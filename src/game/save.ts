@@ -116,3 +116,21 @@ export function saveDailyAttempt(attempt: DailyAttempt) {
     /* ignore */
   }
 }
+
+const HEAL_KEY = "star-heal";
+
+export function healTaken(id: string) {
+  try {
+    return localStorage.getItem(HEAL_KEY) === id;
+  } catch {
+    return false;
+  }
+}
+
+export function markHeal(id: string) {
+  try {
+    localStorage.setItem(HEAL_KEY, id);
+  } catch {
+    /* ignore */
+  }
+}

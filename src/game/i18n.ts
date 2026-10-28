@@ -392,6 +392,7 @@ const en: Record<string, string> = {
   perkNeeds: "Needs {name} first",
   perkOwned: "Active",
   perkBuy: "{n} pts",
+  healClip: "Watch a clip: back from injury now ({n} matches saved). Once a season.",
 };
 
 const he: Record<string, string> = {
@@ -760,6 +761,7 @@ const he: Record<string, string> = {
   perkNeeds: "קודם צריך {name}",
   perkOwned: "פעיל",
   perkBuy: "{n} נק'",
+  healClip: "צפה בקליפ: חוזר מהפציעה עכשיו (חוסך {n} משחקים). פעם בעונה.",
 };
 
 const es: Record<string, string> = {
@@ -1128,6 +1130,7 @@ const es: Record<string, string> = {
   perkNeeds: "Necesita {name} antes",
   perkOwned: "Activo",
   perkBuy: "{n} pts",
+  healClip: "Mira un clip: vuelves de la lesión ya ({n} partidos menos). Una vez por temporada.",
 };
 
 const fr: Record<string, string> = {
@@ -1496,6 +1499,7 @@ const fr: Record<string, string> = {
   perkNeeds: "Il faut d'abord {name}",
   perkOwned: "Actif",
   perkBuy: "{n} pts",
+  healClip: "Regarde un clip : retour de blessure tout de suite ({n} matchs gagnés). Une fois par saison.",
 };
 
 const tables: Record<Lang, Record<string, string>> = { en, he, es, fr };

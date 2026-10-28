@@ -49,7 +49,7 @@ import {
   todayKey,
   trainOdds,
 } from "@/game/engine";
-import { boostId, boostTaken, loadCareer, loadDailyAttempt, loadSound, markBoost, saveCareer, saveDailyAttempt, saveSound, touchStreak, type DailyAttempt } from "@/game/save";
+import { boostId, boostTaken, healTaken, loadCareer, markHeal, loadDailyAttempt, loadSound, markBoost, saveCareer, saveDailyAttempt, saveSound, touchStreak, type DailyAttempt } from "@/game/save";
 import { loadLang, setLang, show, t, type Lang } from "@/game/i18n";
 import { PERKS, applyPerks, buyPerk, canDouble, doubleLegacy, loadLegacy, payLegacy, perkState, type Legacy, type PerkId } from "@/game/legacy";
 import { ATTR_KEYS, type AttrKey, type Career, type Difficulty, type MatchLog, type MatchReport, type Role } from "@/game/types";
@@ -846,6 +846,27 @@ function AttrBar({ attr, value, delta }: { attr: AttrKey; value: number; hot?: b
   );
 }
 
+function HealClip({ career, onChange }: { career: Career; onChange: (c: Career) => void }) {
+  const { tr } = useTx();
+  const id = `${boostId(career.player.name, career.year)}|heal`;
+  const [used, setUsed] = useState(() => healTaken(id));
+  if (used) return null;
+  return (
+    <button
+      type="button"
+      className="btn-ghost mt-3 h-12 w-full px-3 text-sm"
+      data-ad-slot="rewarded"
+      onClick={() => {
+        markHeal(id);
+        setUsed(true);
+        onChange({ ...career, season: { ...career.season, outFor: 0 } });
+      }}
+    >
+      {tr("healClip", { n: career.season.outFor })}
+    </button>
+  );
+}
+
 function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c: Career) => void; onMenu: () => void }) {
   const [paused, setPaused] = useState(() => Boolean(career.lastTrain));
   const club = getClub(career.clubId);
@@ -968,6 +989,8 @@ function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c:
               : tr("trainFlat", { attr: tr(`attr.${career.lastTrain.key}`) })}
         </p>
       ) : null}
+
+      {career.season.outFor > 0 && !career.race ? <HealClip career={career} onChange={onChange} /> : null}
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button type="button" className="btn-ghost h-12" onClick={() => setPaused((value) => !value)}>
