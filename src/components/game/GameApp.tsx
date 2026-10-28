@@ -21,14 +21,17 @@ import { playGoal, playWhistle, setAudioEnabled, unlockAudio } from "@/game/audi
 import { CLUBS, COUNTRIES, LEAGUES, NATIONS, POSITIONS, entryLeague, getClub, getCountry, getLeague, nationById } from "@/game/data";
 import {
   acceptOffer,
+  afterReport,
   answerBreak,
   answerCamp,
   careerAim,
   commitSeason,
+  composeReport,
   createCareer,
   createDailyCareer,
   dailyBoard,
   farewellAge,
+  finishBigMatch,
   money,
   nextFixture,
   openSeason,
@@ -38,6 +41,7 @@ import {
   potentialLabel,
   previewPlayer,
   primaryKeys,
+  resolveMoment,
   retireCareer,
   statCap,
   rewardedBoost,
@@ -53,11 +57,13 @@ import {
 import { boostId, boostTaken, healTaken, loadCareer, markHeal, loadDailyAttempt, loadSound, markBoost, saveCareer, saveDailyAttempt, saveSound, touchStreak, type DailyAttempt } from "@/game/save";
 import { loadLang, setLang, show, t, type Lang } from "@/game/i18n";
 import { authEnabled } from "@/lib/auth/client";
+import { STORIES, answerStory, storyAttr } from "@/game/stories";
+import { ACHIEVEMENTS, checkAchievements, loadUnlocked } from "@/game/achievements";
 import { getViewerAccess, type ViewerAccess } from "@/lib/access";
 import { PERKS, adminGrant, adminUnlockAll, applyPerks, buyPerk, canDouble, doubleLegacy, loadLegacy, payLegacy, perkState, type Legacy, type PerkId } from "@/game/legacy";
 import { ATTR_KEYS, type AttrKey, type Career, type Difficulty, type MatchLog, type MatchReport, type Role } from "@/game/types";
 
-type View = "boot" | "home" | "create" | "game" | "collection" | "summary" | "daily" | "privacy" | "legacy" | "admin";
+type View = "boot" | "home" | "create" | "game" | "collection" | "summary" | "daily" | "privacy" | "legacy" | "admin" | "achievements";
 
 const LangContext = createContext<Lang>("en");
 
@@ -89,6 +95,13 @@ export function GameApp() {
   const [sound, setSound] = useState(true);
   const [lang, setLangState] = useState<Lang>("en");
   const [access, setAccess] = useState<ViewerAccess | null>(null);
+  const [toasts, setToasts] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!toasts.length) return;
+    const id = window.setTimeout(() => setToasts((list) => list.slice(1)), 3400);
+    return () => window.clearTimeout(id);
+  }, [toasts]);
 
   useEffect(() => {
     if (!authEnabled) return;
@@ -138,6 +151,10 @@ export function GameApp() {
       return;
     }
     setCareer(next);
+    if (next) {
+      const fresh = checkAchievements(next);
+      if (fresh.length) setToasts((list) => [...list, ...fresh]);
+    }
   }
 
   function beginDaily(next: Career) {
@@ -200,6 +217,7 @@ export function GameApp() {
         onDaily={() => setView("daily")}
         onPrivacy={() => setView("privacy")}
         onLegacy={() => setView("legacy")}
+        onAchievements={() => setView("achievements")}
         access={access}
         onAdmin={() => setView("admin")}
         streak={streak}
@@ -228,6 +246,7 @@ export function GameApp() {
     screen = <DailyLobby attempt={daily} onBack={() => setView("home")} onBegin={beginDaily} />;
   } else if (view === "privacy") screen = <Privacy onBack={() => setView("home")} />;
   else if (view === "legacy") screen = <LegacyScreen onBack={() => setView("home")} />;
+  else if (view === "achievements") screen = <AchievementsScreen onBack={() => setView("home")} />;
   else if (view === "admin" && access?.admin) {
     screen = (
       <AdminScreen
@@ -244,6 +263,8 @@ export function GameApp() {
   } else if (view === "admin") screen = <Splash />; else if (!run) screen = <Splash />;
   else if (run.screen === "camp" || run.screen === "break") {
     screen = <TrainingScreen career={run} onChange={update} onMenu={menu} />;
+  } else if (run.screen === "bigmatch" && run.pending) {
+    screen = <BigMatchScreen career={run} onChange={update} onMenu={menu} />;
   } else if (run.screen === "match" && run.activeReport) {
     screen = <MatchScreen career={run} onReport={() => update({ ...run, screen: "report" })} onMenu={menu} />;
   } else if (run.screen === "report" && run.activeReport) {
@@ -251,10 +272,7 @@ export function GameApp() {
       <ReportScreen
         career={run}
         report={run.activeReport}
-        onNext={() => {
-          const cleared = { ...run, activeReport: null };
-          update(nextFixture(cleared) ? { ...cleared, screen: "run" } : openSeason(cleared));
-        }}
+        onNext={() => update(afterReport(run))}
         onMenu={menu}
       />
     );
@@ -299,7 +317,12 @@ export function GameApp() {
     );
   } else screen = <RunScreen career={run} onChange={update} onMenu={menu} />;
 
-  return <LangContext.Provider value={lang}>{screen}</LangContext.Provider>;
+  return (
+    <LangContext.Provider value={lang}>
+      {screen}
+      {toasts.length ? <AchievementToast id={toasts[0]} /> : null}
+    </LangContext.Provider>
+  );
 }
 
 function ScreenHeader({
@@ -617,6 +640,7 @@ function Home({
   onDaily,
   onPrivacy,
   onLegacy,
+  onAchievements,
   access,
   onAdmin,
   onNew,
@@ -634,6 +658,7 @@ function Home({
   onDaily: () => void;
   onPrivacy: () => void;
   onLegacy: () => void;
+  onAchievements: () => void;
   access: ViewerAccess | null;
   onAdmin: () => void;
   onNew: () => void;
@@ -643,7 +668,11 @@ function Home({
   const { tr } = useTx();
   const [confirm, setConfirm] = useState(false);
   const [legacyPts, setLegacyPts] = useState(0);
-  useEffect(() => setLegacyPts(loadLegacy().points), []);
+  const [achCount, setAchCount] = useState(0);
+  useEffect(() => {
+    setLegacyPts(loadLegacy().points);
+    setAchCount(Object.keys(loadUnlocked()).filter((id) => ACHIEVEMENTS.some((item) => item.id === id)).length);
+  }, []);
   const closes = useClosesIn();
   const board = useMemo(() => dailyBoard(), []);
   const dailyClub = getClub(board.clubId);
@@ -718,6 +747,15 @@ function Home({
           <span className="flex-1 font-semibold">{tr("trophies")}</span>
           <span className="num text-muted">{career ? career.trophies.length : 0}</span>
           <ChevronLeft className="size-4 -scale-x-100 text-muted rtl:scale-x-100" />
+        </button>
+        <button type="button" className="list-row" onClick={onAchievements}>
+          <span className="list-icon">
+            <Medal className="size-5" />
+          </span>
+          <span className="flex-1 font-semibold">{tr("achievements")}</span>
+          <span className="num text-muted">
+            {achCount}/{ACHIEVEMENTS.length}
+          </span>
         </button>
         <button type="button" className="list-row" onClick={onSummary}>
           <span className="list-icon">
@@ -1001,7 +1039,7 @@ function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c:
   const { tr, text } = useTx();
 
   useEffect(() => {
-    if (paused || career.screen !== "run") return;
+    if (paused || career.screen !== "run" || career.story) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce) return;
     const id = window.setTimeout(() => onChange(playStep(career)), 460 / speed);
@@ -1113,6 +1151,8 @@ function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c:
         </p>
       ) : null}
 
+      {career.story ? <StoryCard career={career} onChange={onChange} /> : null}
+
       {career.season.outFor > 0 && !career.race ? <HealClip career={career} onChange={onChange} /> : null}
 
       <div className="seg seg-grow mt-3" role="group" aria-label={tr("speed")}>
@@ -1184,6 +1224,187 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
           );
         })}
       </div>
+    </Shell>
+  );
+}
+
+function effectLines(career: Career, choice: "a" | "b", storyId: string, tr: (key: string, vars?: Record<string, string | number>) => string) {
+  const story = STORIES.find((item) => item.id === storyId);
+  if (!story) return [];
+  const effect = story[choice];
+  const sign = (n: number) => (n > 0 ? `+${n}` : String(n));
+  const lines: { text: string; good: boolean }[] = [];
+  if (effect.attrDelta) lines.push({ text: `${tr(`attr.${storyAttr(career, effect)}`)} ${sign(effect.attrDelta)}`, good: effect.attrDelta > 0 });
+  for (const key of ["morale", "form", "fitness", "reputation"] as const) {
+    const value = effect[key];
+    if (value) lines.push({ text: tr(`eff.${key}`, { n: sign(value) }), good: value > 0 });
+  }
+  return lines;
+}
+
+function StoryCard({ career, onChange }: { career: Career; onChange: (c: Career) => void }) {
+  const { tr } = useTx();
+  const id = career.story?.id;
+  if (!id) return null;
+  return (
+    <section className="card mt-3 overflow-hidden" aria-live="polite">
+      <div className="px-4 pt-3.5 pb-3">
+        <p className="text-xs text-muted">{tr("story.title")}</p>
+        <p className="mt-0.5 font-semibold leading-snug">{tr(`story.${id}.q`)}</p>
+      </div>
+      <div className="grid grid-cols-2 border-t border-line">
+        {(["a", "b"] as const).map((choice) => (
+          <button
+            key={choice}
+            type="button"
+            className={`grid content-start gap-1.5 px-4 py-3 text-start hover:bg-surface-2 ${choice === "b" ? "border-s border-line" : ""}`}
+            onClick={() => onChange(answerStory(career, choice))}
+          >
+            <span className="font-semibold">{tr(`story.${id}.${choice}`)}</span>
+            <span className="flex flex-wrap gap-1">
+              {effectLines(career, choice, id, tr).map((line) => (
+                <span key={line.text} className={`chip ${line.good ? "chip-good" : "chip-bad"}`}>
+                  {line.text}
+                </span>
+              ))}
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange: (c: Career) => void; onMenu: () => void }) {
+  const { tr, text } = useTx();
+  const pending = career.pending!;
+  const [reveal, setReveal] = useState<number | null>(null);
+  const report = composeReport(pending);
+  const active = pending.moments.findIndex((moment) => !moment.picked);
+  const focus = reveal ?? (active >= 0 ? active : null);
+  const focusMoment = focus !== null ? pending.moments[focus] : null;
+  const minute = focusMoment ? focusMoment.minute : 90;
+  const shown = report.events.filter((event) => (focusMoment ? event.minute < minute || (reveal !== null && event.minute === minute) : true));
+  const current = shown[shown.length - 1];
+  const ours = getClub(career.clubId).name;
+  const theirs = text(pending.base.opponentName);
+  const left = pending.base.home ? ours : theirs;
+  const right = pending.base.home ? theirs : ours;
+  const us = current?.us ?? 0;
+  const them = current?.them ?? 0;
+  const leftGoals = pending.base.home ? us : them;
+  const rightGoals = pending.base.home ? them : us;
+  const done = active < 0 && reveal === null;
+
+  useEffect(() => {
+    playWhistle();
+  }, []);
+
+  function choose(index: number, optionId: string) {
+    const next = resolveMoment(career, index, optionId);
+    const moment = next.pending?.moments[index];
+    const option = moment?.options.find((item) => item.id === optionId);
+    if (moment?.success && option && option.reward !== "stop") playGoal();
+    setReveal(index);
+    onChange(next);
+  }
+
+  return (
+    <Shell>
+      <ScreenHeader
+        title={text(pending.base.roundLabel)}
+        sub={tr("mo.big")}
+        onBack={onMenu}
+        right={
+          done ? undefined : (
+            <span className="live-tag">
+              <span className="live-dot" />
+              {tr("live")}
+            </span>
+          )
+        }
+      />
+
+      <div className="scorebox px-4 pt-4 pb-3">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-center" dir="ltr">
+          <span className={`team-name ${left === ours ? "text-accent-2" : ""}`} dir="auto">
+            {left}
+          </span>
+          <span className="score-big">
+            {leftGoals}
+            <span className="px-2 text-accent">:</span>
+            {rightGoals}
+          </span>
+          <span className={`team-name ${right === ours ? "text-accent-2" : ""}`} dir="auto">
+            {right}
+          </span>
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <div className="meter flex-1" dir="ltr">
+            <i style={{ width: `${Math.min(100, Math.round((minute / 90) * 100))}%` }} />
+          </div>
+          <span className="font-num text-sm text-muted" dir="ltr">
+            {minute}'
+          </span>
+        </div>
+      </div>
+
+      {focusMoment && focus !== null ? (
+        <section className="card moment-card mt-3 overflow-hidden" aria-live="polite">
+          <div className="px-4 pt-3.5 pb-3">
+            <p className="text-xs font-semibold text-accent-2">{tr("mo.title")}</p>
+            <p className="mt-0.5 font-semibold leading-snug">{tr(`mo.${focusMoment.kind}`, { min: focusMoment.minute })}</p>
+          </div>
+          {focusMoment.picked ? (
+            <div className="grid gap-3 border-t border-line px-4 py-3.5">
+              <p className={`text-lg font-bold ${focusMoment.success ? "text-good" : "text-bad"}`}>{focusMoment.success ? tr("mo.yes") : tr("mo.no")}</p>
+              <p className="text-sm">
+                {text(
+                  report.events.find((event) => event.minute === focusMoment.minute && event.text.startsWith("@mo."))?.text ?? "",
+                )}
+              </p>
+              <button
+                type="button"
+                className="btn-primary h-12 w-full"
+                onClick={() => (active < 0 ? onChange(finishBigMatch(career)) : setReveal(null))}
+              >
+                {active < 0 ? tr("mo.finish") : tr("mo.next")}
+              </button>
+            </div>
+          ) : (
+            <div className="list rounded-none border-x-0 border-b-0">
+              {focusMoment.options.map((option) => (
+                <button key={option.id} type="button" className="list-row" onClick={() => choose(focus, option.id)}>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold">{tr(`mo.opt.${option.id}`)}</span>
+                    <span className="block text-xs text-muted">
+                      {tr(`attr.${option.attr}`)} {career.player.attrs[option.attr]}
+                    </span>
+                  </span>
+                  <span className={`num text-lg font-bold band-${option.odds >= 65 ? "high" : option.odds >= 45 ? "good" : option.odds >= 30 ? "mid" : "low"}`}>{option.odds}%</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      <ol className="card mt-3 flex flex-col">
+        {[...shown].reverse().map((event, index) => (
+          <li key={`${event.minute}-${event.text}-${index}`} className={`event ${event.tone === "neutral" ? "" : event.tone}`}>
+            <span className="min">{event.minute}'</span>
+            <span>{text(event.text)}</span>
+          </li>
+        ))}
+      </ol>
+
+      {done ? (
+        <div className="dock">
+          <button type="button" className="btn-primary h-13 w-full text-base" onClick={() => onChange(finishBigMatch(career))}>
+            {tr("report")}
+          </button>
+        </div>
+      ) : null}
     </Shell>
   );
 }
@@ -1941,6 +2162,51 @@ function AdminScreen({
           {note}
         </p>
       ) : null}
+    </Shell>
+  );
+}
+
+function AchievementToast({ id }: { id: string }) {
+  const { tr } = useTx();
+  return (
+    <div className="toast" role="status" key={id}>
+      <span className="list-icon text-trophy">
+        <Trophy className="size-5" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xs text-muted">{tr("ach.unlocked")}</span>
+        <span className="block truncate font-semibold">{tr(`ach.${id}`)}</span>
+      </span>
+    </div>
+  );
+}
+
+function AchievementsScreen({ onBack }: { onBack: () => void }) {
+  const { tr } = useTx();
+  const [unlocked, setUnlocked] = useState<Record<string, string>>({});
+  useEffect(() => setUnlocked(loadUnlocked()), []);
+  const done = ACHIEVEMENTS.filter((item) => unlocked[item.id]).length;
+  return (
+    <Shell>
+      <ScreenHeader title={tr("achievements")} sub={tr("ach.count", { n: done, m: ACHIEVEMENTS.length })} onBack={onBack} />
+      <div className="meter mb-4">
+        <i style={{ width: `${Math.round((done / ACHIEVEMENTS.length) * 100)}%` }} />
+      </div>
+      <div className="list">
+        {ACHIEVEMENTS.map((item) => {
+          const at = unlocked[item.id];
+          return (
+            <div key={item.id} className={`list-row ${at ? "" : "opacity-60"}`}>
+              <span className={`list-icon ${at ? "text-trophy" : ""}`}>{at ? <Trophy className="size-5" /> : <Medal className="size-5" />}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold">{tr(`ach.${item.id}`)}</span>
+                <span className="block text-xs text-muted">{tr(`ach.${item.id}.d`)}</span>
+              </span>
+              {at ? <Check className="size-4 shrink-0 text-good" /> : null}
+            </div>
+          );
+        })}
+      </div>
     </Shell>
   );
 }

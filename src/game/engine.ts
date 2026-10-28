@@ -37,13 +37,18 @@ import {
   type MatchEvent,
   type MatchLog,
   type MatchReport,
+  type Moment,
+  type MomentKind,
+  type MomentOption,
   type Offer,
+  type PendingMatch,
   type PositionId,
   type Role,
   type RoundId,
   type TableRow,
 } from "./types";
 import { t } from "./i18n";
+import { rollStory } from "./stories";
 
 export function emptyAttrs(value = 0): Attrs {
   const attrs = {} as Attrs;
@@ -1029,6 +1034,7 @@ export function playStep(career: Career): Career {
     playing = false;
     missReason = "bench";
   }
+  if (playing && isBigFixture(career, fixture)) return openBigMatch(career, fixture, roll, rng);
   const report = simulateAgainst(career, fixture, playing, roll);
   if (!playing) {
     report.missed = true;
@@ -1036,6 +1042,7 @@ export function playStep(career: Career): Career {
     report.headline = headlineFor(report);
   }
   const applied = applyReport(career, report, roll, "run");
+  applied.story = rollStory(applied, roll);
   applied.rng = rng.state();
   applied.recentDeltas = null;
   applied.lastTrain = null;
@@ -1057,6 +1064,188 @@ export function runToStop(career: Career): Career {
     guard += 1;
   }
   return current;
+}
+
+// ---------- decisive moments ----------
+// Cup ties and games against the top two open live. The match is simulated
+// first, then paused at two or three moments where the player picks an
+// action; the odds come from the attribute against the opponent, and the
+// result changes the score, the rating and the event list before the report
+// is applied to the season.
+
+export function isBigFixture(career: Career, fixture: Fixture) {
+  if (fixture.competition === "cup") return true;
+  if (fixture.competition !== "league") return false;
+  if (career.season.fixturesPlayed.length < 3) return false;
+  const top = sortTable(career.season.table)
+    .slice(0, 2)
+    .map((row) => row.clubId);
+  return top.includes(fixture.opponentId);
+}
+
+function momentOdds(attr: number, opponent: number, bias: number) {
+  return clamp(Math.round((0.42 + (attr - opponent) / 55 + bias) * 100), 8, 92);
+}
+
+function momentOptions(career: Career, kind: MomentKind, opponent: number): MomentOption[] {
+  const a = career.player.attrs;
+  if (kind === "chance") {
+    return [
+      { id: "shoot", attr: "shooting", odds: momentOdds(a.shooting, opponent, 0), reward: "goal" },
+      { id: "dribble", attr: "dribbling", odds: momentOdds(a.dribbling, opponent, -0.12), reward: "goal" },
+      { id: "pass", attr: "passing", odds: momentOdds(a.passing, opponent, 0.12), reward: "assist" },
+    ];
+  }
+  if (kind === "defend") {
+    return [
+      { id: "tackle", attr: "tackle", odds: momentOdds(a.tackle, opponent, 0), reward: "stop" },
+      { id: "block", attr: "physical", odds: momentOdds(a.physical, opponent, 0.05), reward: "stop" },
+      { id: "track", attr: "pace", odds: momentOdds(a.pace, opponent, -0.03), reward: "stop" },
+    ];
+  }
+  return [
+    { id: "dive", attr: "physical", odds: momentOdds(a.physical, opponent, 0), reward: "stop" },
+    { id: "stand", attr: "tackle", odds: momentOdds(a.tackle, opponent, 0.04), reward: "stop" },
+    { id: "rush", attr: "pace", odds: momentOdds(a.pace, opponent, -0.06), reward: "stop" },
+  ];
+}
+
+function buildMoments(career: Career, fixture: Fixture, roll: () => number): Moment[] {
+  const position = career.player.position;
+  const count = fixture.round === "cup-f" ? 3 : 2;
+  const minutes = new Set<number>();
+  while (minutes.size < count) minutes.add(12 + Math.floor(roll() * 76));
+  return [...minutes]
+    .sort((a, b) => a - b)
+    .map((minute, index) => {
+      let kind: MomentKind = "chance";
+      if (position === "GK") kind = "keeper";
+      else if (position === "CB" || position === "CDM" || position === "FB") kind = index === 0 || roll() < 0.5 ? "defend" : "chance";
+      else if (position === "CM" && index > 0 && roll() < 0.4) kind = "defend";
+      return { minute, kind, options: momentOptions(career, kind, fixture.opponentStrength) };
+    });
+}
+
+function openBigMatch(career: Career, fixture: Fixture, roll: () => number, rng: ReturnType<typeof makeRng>): Career {
+  const base = simulateAgainst(career, fixture, true, roll);
+  const moments = buildMoments(career, fixture, roll);
+  const seed = Math.floor(roll() * 2147483647) || 1;
+  const pending: PendingMatch = { base, moments, seed, rngState: rng.state() };
+  return { ...career, pending, screen: "bigmatch", recentDeltas: null, lastTrain: null };
+}
+
+/** Plays one moment. Deterministic for a given career, moment and choice, so the daily race stays fair. */
+export function resolveMoment(career: Career, index: number, optionId: string): Career {
+  const pending = career.pending;
+  const moment = pending?.moments[index];
+  if (!pending || !moment || moment.picked) return career;
+  const option = moment.options.find((item) => item.id === optionId);
+  if (!option) return career;
+  const roll = makeRng(hashString(`${pending.seed}|${index}|${optionId}`)).next();
+  const moments = pending.moments.map((item, at) => (at === index ? { ...item, picked: optionId, success: roll * 100 < option.odds } : item));
+  return { ...career, pending: { ...pending, moments } };
+}
+
+const FINAL_WHISTLE = /^@ev\.ft/;
+
+/** The base report with every played moment applied and the running score recounted. */
+export function composeReport(pending: PendingMatch): MatchReport {
+  const report: MatchReport = { ...pending.base, events: pending.base.events.map((event) => ({ ...event })) };
+  let rating = report.rating;
+  for (const moment of pending.moments) {
+    if (!moment.picked) continue;
+    const option = moment.options.find((item) => item.id === moment.picked);
+    if (!option) continue;
+    const at = moment.minute;
+    if (option.reward === "goal") {
+      if (moment.success) {
+        report.us += 1;
+        report.goals += 1;
+        report.shots += 1;
+        rating += option.id === "dribble" ? 0.9 : 0.7;
+        report.events.push({ minute: at, tone: "goal", text: `@mo.goal.${option.id}`, us: 0, them: 0 });
+      } else {
+        report.shots += 1;
+        rating -= 0.15;
+        report.events.push({ minute: at, tone: "neutral", text: `@mo.miss.${option.id}`, us: 0, them: 0 });
+      }
+    } else if (option.reward === "assist") {
+      if (moment.success) {
+        report.us += 1;
+        report.assists += 1;
+        report.keyPasses += 1;
+        rating += 0.45;
+        report.events.push({ minute: at, tone: "goal", text: "@mo.goal.pass", us: 0, them: 0 });
+      } else {
+        rating -= 0.1;
+        report.events.push({ minute: at, tone: "neutral", text: "@mo.miss.pass", us: 0, them: 0 });
+      }
+    } else if (moment.success) {
+      const goals = report.events
+        .map((event, index) => ({ event, index }))
+        .filter(({ event }) => event.tone === "bad" && !FINAL_WHISTLE.test(event.text));
+      const later = goals.filter(({ event }) => event.minute >= at);
+      const removed = (later[0] ?? goals[goals.length - 1])?.index;
+      if (removed !== undefined && report.them > 0) {
+        report.events.splice(removed, 1);
+        report.them -= 1;
+        rating += 0.45;
+      } else rating += 0.3;
+      if (moment.kind === "keeper") report.saves += 1;
+      else report.tackles += 1;
+      report.events.push({ minute: at, tone: "good", text: `@mo.stop.${option.id}`, us: 0, them: 0 });
+    } else {
+      report.them += 1;
+      rating -= 0.35;
+      report.events.push({ minute: at, tone: "bad", text: `@mo.beaten.${moment.kind}`, us: 0, them: 0 });
+    }
+  }
+  const whistle = report.events.find((event) => FINAL_WHISTLE.test(event.text));
+  const body = report.events.filter((event) => event !== whistle).sort((a, b) => a.minute - b.minute);
+  let us = 0;
+  let them = 0;
+  for (const event of body) {
+    if (event.tone === "goal") us += 1;
+    if (event.tone === "bad") them += 1;
+    event.us = us;
+    event.them = them;
+  }
+  report.us = us;
+  report.them = them;
+  body.push({
+    minute: 90,
+    tone: us > them ? "good" : us < them ? "bad" : "neutral",
+    text: us > them ? "@ev.ftWin" : us < them ? "@ev.ftLoss" : "@ev.ftDraw",
+    us,
+    them,
+  });
+  report.events = body;
+  report.rating = Math.round(clamp(rating, 4.6, 10) * 10) / 10;
+  report.headline = headlineFor(report);
+  return report;
+}
+
+/** Applies the finished big match to the season and opens its report. */
+export function finishBigMatch(career: Career): Career {
+  const pending = career.pending;
+  if (!pending || pending.moments.some((moment) => !moment.picked)) return career;
+  const report = composeReport(pending);
+  const rng = makeRng(pending.rngState);
+  const roll = () => rng.next();
+  const applied = applyReport({ ...career, pending: null }, report, roll, "report");
+  applied.story = rollStory(applied, roll);
+  applied.rng = rng.state();
+  applied.lastTrain = null;
+  return applied;
+}
+
+/** Where the game goes after a match report: the winter break, the next match, or the season review. */
+export function afterReport(career: Career): Career {
+  const cleared: Career = { ...career, activeReport: null };
+  if (!cleared.season.breakDone && cleared.season.cursor >= cleared.season.breakAt) {
+    return { ...cleared, screen: "break", season: { ...cleared.season, phase: "first" } };
+  }
+  return nextFixture(cleared) ? { ...cleared, screen: "run" } : openSeason(cleared);
 }
 
 export function trainOdds(career: Career, key: AttrKey) {

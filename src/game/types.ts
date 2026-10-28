@@ -7,7 +7,7 @@ export type Attrs = Record<AttrKey, number>;
 export type PositionId = "GK" | "CB" | "FB" | "CDM" | "CM" | "CAM" | "W" | "ST";
 export type Difficulty = "easy" | "normal" | "hard";
 export type Role = "Star" | "Starter" | "Rotation" | "Bench";
-export type Screen = "hub" | "run" | "camp" | "break" | "match" | "report" | "season" | "summer" | "offers" | "retired";
+export type Screen = "hub" | "run" | "camp" | "break" | "match" | "bigmatch" | "report" | "season" | "summer" | "offers" | "retired";
 export type Competition = "league" | "cup" | "europe" | "national";
 export type RoundId = "league" | "cup-sf" | "cup-f" | "eu-qf" | "eu-sf" | "eu-f" | "national";
 
@@ -251,5 +251,38 @@ export type Career = {
   race: string | null;
   retired: boolean;
   released?: boolean;
+  pending?: PendingMatch | null;
+  story?: PendingStory | null;
+  storiesSeen?: string[];
   news: string[];
 };
+
+export type MomentKind = "chance" | "defend" | "keeper";
+export type MomentReward = "goal" | "assist" | "stop";
+
+export type MomentOption = {
+  id: string;
+  attr: AttrKey;
+  odds: number;
+  reward: MomentReward;
+};
+
+export type Moment = {
+  minute: number;
+  kind: MomentKind;
+  options: MomentOption[];
+  picked?: string;
+  success?: boolean;
+};
+
+/** A big match paused at its decisive moments; the base report is not applied until every moment is played. */
+export type PendingMatch = {
+  base: MatchReport;
+  moments: Moment[];
+  seed: number;
+  rngState: number;
+};
+
+export type StoryEffect = Partial<Record<"morale" | "form" | "fitness" | "reputation", number>> & { attr?: AttrKey; attrDelta?: number };
+
+export type PendingStory = { id: string };
