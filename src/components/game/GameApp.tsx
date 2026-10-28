@@ -1173,7 +1173,6 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
               }}
             >
               <span>
-                <span className="block text-xs font-semibold tracking-wide text-accent">{tr(`q.${key}`)}</span>
                 <span className="block font-semibold">{tr(`drill.${key}`)}</span>
                 <span className="block text-xs text-muted">
                   {tr(`attr.${key}`)} {career.player.attrs[key]}

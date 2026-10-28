@@ -1,0 +1,478 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-28T17:23:07+00:00",
+  "title": "Design System: STAR",
+  "extensions": {
+    "colorMeta": {
+      "pitch-night": {
+        "role": "neutral",
+        "displayName": "Pitch Night",
+        "canonical": "#14171c",
+        "tonalRamp": [
+          "oklch(15% 0.011 261)",
+          "oklch(26% 0.011 261)",
+          "oklch(38% 0.011 261)",
+          "oklch(50% 0.011 261)",
+          "oklch(62% 0.011 261)",
+          "oklch(74% 0.011 261)",
+          "oklch(85% 0.011 261)",
+          "oklch(95% 0.011 261)"
+        ]
+      },
+      "slate-panel": {
+        "role": "neutral",
+        "displayName": "Slate Panel",
+        "canonical": "#1d2229",
+        "tonalRamp": [
+          "oklch(15% 0.015 257)",
+          "oklch(26% 0.015 257)",
+          "oklch(38% 0.015 257)",
+          "oklch(50% 0.015 257)",
+          "oklch(62% 0.015 257)",
+          "oklch(74% 0.015 257)",
+          "oklch(85% 0.015 257)",
+          "oklch(95% 0.015 257)"
+        ]
+      },
+      "slate-raised": {
+        "role": "neutral",
+        "displayName": "Slate Raised",
+        "canonical": "#262c35",
+        "tonalRamp": [
+          "oklch(15% 0.019 258)",
+          "oklch(26% 0.019 258)",
+          "oklch(38% 0.019 258)",
+          "oklch(50% 0.019 258)",
+          "oklch(62% 0.019 258)",
+          "oklch(74% 0.019 258)",
+          "oklch(85% 0.019 258)",
+          "oklch(95% 0.019 258)"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#303844",
+        "tonalRamp": [
+          "oklch(15% 0.024 258)",
+          "oklch(26% 0.024 258)",
+          "oklch(38% 0.024 258)",
+          "oklch(50% 0.024 258)",
+          "oklch(62% 0.024 258)",
+          "oklch(74% 0.024 258)",
+          "oklch(85% 0.024 258)",
+          "oklch(95% 0.024 258)"
+        ]
+      },
+      "chalk": {
+        "role": "neutral",
+        "displayName": "Chalk",
+        "canonical": "#eef1f5",
+        "tonalRamp": [
+          "oklch(15% 0.006 255)",
+          "oklch(26% 0.006 255)",
+          "oklch(38% 0.006 255)",
+          "oklch(50% 0.006 255)",
+          "oklch(62% 0.006 255)",
+          "oklch(74% 0.006 255)",
+          "oklch(85% 0.006 255)",
+          "oklch(95% 0.006 255)"
+        ]
+      },
+      "fog": {
+        "role": "neutral",
+        "displayName": "Fog",
+        "canonical": "#9aa4b2",
+        "tonalRamp": [
+          "oklch(15% 0.023 257)",
+          "oklch(26% 0.023 257)",
+          "oklch(38% 0.023 257)",
+          "oklch(50% 0.023 257)",
+          "oklch(62% 0.023 257)",
+          "oklch(74% 0.023 257)",
+          "oklch(85% 0.023 257)",
+          "oklch(95% 0.023 257)"
+        ]
+      },
+      "dim-slate": {
+        "role": "neutral",
+        "displayName": "Dim Slate",
+        "canonical": "#6c7684",
+        "tonalRamp": [
+          "oklch(15% 0.025 257)",
+          "oklch(26% 0.025 257)",
+          "oklch(38% 0.025 257)",
+          "oklch(50% 0.025 257)",
+          "oklch(62% 0.025 257)",
+          "oklch(74% 0.025 257)",
+          "oklch(85% 0.025 257)",
+          "oklch(95% 0.025 257)"
+        ]
+      },
+      "continue-green": {
+        "role": "primary",
+        "displayName": "Continue Green",
+        "canonical": "#2fb463",
+        "tonalRamp": [
+          "oklch(15% 0.160 152)",
+          "oklch(26% 0.160 152)",
+          "oklch(38% 0.163 152)",
+          "oklch(50% 0.163 152)",
+          "oklch(62% 0.163 152)",
+          "oklch(74% 0.163 152)",
+          "oklch(85% 0.163 152)",
+          "oklch(95% 0.160 152)"
+        ]
+      },
+      "continue-green-light": {
+        "role": "primary",
+        "displayName": "Continue Green Light",
+        "canonical": "#6edc97",
+        "tonalRamp": [
+          "oklch(15% 0.142 154)",
+          "oklch(26% 0.142 154)",
+          "oklch(38% 0.142 154)",
+          "oklch(50% 0.142 154)",
+          "oklch(62% 0.142 154)",
+          "oklch(74% 0.142 154)",
+          "oklch(85% 0.142 154)",
+          "oklch(95% 0.142 154)"
+        ]
+      },
+      "continue-green-deep": {
+        "role": "primary",
+        "displayName": "Continue Green Deep",
+        "canonical": "#23904e",
+        "tonalRamp": [
+          "oklch(15% 0.139 152)",
+          "oklch(26% 0.139 152)",
+          "oklch(38% 0.139 152)",
+          "oklch(50% 0.139 152)",
+          "oklch(62% 0.139 152)",
+          "oklch(74% 0.139 152)",
+          "oklch(85% 0.139 152)",
+          "oklch(95% 0.139 152)"
+        ]
+      },
+      "green-ink": {
+        "role": "primary",
+        "displayName": "Green Ink",
+        "canonical": "#06160c",
+        "tonalRamp": [
+          "oklch(15% 0.031 155)",
+          "oklch(26% 0.031 155)",
+          "oklch(38% 0.031 155)",
+          "oklch(50% 0.031 155)",
+          "oklch(62% 0.031 155)",
+          "oklch(74% 0.031 155)",
+          "oklch(85% 0.031 155)",
+          "oklch(95% 0.031 155)"
+        ]
+      },
+      "trophy-gold": {
+        "role": "secondary",
+        "displayName": "Trophy Gold",
+        "canonical": "#e5b84a",
+        "tonalRamp": [
+          "oklch(15% 0.135 86)",
+          "oklch(26% 0.135 86)",
+          "oklch(38% 0.135 86)",
+          "oklch(50% 0.135 86)",
+          "oklch(62% 0.135 86)",
+          "oklch(74% 0.135 86)",
+          "oklch(85% 0.135 86)",
+          "oklch(95% 0.135 86)"
+        ]
+      },
+      "good": {
+        "role": "tertiary",
+        "displayName": "Good",
+        "canonical": "#5cd68f",
+        "tonalRamp": [
+          "oklch(15% 0.150 155)",
+          "oklch(26% 0.150 155)",
+          "oklch(38% 0.150 155)",
+          "oklch(50% 0.150 155)",
+          "oklch(62% 0.150 155)",
+          "oklch(74% 0.150 155)",
+          "oklch(85% 0.150 155)",
+          "oklch(95% 0.150 155)"
+        ]
+      },
+      "bad": {
+        "role": "tertiary",
+        "displayName": "Bad",
+        "canonical": "#f06363",
+        "tonalRamp": [
+          "oklch(15% 0.160 23)",
+          "oklch(26% 0.160 23)",
+          "oklch(38% 0.175 23)",
+          "oklch(50% 0.175 23)",
+          "oklch(62% 0.175 23)",
+          "oklch(74% 0.175 23)",
+          "oklch(85% 0.175 23)",
+          "oklch(95% 0.160 23)"
+        ]
+      },
+      "band-low": {
+        "role": "tertiary",
+        "displayName": "Band Low (grey)",
+        "canonical": "#8f99a7",
+        "tonalRamp": [
+          "oklch(15% 0.024 257)",
+          "oklch(26% 0.024 257)",
+          "oklch(38% 0.024 257)",
+          "oklch(50% 0.024 257)",
+          "oklch(62% 0.024 257)",
+          "oklch(74% 0.024 257)",
+          "oklch(85% 0.024 257)",
+          "oklch(95% 0.024 257)"
+        ]
+      },
+      "band-mid": {
+        "role": "tertiary",
+        "displayName": "Band Mid (amber)",
+        "canonical": "#e5b84a",
+        "tonalRamp": [
+          "oklch(15% 0.135 86)",
+          "oklch(26% 0.135 86)",
+          "oklch(38% 0.135 86)",
+          "oklch(50% 0.135 86)",
+          "oklch(62% 0.135 86)",
+          "oklch(74% 0.135 86)",
+          "oklch(85% 0.135 86)",
+          "oklch(95% 0.135 86)"
+        ]
+      },
+      "band-good": {
+        "role": "tertiary",
+        "displayName": "Band Good (light green)",
+        "canonical": "#b5d86b",
+        "tonalRamp": [
+          "oklch(15% 0.142 124)",
+          "oklch(26% 0.142 124)",
+          "oklch(38% 0.142 124)",
+          "oklch(50% 0.142 124)",
+          "oklch(62% 0.142 124)",
+          "oklch(74% 0.142 124)",
+          "oklch(85% 0.142 124)",
+          "oklch(95% 0.142 124)"
+        ]
+      },
+      "band-high": {
+        "role": "tertiary",
+        "displayName": "Band High (green)",
+        "canonical": "#5cd68f",
+        "tonalRamp": [
+          "oklch(15% 0.150 155)",
+          "oklch(26% 0.150 155)",
+          "oklch(38% 0.150 155)",
+          "oklch(50% 0.150 155)",
+          "oklch(62% 0.150 155)",
+          "oklch(74% 0.150 155)",
+          "oklch(85% 0.150 155)",
+          "oklch(95% 0.150 155)"
+        ]
+      },
+      "band-elite": {
+        "role": "tertiary",
+        "displayName": "Band Elite (teal)",
+        "canonical": "#3fd0c9",
+        "tonalRamp": [
+          "oklch(15% 0.120 190)",
+          "oklch(26% 0.120 190)",
+          "oklch(38% 0.120 190)",
+          "oklch(50% 0.120 190)",
+          "oklch(62% 0.120 190)",
+          "oklch(74% 0.120 190)",
+          "oklch(85% 0.120 190)",
+          "oklch(95% 0.120 190)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Home title for a new player; one per screen at most."
+      },
+      "score": {
+        "displayName": "Score",
+        "purpose": "Match score in the score box."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "Headline numbers: overall, legacy points, match rating (1.5–2.25rem)."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Top-bar screen title."
+      },
+      "title-row": {
+        "displayName": "Row title",
+        "purpose": "List-row labels, section headings, primary button text."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Rows, events, terms, attributes."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Sublines, stat terms, chips, segmented text. Sentence case."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "ease-color",
+        "value": "120ms ease-out",
+        "purpose": "Button background transitions."
+      },
+      {
+        "name": "event-in",
+        "value": "260ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Faint chalk wash on a newly arrived match event."
+      },
+      {
+        "name": "live-pulse",
+        "value": "1.4s ease-in-out infinite",
+        "purpose": "Live dot opacity pulse; disabled under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "column",
+        "value": "32rem",
+        "purpose": "Single phone column max width; no other breakpoints."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button (Continue)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one green action that ends a screen; full width, 52px.",
+      "html": "<button class=\"ds-btn-primary\">Continue</button>",
+      "css": ":root{--color-bg:#14171c;--color-surface:#1d2229;--color-surface-2:#262c35;--color-line:#303844;--color-fg:#eef1f5;--color-muted:#9aa4b2;--color-accent:#2fb463;--color-accent-2:#6edc97;--color-accent-deep:#23904e;--color-ink:#06160c;--color-trophy:#e5b84a;--color-good:#5cd68f;--color-bad:#f06363;--color-band-high:#5cd68f;--color-band-good:#b5d86b;}.ds-btn-primary{font-family:Rubik,'Segoe UI',system-ui,sans-serif;display:flex;width:100%;height:52px;align-items:center;justify-content:center;border:0;border-radius:6px;background:var(--color-accent);color:var(--color-ink);font-size:1rem;font-weight:600;cursor:pointer;transition:background-color 120ms ease-out;}.ds-btn-primary:hover{background:var(--color-accent-2);}.ds-btn-primary:active{background:var(--color-accent-deep);}.ds-btn-primary:focus-visible{outline:2px solid var(--color-accent-2);outline-offset:2px;}.ds-btn-primary:disabled{opacity:.45;cursor:not-allowed;}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary choice beside a primary: stay at club, sign out.",
+      "html": "<button class=\"ds-btn-ghost\">Stay at club</button>",
+      "css": ":root{--color-bg:#14171c;--color-surface:#1d2229;--color-surface-2:#262c35;--color-line:#303844;--color-fg:#eef1f5;--color-muted:#9aa4b2;--color-accent:#2fb463;--color-accent-2:#6edc97;--color-accent-deep:#23904e;--color-ink:#06160c;--color-trophy:#e5b84a;--color-good:#5cd68f;--color-bad:#f06363;--color-band-high:#5cd68f;--color-band-good:#b5d86b;}.ds-btn-ghost{font-family:Rubik,'Segoe UI',system-ui,sans-serif;width:100%;height:48px;border:1px solid var(--color-line);border-radius:6px;background:transparent;color:var(--color-fg);font-size:1rem;font-weight:500;cursor:pointer;transition:background-color 120ms ease-out;}.ds-btn-ghost:hover{background:var(--color-surface-2);}.ds-btn-ghost:focus-visible{outline:2px solid var(--color-accent-2);outline-offset:2px;}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "48px field on Slate Panel with label above.",
+      "html": "<label class=\"ds-field\">Player name<input class=\"ds-input\" placeholder=\"Name\"></label>",
+      "css": ":root{--color-bg:#14171c;--color-surface:#1d2229;--color-surface-2:#262c35;--color-line:#303844;--color-fg:#eef1f5;--color-muted:#9aa4b2;--color-accent:#2fb463;--color-accent-2:#6edc97;--color-accent-deep:#23904e;--color-ink:#06160c;--color-trophy:#e5b84a;--color-good:#5cd68f;--color-bad:#f06363;--color-band-high:#5cd68f;--color-band-good:#b5d86b;}.ds-field{font-family:Rubik,'Segoe UI',system-ui,sans-serif;display:grid;gap:6px;color:var(--color-fg);font-size:.875rem;font-weight:600;}.ds-input{font-family:Rubik,'Segoe UI',system-ui,sans-serif;height:48px;padding:0 16px;border:1px solid var(--color-line);border-radius:6px;background:var(--color-surface);color:var(--color-fg);font-size:1rem;font-weight:400;caret-color:var(--color-accent-2);}.ds-input::placeholder{color:var(--color-muted);}.ds-input:focus-visible{outline:2px solid var(--color-accent-2);outline-offset:2px;}"
+    },
+    {
+      "name": "Menu List",
+      "kind": "nav",
+      "refersTo": "list-row",
+      "description": "Home menu: 56px hairline-split rows with icon well, label, value or chevron.",
+      "html": "<nav class=\"ds-list\"><button class=\"ds-row\"><span class=\"ds-well\" style=\"color:#e5b84a\"><svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6 9H4.5a2.5 2.5 0 0 1 0-5H6\"/><path d=\"M18 9h1.5a2.5 2.5 0 0 0 0-5H18\"/><path d=\"M4 22h16\"/><path d=\"M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22\"/><path d=\"M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22\"/><path d=\"M18 2H6v7a6 6 0 0 0 12 0V2Z\"/></svg></span><span class=\"ds-t\">Daily race<small>Striker · same start for everyone</small></span><span class=\"ds-v\">2h</span></button><button class=\"ds-row\"><span class=\"ds-well\"><svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M6 9H4.5a2.5 2.5 0 0 1 0-5H6\"/><path d=\"M18 9h1.5a2.5 2.5 0 0 0 0-5H18\"/><path d=\"M4 22h16\"/><path d=\"M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22\"/><path d=\"M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22\"/><path d=\"M18 2H6v7a6 6 0 0 0 12 0V2Z\"/></svg></span><span class=\"ds-t\">Trophies</span><span class=\"ds-v\">3</span><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"#9aa4b2\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m9 18 6-6-6-6\"/></svg></button></nav>",
+      "css": ":root{--color-bg:#14171c;--color-surface:#1d2229;--color-surface-2:#262c35;--color-line:#303844;--color-fg:#eef1f5;--color-muted:#9aa4b2;--color-accent:#2fb463;--color-accent-2:#6edc97;--color-accent-deep:#23904e;--color-ink:#06160c;--color-trophy:#e5b84a;--color-good:#5cd68f;--color-bad:#f06363;--color-band-high:#5cd68f;--color-band-good:#b5d86b;}.ds-list{font-family:Rubik,'Segoe UI',system-ui,sans-serif;display:grid;overflow:hidden;background:var(--color-surface);border:1px solid var(--color-line);border-radius:8px;}.ds-row{font-family:Rubik,'Segoe UI',system-ui,sans-serif;display:flex;width:100%;min-height:56px;align-items:center;gap:12px;padding:9.6px 14.4px;border:0;background:transparent;color:var(--color-fg);text-align:start;font-size:1rem;cursor:pointer;}.ds-row+.ds-row{border-top:1px solid var(--color-line);}.ds-row:hover{background:var(--color-surface-2);}.ds-row:focus-visible{outline:2px solid var(--color-accent-2);outline-offset:-2px;}.ds-well{display:inline-flex;width:32px;height:32px;flex-shrink:0;align-items:center;justify-content:center;border-radius:6px;background:var(--color-surface-2);color:var(--color-muted);}.ds-t{flex:1;font-weight:600;display:grid;}.ds-t small{font-size:.75rem;font-weight:400;color:var(--color-muted);}.ds-v{color:var(--color-muted);font-variant-numeric:tabular-nums;font-size:.75rem;}"
+    },
+    {
+      "name": "Chips",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Small status tags: neutral, trophy, good, bad, accent.",
+      "html": "<div class=\"ds-chips\"><span class=\"ds-chip\">Loan</span><span class=\"ds-chip ds-gold\">Champion</span><span class=\"ds-chip ds-good\">+2</span><span class=\"ds-chip ds-bad\">Injured</span><span class=\"ds-chip ds-acc\">You</span></div>",
+      "css": ":root{--color-bg:#14171c;--color-surface:#1d2229;--color-surface-2:#262c35;--color-line:#303844;--color-fg:#eef1f5;--color-muted:#9aa4b2;--color-accent:#2fb463;--color-accent-2:#6edc97;--color-accent-deep:#23904e;--color-ink:#06160c;--color-trophy:#e5b84a;--color-good:#5cd68f;--color-bad:#f06363;--color-band-high:#5cd68f;--color-band-good:#b5d86b;}.ds-chips{display:flex;gap:6px;flex-wrap:wrap;}.ds-chip{font-family:Rubik,'Segoe UI',system-ui,sans-serif;display:inline-flex;align-items:center;padding:2.4px 8px;border-radius:4px;font-size:.72rem;font-weight:600;background:var(--color-surface-2);color:var(--color-muted);}.ds-gold{background:color-mix(in oklab,var(--color-trophy) 16%,transparent);color:var(--color-trophy);}.ds-good{background:color-mix(in oklab,var(--color-good) 15%,transparent);color:var(--color-good);}.ds-bad{background:color-mix(in oklab,var(--color-bad) 16%,transparent);color:#ff8a8a;}.ds-acc{background:var(--color-accent);color:var(--color-ink);}"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat Slate Panel container, hairline border, 8px corners.",
+      "html": "<section class=\"ds-card\"><p class=\"ds-ct\">Season 2027</p><p class=\"ds-cb\">Matchday 14 of 34 · 3rd in the table</p></section>",
+      "css": ":root{--color-bg:#14171c;--color-surface:#1d2229;--color-surface-2:#262c35;--color-line:#303844;--color-fg:#eef1f5;--color-muted:#9aa4b2;--color-accent:#2fb463;--color-accent-2:#6edc97;--color-accent-deep:#23904e;--color-ink:#06160c;--color-trophy:#e5b84a;--color-good:#5cd68f;--color-bad:#f06363;--color-band-high:#5cd68f;--color-band-good:#b5d86b;}.ds-card{font-family:Rubik,'Segoe UI',system-ui,sans-serif;padding:16px;background:var(--color-surface);border:1px solid var(--color-line);border-radius:8px;color:var(--color-fg);}.ds-ct{margin:0;font-weight:600;}.ds-cb{margin:4px 0 0;font-size:.875rem;color:var(--color-muted);}"
+    },
+    {
+      "name": "Player Header",
+      "kind": "custom",
+      "refersTo": "ovr-badge",
+      "description": "Overall badge coloured by band, identity lines, ability/potential half-stars.",
+      "html": "<section class=\"ds-ph\"><div class=\"ds-top\"><div class=\"ds-ovr\">78</div><div><p class=\"ds-nm\">Noa Levi</p><p class=\"ds-sb\">Striker · Maccabi Haifa</p></div></div><div class=\"ds-st\"><div><span>Ability</span><span class=\"ds-stars\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\"><path d=\"M12 2.6l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z\" fill=\"#e5b84a\"/></svg><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\"><path d=\"M12 2.6l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z\" fill=\"#e5b84a\"/></svg><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\"><path d=\"M12 2.6l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z\" fill=\"#e5b84a\"/></svg><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\"><path d=\"M12 2.6l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z\" fill=\"#e5b84a\"/></svg></span></div><div><span>Potential</span><span class=\"ds-stars\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\"><path d=\"M12 2.6l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z\" fill=\"#e5b84a\"/></svg><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\"><path d=\"M12 2.6l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z\" fill=\"#e5b84a\"/></svg><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\"><path d=\"M12 2.6l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z\" fill=\"#e5b84a\"/></svg><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\"><path d=\"M12 2.6l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z\" fill=\"#e5b84a\"/></svg><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\"><path d=\"M12 2.6l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z\" fill=\"#e5b84a\"/></svg></span></div></div></section>",
+      "css": ":root{--color-bg:#14171c;--color-surface:#1d2229;--color-surface-2:#262c35;--color-line:#303844;--color-fg:#eef1f5;--color-muted:#9aa4b2;--color-accent:#2fb463;--color-accent-2:#6edc97;--color-accent-deep:#23904e;--color-ink:#06160c;--color-trophy:#e5b84a;--color-good:#5cd68f;--color-bad:#f06363;--color-band-high:#5cd68f;--color-band-good:#b5d86b;}.ds-ph{font-family:Rubik,'Segoe UI',system-ui,sans-serif;overflow:hidden;background:var(--color-surface);border:1px solid var(--color-line);border-radius:8px;color:var(--color-fg);}.ds-top{display:flex;gap:12px;align-items:center;padding:14px 16px;}.ds-ovr{display:flex;width:52px;height:52px;align-items:center;justify-content:center;border-radius:6px;background:var(--color-surface-2);color:var(--color-band-good);font-size:1.45rem;font-weight:700;font-variant-numeric:tabular-nums;}.ds-nm{margin:0;font-size:1.125rem;font-weight:700;}.ds-sb{margin:0;font-size:.875rem;color:var(--color-muted);}.ds-st{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--color-line);}.ds-st>div{display:grid;gap:4px;padding:10px 16px;font-size:.75rem;color:var(--color-muted);}.ds-st>div+div{border-inline-start:1px solid var(--color-line);}.ds-stars{display:inline-flex;gap:1px;direction:ltr;}"
+    },
+    {
+      "name": "League Table",
+      "kind": "custom",
+      "refersTo": "list-row",
+      "description": "Fixed-column standings; the player's club row tinted green.",
+      "html": "<div class=\"ds-tbl\"><div class=\"ds-tr\"><span>1</span><span>Hapoel Be'er Sheva</span><span>14</span><span>31</span></div><div class=\"ds-tr ds-me\"><span>2</span><span>Maccabi Haifa</span><span>14</span><span>29</span></div><div class=\"ds-tr\"><span>3</span><span>Beitar Jerusalem</span><span>14</span><span>25</span></div></div>",
+      "css": ":root{--color-bg:#14171c;--color-surface:#1d2229;--color-surface-2:#262c35;--color-line:#303844;--color-fg:#eef1f5;--color-muted:#9aa4b2;--color-accent:#2fb463;--color-accent-2:#6edc97;--color-accent-deep:#23904e;--color-ink:#06160c;--color-trophy:#e5b84a;--color-good:#5cd68f;--color-bad:#f06363;--color-band-high:#5cd68f;--color-band-good:#b5d86b;}.ds-tbl{font-family:Rubik,'Segoe UI',system-ui,sans-serif;overflow:hidden;background:var(--color-surface);border:1px solid var(--color-line);border-radius:8px;color:var(--color-fg);}.ds-tr{display:grid;grid-template-columns:1.6rem minmax(0,1fr) 2.4rem 2.2rem;gap:6px;align-items:center;padding:8.8px 14.4px;font-size:.875rem;font-variant-numeric:tabular-nums;}.ds-tr+.ds-tr{border-top:1px solid color-mix(in oklab,var(--color-line) 70%,transparent);}.ds-me{background:color-mix(in oklab,var(--color-accent) 14%,transparent);color:var(--color-accent-2);font-weight:600;}"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segmented-option",
+      "description": "Tab-like switch; pressed option fills Slate Raised.",
+      "html": "<div class=\"ds-seg\"><button aria-pressed=\"true\">Season</button><button aria-pressed=\"false\">Career</button><button aria-pressed=\"false\">Table</button></div>",
+      "css": ":root{--color-bg:#14171c;--color-surface:#1d2229;--color-surface-2:#262c35;--color-line:#303844;--color-fg:#eef1f5;--color-muted:#9aa4b2;--color-accent:#2fb463;--color-accent-2:#6edc97;--color-accent-deep:#23904e;--color-ink:#06160c;--color-trophy:#e5b84a;--color-good:#5cd68f;--color-bad:#f06363;--color-band-high:#5cd68f;--color-band-good:#b5d86b;}.ds-seg{display:flex;gap:2px;padding:2px;border-radius:6px;background:var(--color-surface);border:1px solid var(--color-line);}.ds-seg button{font-family:Rubik,'Segoe UI',system-ui,sans-serif;flex:1;min-width:44px;height:44px;border:0;border-radius:4px;background:transparent;color:var(--color-muted);font-size:.875rem;font-weight:600;cursor:pointer;}.ds-seg button:hover{color:var(--color-fg);}.ds-seg button[aria-pressed=true]{background:var(--color-surface-2);color:var(--color-fg);}.ds-seg button:focus-visible{outline:2px solid var(--color-accent-2);outline-offset:2px;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Manager's Clipboard",
+    "overview": "STAR is the football-manager standard played straight, at Football Manager Mobile's craft level. The whole career is read off a dark clipboard: a charcoal-slate ground, flat panels split by hairlines, rows of data that can be scanned in a glance on a phone held in one hand. Nothing glows and nothing is gradient-filled; hierarchy comes from tone steps, weight, and a single action colour.\n\nDensity is that of a good sports app: 56px list rows, 14px body text, 12px labels, tabular numerals everywhere a number appears. Every screen resolves into one full-width green Continue (or its equivalent primary action) at the bottom of the flow or in the sticky dock. Hebrew and English are equal citizens: every layout uses logical properties (start/end, inline borders) and directional icons mirror under RTL, while numbers, scores and the wordmark are isolated left-to-right.\n\nThe world explicitly refuses the FIFA / Ultimate Team card-and-glow look and the neon esports look.",
+    "keyCharacteristics": [
+      "Charcoal-slate ground with three tonal steps and a 1px hairline; no shadows, no gradients.",
+      "One action green, reserved for the primary action, the player's own table row, and goal moments.",
+      "Attribute and rating numbers coloured by band, FM style (grey, amber, light green, green, teal).",
+      "Ability and potential as five gold stars in halves.",
+      "Rubik for Hebrew and Latin alike, tabular numerals for all data.",
+      "RTL and LTR mirrored through logical properties, numbers always isolated LTR."
+    ],
+    "rules": [
+      {
+        "name": "The One Green Rule",
+        "body": "Continue Green is the only action colour. If something is green-filled it is the primary action on that screen, or it is the player themself. One green fill per screen.",
+        "section": "colors"
+      },
+      {
+        "name": "The Signal-Only Rule",
+        "body": "Gold, good-green, red and the band colours mean something (reward, outcome, rating). They never decorate.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Every number that can change — ratings, scores, minutes, money, counts — is set in tabular numerals and isolated left-to-right, so columns align and RTL never reorders digits.",
+        "section": "typography"
+      },
+      {
+        "name": "The Weight-Not-Case Rule",
+        "body": "Hierarchy is made with weight and size. No uppercase labels, no tracked small caps, no small coloured label stacked above a heading.",
+        "section": "typography"
+      },
+      {
+        "name": "The Hairline Rule",
+        "body": "Surfaces separate by a 1px hairline and a tone step, never by a shadow, blur or glow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** end every screen with one full-width Continue Green primary action (52px), in the sticky dock when the content scrolls.",
+      "**Do** separate every surface with a 1px Hairline and a tone step (ground, panel, raised).",
+      "**Do** colour attribute values, the overall badge and match ratings by band, and show ability/potential as five gold half-stars.",
+      "**Do** set every changing number in tabular numerals, isolated left-to-right.",
+      "**Do** use logical properties (start/end, inline borders) and mirror directional icons under RTL so Hebrew and English get identical layouts.",
+      "**Do** keep touch targets at 44px minimum."
+    ],
+    "donts": [
+      "**Don't** use gradients, glows, box-shadows or blur; this is not the FIFA card look or a neon esports look.",
+      "**Don't** fill anything green that is not the primary action or the player themself.",
+      "**Don't** use gold, good-green, red or band colours as decoration.",
+      "**Don't** put a small coloured or uppercase label above a heading or title; rank with weight and size.",
+      "**Don't** use Dim Slate for readable copy; it is for past or missing values only.",
+      "**Don't** use dashed borders except for the league-table gap and the ad slot."
+    ]
+  }
+}

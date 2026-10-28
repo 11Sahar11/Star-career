@@ -355,12 +355,6 @@
 
   /* ---------- labels and data ---------- */
 
-  .eyebrow {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--color-muted);
-  }
-
   .goal-strip {
     margin-top: 0.4rem;
     font-size: 0.85rem;
