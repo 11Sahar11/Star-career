@@ -30,3 +30,23 @@ export const getViewerAccess = createServerFn({ method: "POST" })
     const verified = rows[0]?.emailVerified === true;
     return { signedIn: true, email: user.email, verified, admin: verified && isOwnerEmail(user.email) };
   });
+
+/**
+ * Deletes the signed-in account and everything stored for it on the server
+ * (Google Play requires in-app account deletion). The career itself lives on
+ * the device and is not touched.
+ */
+export const deleteMyAccount = createServerFn({ method: "POST" })
+  .middleware([sessionMiddleware])
+  .handler(async ({ context }): Promise<{ deleted: boolean }> => {
+    const { getSessionUser } = await import("./auth/verify.server");
+    const user = await getSessionUser(context.bearerToken);
+    if (!user) return { deleted: false };
+    const { getSql } = await import("./db");
+    const sql = await getSql();
+    await sql`delete from "session" where "userId" = ${user.id}`;
+    await sql`delete from "account" where "userId" = ${user.id}`;
+    await sql`delete from "verification" where "identifier" = ${user.email ?? ""}`;
+    await sql`delete from "user" where id = ${user.id}`;
+    return { deleted: true };
+  });

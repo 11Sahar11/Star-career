@@ -44,12 +44,12 @@ export function storyById(id: string): Story | undefined {
   return STORIES.find((story) => story.id === id);
 }
 
-/** Every fifth league match from the third, three times in four, a story the player has not seen recently. */
+/** About three a season: every seventh match from the fourth, three times in five, a story not seen recently. */
 export function rollStory(career: Career, roll: () => number): PendingStory | null {
   if (career.story || career.retired) return null;
   const played = career.season.fixturesPlayed.length;
-  if (played < 3 || played % 5 !== 3) return null;
-  if (roll() > 0.75) return null;
+  if (played < 4 || played % 7 !== 4) return null;
+  if (roll() > 0.6) return null;
   const seen = career.storiesSeen ?? [];
   let pool = STORIES.filter((story) => !seen.includes(story.id) && (!story.when || story.when(career)));
   if (!pool.length) pool = STORIES.filter((story) => !story.when || story.when(career));

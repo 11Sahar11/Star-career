@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.star.footballcareer",
+      "sha256_cert_fingerprints": ["PASTE:THE:SHA256:FROM:PLAY:CONSOLE:APP:SIGNING"]
+    }
+  }
+]

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { authClient, signIn, signOut } from "@/lib/auth/client";
-import { getViewerAccess, type ViewerAccess } from "@/lib/access";
+import { deleteMyAccount, getViewerAccess, type ViewerAccess } from "@/lib/access";
 import { loadLang, t, type Lang } from "@/game/i18n";
 import { Crest } from "@/components/game/crest";
 
@@ -18,6 +18,8 @@ function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [access, setAccess] = useState<ViewerAccess | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleted, setDeleted] = useState(false);
   const tr = (key: string, vars?: Record<string, string | number>) => t(key, vars, lang);
 
   useEffect(() => {
@@ -79,6 +81,12 @@ function LoginPage() {
         <span className="wordmark">STAR</span>
       </div>
 
+      {deleted ? (
+        <p role="status" className="card mt-6 px-4 py-4 text-sm">
+          {tr("acct.deleted")}
+        </p>
+      ) : null}
+
       {access?.signedIn ? (
         <section className="card mt-6 grid gap-3 px-4 py-5">
           <p className="text-xs text-muted">{tr("acct.signedInAs")}</p>
@@ -100,6 +108,43 @@ function LoginPage() {
           >
             {tr("acct.signOut")}
           </button>
+          {confirmDelete ? (
+            <div className="grid gap-2 border-t border-line pt-3">
+              <p className="text-sm">{tr("acct.deleteAsk")}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" className="btn-ghost h-11" onClick={() => setConfirmDelete(false)}>
+                  {tr("cancel")}
+                </button>
+                <button
+                  type="button"
+                  className="btn-danger h-11"
+                  onClick={async () => {
+                    try {
+                      const result = await deleteMyAccount();
+                      if (result.deleted) {
+                        await signOut();
+                        setDeleted(true);
+                        refresh();
+                      } else setError(tr("acct.failed"));
+                    } catch {
+                      setError(tr("acct.failed"));
+                    }
+                  }}
+                >
+                  {tr("acct.deleteYes")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" className="min-h-11 text-start text-sm text-bad" onClick={() => setConfirmDelete(true)}>
+              {tr("acct.delete")}
+            </button>
+          )}
+          {error ? (
+            <p role="alert" className="text-sm text-bad">
+              {error}
+            </p>
+          ) : null}
         </section>
       ) : (
         <>

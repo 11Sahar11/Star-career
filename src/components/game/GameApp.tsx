@@ -59,6 +59,7 @@ import { loadLang, setLang, show, t, type Lang } from "@/game/i18n";
 import { authEnabled } from "@/lib/auth/client";
 import { STORIES, answerStory, storyAttr } from "@/game/stories";
 import { ACHIEVEMENTS, checkAchievements, loadUnlocked } from "@/game/achievements";
+import { initAds, showInterstitial, showRewarded } from "@/game/ads";
 import { getViewerAccess, type ViewerAccess } from "@/lib/access";
 import { PERKS, adminGrant, adminUnlockAll, applyPerks, buyPerk, canDouble, doubleLegacy, loadLegacy, payLegacy, perkState, type Legacy, type PerkId } from "@/game/legacy";
 import { ATTR_KEYS, type AttrKey, type Career, type Difficulty, type MatchLog, type MatchReport, type Role } from "@/game/types";
@@ -124,6 +125,7 @@ export function GameApp() {
     document.documentElement.dir = chosen === "he" ? "rtl" : "ltr";
     setBooted(true);
     setStreak(touchStreak());
+    initAds();
   }, []);
 
   function chooseLang(next: Lang) {
@@ -282,7 +284,7 @@ export function GameApp() {
       <SeasonScreen
         career={run}
         claimRace={wonRace}
-        onSummer={() => (wonRace ? finishDaily(run) : update(startSummer(run)))}
+        onSummer={() => (wonRace ? finishDaily(run) : playing === "daily" ? update(startSummer(run)) : showInterstitial("season-end", () => update(startSummer(run))))}
         onMenu={menu}
       />
     );
@@ -557,11 +559,13 @@ function SeasonBreak({ career, onBoost }: { career: Career; onBoost: (key: AttrK
               key={key}
               type="button"
               className="btn-ghost h-11 text-sm"
-              onClick={() => {
-                markBoost(id);
-                setUsed(true);
-                onBoost(key);
-              }}
+              onClick={() =>
+                showRewarded("attribute-boost", () => {
+                  markBoost(id);
+                  setUsed(true);
+                  onBoost(key);
+                })
+              }
             >
               {tr(`attr.${key}`)}
             </button>
@@ -1012,11 +1016,13 @@ function HealClip({ career, onChange }: { career: Career; onChange: (c: Career) 
       type="button"
       className="btn-ghost mt-3 h-12 w-full px-3 text-sm"
       data-ad-slot="rewarded"
-      onClick={() => {
-        markHeal(id);
-        setUsed(true);
-        onChange({ ...career, season: { ...career.season, outFor: 0 } });
-      }}
+      onClick={() =>
+        showRewarded("injury-return", () => {
+          markHeal(id);
+          setUsed(true);
+          onChange({ ...career, season: { ...career.season, outFor: 0 } });
+        })
+      }
     >
       {tr("healClip", { n: career.season.outFor })}
     </button>
@@ -2291,10 +2297,12 @@ function Retired({ career, legacyOn, onHome, onNew }: { career: Career; legacyOn
               type="button"
               className="btn-ghost h-12 text-sm"
               data-ad-slot="rewarded"
-              onClick={() => {
-                const next = doubleLegacy(career);
-                setGain({ gained: gain.gained * 2, total: next.points, double: false });
-              }}
+              onClick={() =>
+                showRewarded("legacy-double", () => {
+                  const next = doubleLegacy(career);
+                  setGain({ gained: gain.gained * 2, total: next.points, double: false });
+                })
+              }
             >
               {tr("legacyDouble")}
             </button>

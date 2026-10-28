@@ -1,0 +1,6 @@
+# Bubblewrap output and the signing key never go into git
+*.keystore
+*.jks
+app-release*
+build/
+.gradle/

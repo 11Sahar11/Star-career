@@ -366,7 +366,7 @@ const en: Record<string, string> = {
   avgN: "avg {n}",
   noCareer: "No career yet. Start one and come back after the first matches.",
   privacyAds: "Ads appear in three places: a banner on the menu, a skippable break after a season, and optional clips you choose to watch (+1 to an attribute, an early return from injury, or double legacy points). Nothing runs during a match, and the daily race has no clips.",
-  privacyData: "Without an account nothing leaves the device. If you create one, we keep your email and name to sign you in, and nothing else.",
+  privacyData: "Without an account nothing leaves the device. If you create one, we keep your email and name to sign you in, and nothing else. You can delete the account at any time on the account page.",
   lastResult: "Last result",
   formLast: "Form · last 5",
   boardHead: "Board target",
@@ -542,6 +542,10 @@ const en: Record<string, string> = {
   "ach.ballon.d": "Win the Ballon d'Or.",
   "ach.seasons_15": "Legend",
   "ach.seasons_15.d": "Play 15 seasons in one career.",
+  "acct.delete": "Delete my account",
+  "acct.deleteAsk": "Delete the account and everything stored with it? The career on this device stays.",
+  "acct.deleteYes": "Delete for good",
+  "acct.deleted": "The account was deleted.",
 };
 
 const he: Record<string, string> = {
@@ -884,7 +888,7 @@ const he: Record<string, string> = {
   avgN: "ממוצע {n}",
   noCareer: "עוד אין קריירה. מתחילים אחת וחוזרים אחרי המשחקים הראשונים.",
   privacyAds: "פרסומות מופיעות בשלושה מקומות: באנר בתפריט, הפסקה שאפשר לדלג עליה אחרי עונה, וקליפים שאתה בוחר לצפות בהם (+1 לתכונה, חזרה מוקדמת מפציעה, או נקודות מורשת כפולות). אין פרסומת באמצע משחק, ובמרוץ היומי אין קליפים.",
-  privacyData: "בלי חשבון שום דבר לא יוצא מהמכשיר. אם פותחים חשבון, שומרים את המייל והשם רק כדי להתחבר, ותו לא.",
+  privacyData: "בלי חשבון שום דבר לא יוצא מהמכשיר. אם פותחים חשבון, שומרים את המייל והשם רק כדי להתחבר, ותו לא. אפשר למחוק את החשבון בכל רגע בעמוד החשבון.",
   lastResult: "תוצאה אחרונה",
   formLast: "כושר · 5 אחרונים",
   boardHead: "יעד ההנהלה",
@@ -1060,6 +1064,10 @@ const he: Record<string, string> = {
   "ach.ballon.d": "לזכות בבלון ד'אור.",
   "ach.seasons_15": "אגדה",
   "ach.seasons_15.d": "15 עונות בקריירה אחת.",
+  "acct.delete": "מחיקת החשבון שלי",
+  "acct.deleteAsk": "למחוק את החשבון וכל מה שנשמר בו? הקריירה במכשיר הזה נשארת.",
+  "acct.deleteYes": "למחוק לצמיתות",
+  "acct.deleted": "החשבון נמחק.",
 };
 
 const es: Record<string, string> = {
@@ -1402,7 +1410,7 @@ const es: Record<string, string> = {
   avgN: "media {n}",
   noCareer: "Aún no hay carrera. Empieza una y vuelve tras los primeros partidos.",
   privacyAds: "Los anuncios aparecen en tres sitios: un banner en el menú, una pausa que puedes saltar tras una temporada y clips opcionales que eliges ver (+1 a un atributo, volver antes de una lesión o duplicar puntos de legado). Nada durante un partido, y la carrera diaria no tiene clips.",
-  privacyData: "Sin cuenta, nada sale del dispositivo. Si creas una, guardamos tu email y nombre solo para iniciar sesión.",
+  privacyData: "Sin cuenta, nada sale del dispositivo. Si creas una, guardamos tu email y nombre solo para iniciar sesión. Puedes eliminar la cuenta cuando quieras en la página de la cuenta.",
   lastResult: "Último resultado",
   formLast: "Forma · últimos 5",
   boardHead: "Objetivo de la directiva",
@@ -1578,6 +1586,10 @@ const es: Record<string, string> = {
   "ach.ballon.d": "Gana el Balón de Oro.",
   "ach.seasons_15": "Leyenda",
   "ach.seasons_15.d": "15 temporadas en una carrera.",
+  "acct.delete": "Eliminar mi cuenta",
+  "acct.deleteAsk": "¿Eliminar la cuenta y todo lo guardado en ella? La carrera de este dispositivo se queda.",
+  "acct.deleteYes": "Eliminar para siempre",
+  "acct.deleted": "La cuenta se ha eliminado.",
 };
 
 const fr: Record<string, string> = {
@@ -1920,7 +1932,7 @@ const fr: Record<string, string> = {
   avgN: "moyenne {n}",
   noCareer: "Pas encore de carrière. Commences-en une et reviens après les premiers matchs.",
   privacyAds: "Les pubs apparaissent à trois endroits : une bannière dans le menu, une pause passable après une saison, et des clips facultatifs que tu choisis (+1 à un attribut, retour anticipé de blessure, ou points d'héritage doublés). Rien pendant un match, et la course du jour n'a pas de clips.",
-  privacyData: "Sans compte, rien ne quitte l'appareil. Si tu en crées un, on garde ton e-mail et ton nom pour te connecter, rien d'autre.",
+  privacyData: "Sans compte, rien ne quitte l'appareil. Si tu en crées un, on garde ton e-mail et ton nom pour te connecter, rien d'autre. Tu peux supprimer le compte à tout moment sur la page du compte.",
   lastResult: "Dernier résultat",
   formLast: "Forme · 5 derniers",
   boardHead: "Objectif du club",
@@ -2096,6 +2108,10 @@ const fr: Record<string, string> = {
   "ach.ballon.d": "Gagne le Ballon d'Or.",
   "ach.seasons_15": "Légende",
   "ach.seasons_15.d": "15 saisons dans une carrière.",
+  "acct.delete": "Supprimer mon compte",
+  "acct.deleteAsk": "Supprimer le compte et tout ce qui y est enregistré ? La carrière sur cet appareil reste.",
+  "acct.deleteYes": "Supprimer définitivement",
+  "acct.deleted": "Le compte a été supprimé.",
 };
 
 const tables: Record<Lang, Record<string, string>> = { en, he, es, fr };
