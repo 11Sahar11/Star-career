@@ -597,7 +597,7 @@
     font-size: 0.75rem;
     font-weight: 700;
   }
-  .wdl-w { background: var(--color-accent); color: var(--color-ink); }
+  .wdl-w { background: color-mix(in oklab, var(--color-good) 20%, transparent); color: var(--color-good); }
   .wdl-d { background: var(--color-surface-2); color: var(--color-fg); }
   .wdl-l { background: color-mix(in oklab, var(--color-bad) 85%, black); color: #fff; }
 
@@ -612,7 +612,7 @@
   .stat-row > div { display: grid; gap: 0.1rem; padding: 0.55rem 0.75rem; }
   .stat-row > div + div { border-inline-start: 1px solid var(--color-line); }
   .stat-row dt { font-size: 0.72rem; color: var(--color-muted); }
-  .stat-row dd { margin: 0; font-size: 1.1rem; font-weight: 600; }
+  .stat-row dd { margin: 0; font-size: 1.1rem; font-weight: 600; text-align: start; }
 
   .team-name {
     min-width: 0;
@@ -641,7 +641,7 @@
     position: sticky;
     bottom: 0;
     z-index: 5;
-    margin: 1rem -1rem -1.25rem;
+    margin: auto -1rem -1.25rem;
     padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
     background: var(--color-bg);
     border-top: 1px solid var(--color-line);

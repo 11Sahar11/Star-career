@@ -1520,19 +1520,27 @@ function SeasonScreen({
       <dl className="stat-row mt-3">
         <div>
           <dt>{tr("apps")}</dt>
-          <dd className="num">{career.season.apps}</dd>
+          <dd>
+            <span className="num">{career.season.apps}</span>
+          </dd>
         </div>
         <div>
           <dt>{tr("goals")}</dt>
-          <dd className="num">{career.season.goals}</dd>
+          <dd>
+            <span className="num">{career.season.goals}</span>
+          </dd>
         </div>
         <div>
           <dt>{tr("assists")}</dt>
-          <dd className="num">{career.season.assists}</dd>
+          <dd>
+            <span className="num">{career.season.assists}</span>
+          </dd>
         </div>
         <div>
           <dt>{tr("average")}</dt>
-          <dd className={`num ${preview.avg >= 7 ? "text-good" : ""}`}>{preview.avg ? preview.avg.toFixed(1) : "–"}</dd>
+          <dd className={preview.avg >= 7 ? "text-good" : ""}>
+            <span className="num">{preview.avg ? preview.avg.toFixed(1) : "–"}</span>
+          </dd>
         </div>
       </dl>
 
