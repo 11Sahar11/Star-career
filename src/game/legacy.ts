@@ -120,3 +120,19 @@ export function applyPerks(career: Career, perks: PerkId[]): Career {
   }
   return { ...career, player: { ...player, potential, attrs } };
 }
+
+/** Admin tool: add points (for testing the perk shop). */
+export function adminGrant(points: number): Legacy {
+  const legacy = loadLegacy();
+  const next = { ...legacy, points: legacy.points + points, earned: legacy.earned + points };
+  saveLegacy(next);
+  return next;
+}
+
+/** Admin tool: own every perk without spending points. */
+export function adminUnlockAll(): Legacy {
+  const legacy = loadLegacy();
+  const next = { ...legacy, perks: PERKS.map((perk) => perk.id) };
+  saveLegacy(next);
+  return next;
+}

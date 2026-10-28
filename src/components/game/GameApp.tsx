@@ -39,6 +39,7 @@ import {
   previewPlayer,
   primaryKeys,
   retireCareer,
+  statCap,
   rewardedBoost,
   runToStop,
   seasonLabel,
@@ -51,10 +52,12 @@ import {
 } from "@/game/engine";
 import { boostId, boostTaken, healTaken, loadCareer, markHeal, loadDailyAttempt, loadSound, markBoost, saveCareer, saveDailyAttempt, saveSound, touchStreak, type DailyAttempt } from "@/game/save";
 import { loadLang, setLang, show, t, type Lang } from "@/game/i18n";
-import { PERKS, applyPerks, buyPerk, canDouble, doubleLegacy, loadLegacy, payLegacy, perkState, type Legacy, type PerkId } from "@/game/legacy";
+import { authEnabled } from "@/lib/auth/client";
+import { getViewerAccess, type ViewerAccess } from "@/lib/access";
+import { PERKS, adminGrant, adminUnlockAll, applyPerks, buyPerk, canDouble, doubleLegacy, loadLegacy, payLegacy, perkState, type Legacy, type PerkId } from "@/game/legacy";
 import { ATTR_KEYS, type AttrKey, type Career, type Difficulty, type MatchLog, type MatchReport, type Role } from "@/game/types";
 
-type View = "boot" | "home" | "create" | "game" | "collection" | "summary" | "daily" | "privacy" | "legacy";
+type View = "boot" | "home" | "create" | "game" | "collection" | "summary" | "daily" | "privacy" | "legacy" | "admin";
 
 const LangContext = createContext<Lang>("en");
 
@@ -85,6 +88,14 @@ export function GameApp() {
   const [streak, setStreak] = useState(1);
   const [sound, setSound] = useState(true);
   const [lang, setLangState] = useState<Lang>("en");
+  const [access, setAccess] = useState<ViewerAccess | null>(null);
+
+  useEffect(() => {
+    if (!authEnabled) return;
+    getViewerAccess()
+      .then(setAccess)
+      .catch(() => setAccess(null));
+  }, []);
 
   useEffect(() => {
     const loaded = loadCareer();
@@ -189,6 +200,8 @@ export function GameApp() {
         onDaily={() => setView("daily")}
         onPrivacy={() => setView("privacy")}
         onLegacy={() => setView("legacy")}
+        access={access}
+        onAdmin={() => setView("admin")}
         streak={streak}
         onNew={() => {
           setPlaying("main");
@@ -214,7 +227,21 @@ export function GameApp() {
   else if (view === "daily") {
     screen = <DailyLobby attempt={daily} onBack={() => setView("home")} onBegin={beginDaily} />;
   } else if (view === "privacy") screen = <Privacy onBack={() => setView("home")} />;
-  else if (view === "legacy") screen = <LegacyScreen onBack={() => setView("home")} />; else if (!run) screen = <Splash />;
+  else if (view === "legacy") screen = <LegacyScreen onBack={() => setView("home")} />;
+  else if (view === "admin" && access?.admin) {
+    screen = (
+      <AdminScreen
+        career={career}
+        onCareer={setCareer}
+        onResetDaily={() => {
+          const cleared: DailyAttempt = { date: todayKey(), career: null, seasons: null };
+          saveDailyAttempt(cleared);
+          setDaily(cleared);
+        }}
+        onBack={() => setView("home")}
+      />
+    );
+  } else if (view === "admin") screen = <Splash />; else if (!run) screen = <Splash />;
   else if (run.screen === "camp" || run.screen === "break") {
     screen = <TrainingScreen career={run} onChange={update} onMenu={menu} />;
   } else if (run.screen === "match" && run.activeReport) {
@@ -525,6 +552,8 @@ function Home({
   onDaily,
   onPrivacy,
   onLegacy,
+  access,
+  onAdmin,
   onNew,
   dailyBest,
   streak,
@@ -540,6 +569,8 @@ function Home({
   onDaily: () => void;
   onPrivacy: () => void;
   onLegacy: () => void;
+  access: ViewerAccess | null;
+  onAdmin: () => void;
   onNew: () => void;
   dailyBest: number | null;
   streak: number;
@@ -675,7 +706,20 @@ function Home({
             )}
           </div>
         ) : null}
-        <button type="button" className="mx-auto mt-4 block text-xs text-muted" onClick={onPrivacy}>
+        {authEnabled ? (
+          <div className="mx-auto mt-5 grid max-w-[26rem] gap-2">
+            {access?.admin ? (
+              <button type="button" className="btn-ghost flex h-11 items-center justify-center gap-2 text-sm" onClick={onAdmin}>
+                <Shield className="size-4 text-gold" />
+                {tr("admin.open")}
+              </button>
+            ) : null}
+            <a href="/login" className="flex min-h-11 items-center justify-center text-sm text-muted underline">
+              {access?.signedIn ? tr("acct.signedInShort", { email: access.email ?? "" }) : tr("acct.cta")}
+            </a>
+          </div>
+        ) : null}
+        <button type="button" className="mx-auto mt-2 block min-h-11 text-xs text-muted" onClick={onPrivacy}>
           {tr("privacy")}
         </button>
       </div>
@@ -1796,6 +1840,61 @@ function DailyLobby({ attempt, onBack, onBegin }: { attempt: DailyAttempt | null
         </button>
       ) : null}
       <p className="mt-4 text-xs text-muted">{tr("dailyTomorrow")}</p>
+    </Shell>
+  );
+}
+
+function AdminScreen({
+  career,
+  onCareer,
+  onResetDaily,
+  onBack,
+}: {
+  career: Career | null;
+  onCareer: (career: Career) => void;
+  onResetDaily: () => void;
+  onBack: () => void;
+}) {
+  const { tr } = useTx();
+  const [note, setNote] = useState<string | null>(null);
+  const tools: { id: string; label: string; run: () => string }[] = [
+    { id: "points", label: tr("admin.points"), run: () => tr("legacyPts", { n: adminGrant(500).points }) },
+    { id: "perks", label: tr("admin.perks"), run: () => (adminUnlockAll(), tr("admin.done")) },
+    {
+      id: "max",
+      label: tr("admin.max"),
+      run: () => {
+        if (!career) return tr("noCareer");
+        const player = career.player;
+        const attrs = { ...player.attrs };
+        for (const key of ATTR_KEYS) attrs[key] = statCap(player.position, 99, key);
+        onCareer({ ...career, player: { ...player, potential: 99, attrs } });
+        return tr("admin.done");
+      },
+    },
+    { id: "daily", label: tr("admin.daily"), run: () => (onResetDaily(), tr("admin.done")) },
+  ];
+  return (
+    <Shell>
+      <button type="button" className="mb-3 flex min-h-11 items-center gap-1 text-sm text-muted" onClick={onBack}>
+        <ChevronLeft className="size-4 rtl:-scale-x-100" />
+        {tr("menu")}
+      </button>
+      <p className="eyebrow">{tr("acct.admin")}</p>
+      <h1 className="font-display mt-1 text-4xl">{tr("admin.title")}</h1>
+      <p className="mt-2 text-sm leading-6 text-muted">{tr("admin.copy")}</p>
+      <div className="mt-4 grid gap-2">
+        {tools.map((tool) => (
+          <button key={tool.id} type="button" className="btn-ghost h-12 px-4 text-sm" onClick={() => setNote(tool.run())}>
+            {tool.label}
+          </button>
+        ))}
+      </div>
+      {note ? (
+        <p role="status" className="card mt-4 px-4 py-3 text-sm font-bold text-good">
+          {note}
+        </p>
+      ) : null}
     </Shell>
   );
 }
