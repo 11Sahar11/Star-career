@@ -76,18 +76,18 @@ function LoginPage() {
 
       <div className="flex items-center gap-2">
         <Crest className="h-8 w-8" />
-        <span className="wordmark text-gold-2">STAR</span>
+        <span className="wordmark">STAR</span>
       </div>
 
       {access?.signedIn ? (
         <section className="card mt-6 grid gap-3 px-4 py-5">
-          <p className="eyebrow">{tr("acct.signedInAs")}</p>
-          <p className="truncate text-lg font-extrabold" dir="ltr">
+          <p className="text-xs text-muted">{tr("acct.signedInAs")}</p>
+          <p className="truncate text-lg font-semibold" dir="ltr">
             {access.email}
           </p>
-          {access.admin ? <span className="chip chip-gold">{tr("acct.admin")}</span> : null}
+          {access.admin ? <span className="chip chip-accent">{tr("acct.admin")}</span> : null}
           {!access.verified ? <p className="text-xs leading-5 text-muted">{tr("acct.unverified")}</p> : null}
-          <Link to="/" className="btn-gold flex h-12 items-center justify-center">
+          <Link to="/" className="btn-primary flex h-12 items-center justify-center">
             {tr("acct.toGame")}
           </Link>
           <button
@@ -103,7 +103,7 @@ function LoginPage() {
         </section>
       ) : (
         <>
-          <h1 className="font-display mt-5 text-4xl">{mode === "signup" ? tr("acct.signupTitle") : tr("acct.signinTitle")}</h1>
+          <h1 className="mt-5 text-2xl font-bold">{mode === "signup" ? tr("acct.signupTitle") : tr("acct.signinTitle")}</h1>
           <p className="mt-2 text-sm leading-6 text-muted">{tr("acct.copy")}</p>
 
           <button type="button" className="btn-ghost mt-5 flex h-12 items-center justify-center gap-2" onClick={google}>
@@ -132,7 +132,7 @@ function LoginPage() {
                   maxLength={32}
                   autoComplete="nickname"
                   onChange={(event) => setName(event.target.value)}
-                  className="h-12 rounded-2xl border border-line bg-surface px-4 text-base font-normal text-fg"
+                  className="h-12 rounded-md border border-line bg-surface px-4 text-base font-normal text-fg"
                 />
               </label>
             ) : null}
@@ -146,7 +146,7 @@ function LoginPage() {
                 value={email}
                 autoComplete="email"
                 onChange={(event) => setEmail(event.target.value)}
-                className="h-12 rounded-2xl border border-line bg-surface px-4 text-base font-normal text-fg"
+                className="h-12 rounded-md border border-line bg-surface px-4 text-base font-normal text-fg"
               />
             </label>
             <label className="grid gap-1.5 text-sm font-semibold" htmlFor="acct-pass">
@@ -160,7 +160,7 @@ function LoginPage() {
                 value={password}
                 autoComplete={mode === "signup" ? "new-password" : "current-password"}
                 onChange={(event) => setPassword(event.target.value)}
-                className="h-12 rounded-2xl border border-line bg-surface px-4 text-base font-normal text-fg"
+                className="h-12 rounded-md border border-line bg-surface px-4 text-base font-normal text-fg"
               />
             </label>
             {error ? (
@@ -168,14 +168,14 @@ function LoginPage() {
                 {error}
               </p>
             ) : null}
-            <button type="submit" className="btn-gold mt-1 h-14 text-lg" disabled={busy || !email.trim() || !password}>
+            <button type="submit" className="btn-primary mt-1 h-13 text-base" disabled={busy || !email.trim() || !password}>
               {mode === "signup" ? tr("acct.signupBtn") : tr("acct.signinBtn")}
             </button>
           </form>
 
           <button
             type="button"
-            className="mt-4 min-h-11 text-sm text-gold"
+            className="mt-4 min-h-11 text-sm text-accent"
             onClick={() => {
               setMode(mode === "signup" ? "signin" : "signup");
               setError(null);

@@ -22,7 +22,7 @@ function PrivacyPage() {
         <p>{t("privacyData", undefined, lang)}</p>
         <p>{t("privacyAds", undefined, lang)}</p>
       </div>
-      <Link to="/" className="mt-6 min-h-11 text-sm text-gold">
+      <Link to="/" className="mt-6 min-h-11 text-sm text-accent">
         {t("back", undefined, lang)}
       </Link>
     </main>
