@@ -4,7 +4,8 @@ import {
   CLUBS,
   COUNTRIES,
   LEAGUES,
-  NATIONS,
+  nationById,
+  nationPool,
   POSITIONS,
   RELEVANCE,
   TIER_STRENGTH,
@@ -223,16 +224,60 @@ function slotsFor(sizeA: number, sizeB: number) {
   return Math.min(spots, Math.floor(sizeA / 3), Math.floor(sizeB / 3));
 }
 
+function strengthScore(home: number, away: number, rng: () => number): [number, number] {
+  const diff = home - away + 4;
+  const rawHome = Math.exp(diff / 8);
+  const rawAway = Math.exp(-diff / 8);
+  const rawDraw = 1.25;
+  const roll = rng() * (rawHome + rawAway + rawDraw);
+  if (roll < rawHome) {
+    const goals = 1 + Math.floor(rng() * 3);
+    return [goals, Math.floor(rng() * goals)];
+  }
+  if (roll < rawHome + rawDraw) {
+    const goals = Math.floor(rng() * 3);
+    return [goals, goals];
+  }
+  const goals = 1 + Math.floor(rng() * 3);
+  return [Math.floor(rng() * goals), goals];
+}
+
+function pairRound(ids: string[], roundIndex: number): Array<[string, string]> {
+  const ring = ids.length % 2 === 1 ? [...ids, ""] : [...ids];
+  const count = ring.length;
+  const round = roundIndex % (count - 1);
+  const leg = Math.floor(roundIndex / (count - 1)) % 2;
+  const rest = ring.slice(1);
+  for (let step = 0; step < round; step += 1) {
+    const last = rest.pop();
+    if (last !== undefined) rest.unshift(last);
+  }
+  const line = [ring[0], ...rest];
+  const pairs: Array<[string, string]> = [];
+  for (let i = 0; i < count / 2; i += 1) {
+    let home = line[i] ?? "";
+    let away = line[count - 1 - i] ?? "";
+    if (!home || !away) continue;
+    if (leg === 1) [home, away] = [away, home];
+    pairs.push([home, away]);
+  }
+  return pairs;
+}
+
+function playRound(table: TableRow[], ids: string[], roundIndex: number, rng: () => number) {
+  for (const [homeId, awayId] of pairRound(ids, roundIndex)) {
+    const [homeGoals, awayGoals] = strengthScore(clubStrength(homeId), clubStrength(awayId), rng);
+    applyScore(table, homeId, awayId, homeGoals, awayGoals);
+  }
+}
+
 function ghostTable(career: Career, leagueId: string, rng: () => number): TableRow[] {
-  return divisionClubs(career, leagueId).map((club) => ({
-    clubId: club.id,
-    pts: Math.round(clubStrength(club.id) + rng() * 14 - 7),
-    gf: Math.round(28 + rng() * 36),
-    ga: Math.round(28 + rng() * 36),
-    w: 0,
-    d: 0,
-    l: 0,
-  }));
+  const clubs = divisionClubs(career, leagueId);
+  const table = emptyTable(clubs);
+  const rounds = Math.max(2, (clubs.length - 1) * 2);
+  const ids = clubs.map((club) => club.id);
+  for (let round = 0; round < rounds; round += 1) playRound(table, ids, round, rng);
+  return table;
 }
 
 function shufflePyramid(career: Career) {
@@ -683,9 +728,10 @@ function freshSeason(career: Career, rng: () => number) {
   };
 }
 
-export function createCareer(name: string, position: PositionId, countryId: string, salt: number, difficulty: Difficulty = "normal"): Career {
+export function createCareer(name: string, position: PositionId, countryId: string, salt: number, difficulty: Difficulty = "normal", nationId?: string): Career {
   const trimmed = name.trim().slice(0, 16);
   const country = COUNTRIES.some((item) => item.id === countryId) ? countryId : "eng";
+  const nation = nationById(nationId || country).id;
   const rolled = previewPlayer(trimmed, position, salt);
   const rng = makeRng(rolled.rng);
   const league = entryLeague(country);
@@ -709,6 +755,7 @@ export function createCareer(name: string, position: PositionId, countryId: stri
     },
     reputation: 6,
     countryId: country,
+    nationId: nation,
     clubId: home.id,
     difficulty,
     year: 2026,
@@ -860,14 +907,7 @@ function followUp(career: Career, report: MatchReport, rng: () => number) {
 function simBystanders(table: TableRow[], ourId: string, roundIndex: number, rng: () => number) {
   const others = table.filter((row) => row.clubId !== ourId);
   if (others.length < 2) return;
-  const shift = roundIndex % others.length;
-  const rotated = others.map((_, index) => others[(index + shift) % others.length]);
-  for (let i = 0; i + 1 < rotated.length; i += 2) {
-    const home = rotated[i];
-    const away = rotated[i + 1];
-    const [gf, ga] = sampleScore(clubStrength(home.clubId), clubStrength(away.clubId), roundIndex % 2 === 0, rng);
-    applyScore(table, home.clubId, away.clubId, gf, ga);
-  }
+  playRound(table, others.map((row) => row.clubId), roundIndex, rng);
 }
 
 function applyDeltas(attrs: Attrs, deltas: Attrs) {
@@ -1022,24 +1062,35 @@ export function runToStop(career: Career): Career {
 export function trainOdds(career: Career, key: AttrKey) {
   const room = statCap(career.player.position, career.player.potential, key) - career.player.attrs[key];
   const age = career.player.age;
-  let up = age <= 19 ? 64 : age <= 23 ? 54 : age <= 28 ? 42 : age <= 32 ? 30 : 18;
+  let big = age <= 19 ? 16 : age <= 23 ? 12 : age <= 28 ? 8 : age <= 32 ? 4 : 0;
+  let up = age <= 19 ? 48 : age <= 23 ? 42 : age <= 28 ? 34 : age <= 32 ? 26 : 16;
   let down = 11;
   if (career.difficulty === "easy") {
-    up += 12;
+    big += 8;
+    up += 6;
     down = 6;
   } else if (career.difficulty === "hard") {
-    up -= 12;
+    big = Math.max(0, big - 6);
+    up -= 8;
     down = 20;
   }
-  if (room <= 0) up = 0;
+  if (room <= 0) {
+    up = 0;
+    big = 0;
+  } else if (room < 3) {
+    up += big;
+    big = 0;
+  }
   up = clamp(up, 0, 90);
+  big = clamp(big, 0, 40);
   down = clamp(down, 4, 35);
-  if (up + down > 97) up = 97 - down;
-  return { up, down, gain: room > 0 ? 1 : 0 };
+  if (up + big + down > 97) up = Math.max(0, 97 - big - down);
+  return { up, big, down };
 }
 
 function applyTrain(career: Career, key: AttrKey, which: "camp" | "break"): Career {
   const odds = trainOdds(career, key);
+  const room = statCap(career.player.position, career.player.potential, key) - career.player.attrs[key];
   const rng = makeRng(career.rng);
   const roll = Math.floor(rng.next() * 100);
   let delta = 0;
@@ -1047,8 +1098,10 @@ function applyTrain(career: Career, key: AttrKey, which: "camp" | "break"): Care
   if (roll < odds.down) {
     delta = -1;
     spell = career.difficulty === "hard" ? 4 : career.difficulty === "easy" ? 2 : 3;
-  } else if (roll < odds.down + odds.up) {
-    delta = odds.gain;
+  } else if (roll < odds.down + odds.big) {
+    delta = Math.min(3, room);
+  } else if (roll < odds.down + odds.big + odds.up) {
+    delta = Math.min(1, room);
   }
   const nextVal = clamp(career.player.attrs[key] + delta, 40, 99);
   const real = nextVal - career.player.attrs[key];
@@ -1341,14 +1394,40 @@ function clubBySalt(career: Career, leagueId: string, salt: string, bias: "top" 
   return options[hashString(salt) % options.length] ?? list[0];
 }
 
+function seasonWasPoor(career: Career) {
+  const apps = career.season.apps;
+  if (apps <= 0) return true;
+  return career.season.sumRating / apps < 6.4;
+}
+
 export function buildOffers(career: Career, ovr: number, tablePos: number): Offer[] {
   const club = getClub(career.clubId);
   const league = getLeague(leagueOf(career, club.id));
   const age = career.player.age;
   const years = age >= farewellAge(career.player.position) ? 1 : moveEvery(career.difficulty);
-  const offers: Offer[] = [offerFor(career, club, ovr, age, "stay", years)];
-  if (career.shuffle?.promoted.includes(club.id)) offers[0].note = `@note.promoted|${league.name}|${offers[0].note.replace(/^@/, "")}`;
-  if (career.shuffle?.relegated.includes(club.id)) offers[0].note = `@note.relegated|${league.name}|${offers[0].note.replace(/^@/, "")}`;
+  const poor = seasonWasPoor(career);
+  if (career.race) {
+    if (poor) return [];
+    const stay = offerFor(career, club, ovr, age, "stay", 1);
+    stay.note = "@note.raceStay";
+    return [stay];
+  }
+  const offers: Offer[] = [];
+  if (!poor) {
+    offers.push(offerFor(career, club, ovr, age, "stay", years));
+    if (career.shuffle?.promoted.includes(club.id)) offers[0].note = `@note.promoted|${league.name}|${offers[0].note.replace(/^@/, "")}`;
+    if (career.shuffle?.relegated.includes(club.id)) offers[0].note = `@note.relegated|${league.name}|${offers[0].note.replace(/^@/, "")}`;
+    const limit = farewellAge(career.player.position);
+    if (age >= limit) {
+      offers[0].years = 1;
+      return offers.slice(0, 1);
+    }
+    if (career.contractLeft > 0) {
+      offers[0].years = career.contractLeft;
+      offers[0].note = career.contractLeft === 1 ? "@note.locked1" : `@note.locked|${career.contractLeft}`;
+      return offers.slice(0, 1);
+    }
+  }
   const avg = career.season.apps ? career.season.sumRating / career.season.apps : 0;
   const strong = tablePos <= 2;
   const sharp = avg >= 7.1 && career.season.apps >= 4;
@@ -1368,19 +1447,10 @@ export function buildOffers(career: Career, ovr: number, tablePos: number): Offe
 
   const up = nextLeague(league);
   const limit = farewellAge(career.player.position);
-  if (age >= limit) {
-    offers[0].years = 1;
-    return offers.slice(0, 1);
-  }
-  if (career.contractLeft > 0) {
-    offers[0].years = career.contractLeft;
-    offers[0].note = career.contractLeft === 1 ? "@note.locked1" : `@note.locked|${career.contractLeft}`;
-    return offers.slice(0, 1);
-  }
-
+  if (age >= limit) return offers;
   const mates = divisionClubs(career, league.id).filter((item) => item.id !== club.id);
   const sideCount = age >= 36 ? 1 : 2;
-  const start = hashString(`${salt}|side`) % mates.length;
+  const start = mates.length ? hashString(`${salt}|side`) % mates.length : 0;
   for (let i = 0; i < sideCount; i++) {
     const dest = mates[(start + i * 5) % mates.length];
     if (dest && !offers.some((item) => item.clubId === dest.id)) offers.push(offerFor(career, dest, ovr, age, "side", years));
@@ -1459,13 +1529,16 @@ export function commitSeason(career: Career): Career {
     news: pushNews(career.news, preview.targetHit ? "The board is pleased with the season." : "The board wanted a higher finish."),
   };
   aged.pendingOffers = buildOffers(aged, ovr, preview.tablePos);
-  if (aged.player.age > farewellAge(aged.player.position)) {
+  const tooOld = aged.player.age > farewellAge(aged.player.position);
+  const released = !tooOld && aged.pendingOffers.length === 0;
+  if (tooOld || released) {
     return {
       ...aged,
       retired: true,
+      released,
       screen: "retired",
       pendingOffers: null,
-      news: pushNews(aged.news, `At ${aged.player.age} nobody offers a contract. The career ends.`),
+      news: pushNews(aged.news, released ? "Released. The season was not good enough for a new contract." : `At ${aged.player.age} nobody offers a contract. The career ends.`),
     };
   }
   return aged;
@@ -1512,19 +1585,30 @@ export function acceptOffer(career: Career, clubId: string): Career {
   return next;
 }
 
-function summerKind(year: number): "friendly" | "euros" | "world-cup" {
+function playerNation(career: Career) {
+  return nationById(career.nationId || career.countryId);
+}
+
+function summerKind(year: number, nationId: string): "friendly" | "euros" | "world-cup" | "copa" {
+  const nation = nationById(nationId);
   if (year % 4 === 2) return "world-cup";
-  if (year % 4 === 0) return "euros";
+  if (year % 4 === 0) return nation.euros ? "euros" : nation.copa ? "copa" : "friendly";
   return "friendly";
 }
 
-function intlFixture(id: string, label: string, opponent: string, strength: number, home: boolean): Fixture {
+function pickNation(pool: ReturnType<typeof nationPool>, rng: () => number, avoid: string[]) {
+  const options = pool.filter((item) => !avoid.includes(item.id));
+  const list = options.length ? options : pool;
+  return list[Math.floor(rng() * list.length)];
+}
+
+function intlFixture(id: string, label: string, opponent: string, strength: number, home: boolean, opponentId = id): Fixture {
   return {
     id,
     competition: "national",
     round: "national",
     roundLabel: label,
-    opponentId: id,
+    opponentId,
     opponentName: opponent,
     opponentStrength: strength,
     home,
@@ -1533,27 +1617,30 @@ function intlFixture(id: string, label: string, opponent: string, strength: numb
 
 export function startSummer(career: Career): Career {
   if (career.screen !== "season") return career;
-  const kind = summerKind(career.year);
-  const country = getCountry(career.countryId);
+  const nation = playerNation(career);
+  const kind = summerKind(career.year, nation.id);
   const ovr = overall(career.player.position, career.player.attrs);
-  const bar = career.countryId === "isr" ? 60 : career.countryId === "ned" || career.countryId === "por" ? 68 : 74;
-  const called = career.player.age >= 17 && (ovr >= bar || (career.reputation >= 50 && ovr >= bar - 6));
-  const tag = kind === "world-cup" ? "summer.wc" : kind === "euros" ? "summer.euros" : "summer.friendly";
-  const reason = called ? `@summer.in|${country.national}|${tag}` : `@summer.out|${country.national}|${bar}`;
+  const called = career.player.age >= 17 && (ovr >= nation.bar || (career.reputation >= 50 && ovr >= nation.bar - 6));
+  const tag = kind === "world-cup" ? "summer.wc" : kind === "euros" ? "summer.euros" : kind === "copa" ? "summer.copa" : "summer.friendly";
+  const reason = called ? `@summer.in|country.${nation.id}|${tag}` : `@summer.out|country.${nation.id}|${nation.bar}`;
   const rng = makeRng(hashString(`${career.player.name}|summer|${career.year}`) || 1);
-  const rivals = NATIONS.filter((name) => name !== country.national);
-  const pickName = () => rivals[Math.floor(rng.next() * rivals.length)] ?? "A national team";
+  const pool = nationPool(kind, nation.id);
   const fixtures: Fixture[] = [];
+  const add = (id: string, label: string, strength: number, home: boolean) => {
+    const rival = pickNation(pool, () => rng.next(), []);
+    if (!rival) return;
+    fixtures.push(intlFixture(id, label, `@country.${rival.id}`, strength, home, rival.id));
+  };
   if (called && kind === "friendly") {
-    fixtures.push(intlFixture(`f1-${career.year}`, "@summer.friendly", pickName(), 70 + rng.next() * 10, true));
-    fixtures.push(intlFixture(`f2-${career.year}`, "@summer.friendly", pickName(), 72 + rng.next() * 8, false));
-  } else if (called) {
-    fixtures.push(intlFixture(`t1-${career.year}`, `@summer.group|${tag}`, pickName(), 76 + rng.next() * 8, true));
+    add(`f1-${career.year}`, "@summer.friendly", 70 + rng.next() * 10, true);
+    add(`f2-${career.year}`, "@summer.friendly", 72 + rng.next() * 8, false);
+  } else if (called && pool.length) {
+    add(`t1-${career.year}`, `@summer.group|${tag}`, 76 + rng.next() * 8, true);
   }
   return {
     ...career,
     screen: "summer",
-    summer: { kind, called, reason, fixtures, cursor: 0, played: [], done: !called },
+    summer: { kind, called: called && fixtures.length > 0, reason, fixtures, cursor: 0, played: [], done: !called || fixtures.length === 0 },
     news: pushNews(career.news, reason),
   };
 }
@@ -1568,19 +1655,22 @@ export function playSummer(career: Career): Career {
   report.deltas = emptyAttrs();
   const fixtures = [...career.summer.fixtures];
   const won = report.us > report.them;
-  const tag = career.summer.kind === "world-cup" ? "summer.wc" : "summer.euros";
+  const tag = career.summer.kind === "world-cup" ? "summer.wc" : career.summer.kind === "copa" ? "summer.copa" : "summer.euros";
+  const nation = playerNation(career);
+  const pool = nationPool(career.summer.kind === "friendly" ? "world-cup" : career.summer.kind, nation.id);
+  const nextRival = () => pickNation(pool, roll, [nation.id, fx.opponentId]);
   if (career.summer.kind !== "friendly" && won && fx.id.startsWith("t1")) {
-    const rivals = NATIONS.filter((name) => name !== getCountry(career.countryId).national && name !== fx.opponentName);
-    fixtures.push(intlFixture(`t2-${career.year}`, `@summer.semi|${tag}`, rivals[Math.floor(roll() * rivals.length)] ?? "A national team", 80 + roll() * 6, false));
+    const rival = nextRival();
+    if (rival) fixtures.push(intlFixture(`t2-${career.year}`, `@summer.semi|${tag}`, `@country.${rival.id}`, 80 + roll() * 6, false, rival.id));
   }
   if (career.summer.kind !== "friendly" && won && fx.id.startsWith("t2")) {
-    const rivals = NATIONS.filter((name) => name !== getCountry(career.countryId).national && name !== fx.opponentName);
-    fixtures.push(intlFixture(`t3-${career.year}`, `@summer.final|${tag}`, rivals[Math.floor(roll() * rivals.length)] ?? "A national team", 84, true));
+    const rival = nextRival();
+    if (rival) fixtures.push(intlFixture(`t3-${career.year}`, `@summer.final|${tag}`, `@country.${rival.id}`, 84, true, rival.id));
   }
   let trophies = career.trophies;
   let news = pushNews(career.news, `${fx.roundLabel}: ${report.us}–${report.them} vs ${report.opponentName}. ${report.rating.toFixed(1)}.`);
   if (won && fx.id.startsWith("t3")) {
-    trophies = [...trophies, { id: `${career.summer.kind}-${career.year}`, name: `@${tag}`, year: career.year, detail: getCountry(career.countryId).national }];
+    trophies = [...trophies, { id: `${career.summer.kind}-${career.year}`, name: `@${tag}`, year: career.year, detail: `@country.${nation.id}` }];
     news = pushNews(news, `${tag} winners.`);
   }
   const cursor = career.summer.cursor + 1;
@@ -1670,6 +1760,7 @@ export function createDailyCareer(name: string, date = todayKey()): Career {
     },
     reputation: 24,
     countryId: league.countryId,
+    nationId: league.countryId,
     clubId: club.id,
     difficulty: "normal",
     year: 2026,

@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { Crest } from "@/components/game/crest";
 import { playGoal, playWhistle, setAudioEnabled, unlockAudio } from "@/game/audio";
-import { CLUBS, COUNTRIES, LEAGUES, POSITIONS, entryLeague, getClub, getCountry, getLeague } from "@/game/data";
+import { CLUBS, COUNTRIES, LEAGUES, NATIONS, POSITIONS, entryLeague, getClub, getCountry, getLeague, nationById } from "@/game/data";
 import {
   acceptOffer,
   answerBreak,
@@ -214,10 +214,10 @@ export function GameApp() {
     screen = (
       <Create
         onBack={() => setView("home")}
-        onStart={(name, position, countryId, salt, difficulty) => {
+        onStart={(name, position, countryId, nationId, salt, difficulty) => {
           setPlaying("main");
           unlockAudio();
-          setCareer(applyPerks(createCareer(name, position, countryId, salt, difficulty), loadLegacy().perks));
+          setCareer(applyPerks(createCareer(name, position, countryId, salt, difficulty, nationId), loadLegacy().perks));
           setView("game");
         }}
       />
@@ -732,16 +732,17 @@ function Create({
   onStart,
 }: {
   onBack: () => void;
-  onStart: (name: string, position: Career["player"]["position"], countryId: string, salt: number, difficulty: Difficulty) => void;
+  onStart: (name: string, position: Career["player"]["position"], countryId: string, nationId: string, salt: number, difficulty: Difficulty) => void;
 }) {
   const [name, setName] = useState("Alex");
   const [countryId, setCountryId] = useState<string | null>(null);
+  const [nationId, setNationId] = useState<string | null>(null);
   const [position, setPosition] = useState<Career["player"]["position"] | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [salt, setSalt] = useState(1);
   const preview = useMemo(() => (position ? previewPlayer(name || "Player", position, salt) : null), [name, position, salt]);
   const country = COUNTRIES.find((item) => item.id === countryId);
-  const ready = name.trim().length >= 2 && position && countryId;
+  const ready = name.trim().length >= 2 && position && countryId && nationId;
   const { tr } = useTx();
 
   return (
@@ -766,7 +767,7 @@ function Create({
         placeholder={tr("namePh")}
       />
 
-      <h2 className="mt-5 text-base font-extrabold">{tr("country")}</h2>
+      <h2 className="mt-5 text-base font-extrabold">{tr("startCountry")}</h2>
       <div className="mt-3 grid grid-cols-2 gap-2">
         {COUNTRIES.map((item) => {
           const selected = countryId === item.id;
@@ -774,11 +775,31 @@ function Create({
             <button
               key={item.id}
               type="button"
-              onClick={() => setCountryId(item.id)}
+              onClick={() => {
+                setCountryId(item.id);
+                setNationId((current) => current ?? item.id);
+              }}
               className={`rounded-2xl border px-3 py-3 text-start ${selected ? "border-gold bg-surface-2" : "border-line bg-surface"}`}
             >
               <span className="block font-extrabold">{tr(`country.${item.id}`)}</span>
               <span className="mt-1 block text-xs text-muted">{entryLeague(item.id).name}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <h2 className="mt-5 text-base font-extrabold">{tr("nation")}</h2>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {NATIONS.map((item) => {
+          const selected = nationId === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setNationId(item.id)}
+              className={`rounded-2xl border px-3 py-3 text-start ${selected ? "border-gold bg-surface-2" : "border-line bg-surface"}`}
+            >
+              <span className="block font-extrabold">{tr(`country.${item.id}`)}</span>
             </button>
           );
         })}
@@ -854,8 +875,8 @@ function Create({
       <button
         type="button"
         className="btn-gold mt-5 h-14 w-full text-lg"
-        disabled={!ready || !position || !countryId}
-        onClick={() => position && countryId && onStart(name.trim(), position, countryId, salt, difficulty)}
+        disabled={!ready || !position || !countryId || !nationId}
+        onClick={() => position && countryId && nationId && onStart(name.trim(), position, countryId, nationId, salt, difficulty)}
       >
         {tr("startSeason")}
       </button>
@@ -913,6 +934,7 @@ function HealClip({ career, onChange }: { career: Career; onChange: (c: Career) 
 
 function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c: Career) => void; onMenu: () => void }) {
   const [paused, setPaused] = useState(() => Boolean(career.lastTrain));
+  const [speed, setSpeed] = useState<1 | 2 | 4>(1);
   const club = getClub(career.clubId);
   const league = getLeague(career.season.leagueId);
   const country = getCountry(career.countryId);
@@ -929,9 +951,9 @@ function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c:
     if (paused || career.screen !== "run") return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce) return;
-    const id = window.setTimeout(() => onChange(playStep(career)), 460);
+    const id = window.setTimeout(() => onChange(playStep(career)), 460 / speed);
     return () => window.clearTimeout(id);
-  }, [career, paused, onChange]);
+  }, [career, paused, onChange, speed]);
 
   return (
     <Shell>
@@ -960,7 +982,7 @@ function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c:
           <div className="min-w-0">
             <h1 className="font-display truncate text-3xl leading-none">{career.player.name}</h1>
             <p className="mt-1 text-sm text-muted">
-              #{shirtNumber(career.player.position)} · {club.name}
+              #{shirtNumber(career.player.position)} · {club.name} · {tr(`country.${nationById(career.nationId || career.countryId).id}`)}
             </p>
           </div>
           {career.race ? <span className="chip chip-trophy shrink-0">{tr("raceTag")}</span> : null}
@@ -983,7 +1005,7 @@ function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c:
               <p className="text-xs text-muted">
                 {tr("lastResult")} · {text(latest.roundLabel)}
               </p>
-              <p className="truncate text-sm font-bold">{latest.opponentName}</p>
+              <p className="truncate text-sm font-bold">{text(latest.opponentName)}</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <span className="font-num text-2xl font-bold" dir="ltr">
@@ -1035,6 +1057,14 @@ function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c:
       ) : null}
 
       {career.season.outFor > 0 && !career.race ? <HealClip career={career} onChange={onChange} /> : null}
+
+      <div className="seg seg-grow mt-3" role="group" aria-label={tr("speed")}>
+        {([1, 2, 4] as const).map((value) => (
+          <button key={value} type="button" aria-pressed={speed === value} onClick={() => setSpeed(value)}>
+            x{value}
+          </button>
+        ))}
+      </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button type="button" className="btn-ghost h-12" onClick={() => setPaused((value) => !value)}>
@@ -1088,6 +1118,11 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
       <div className="mt-4 grid gap-2">
         {ATTR_KEYS.map((key) => {
           const odds = trainOdds(career, key);
+          const chance = odds.big
+            ? tr("trainChance", { big: odds.big, up: odds.up, down: odds.down })
+            : odds.up
+              ? tr("trainRise", { up: odds.up, down: odds.down })
+              : tr("ceiling");
           return (
             <button
               key={key}
@@ -1103,10 +1138,10 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
                 <span className="block font-extrabold">{tr(`drill.${key}`)}</span>
                 <span className="block text-xs text-muted">
                   {tr(`attr.${key}`)} {career.player.attrs[key]}
-                  {odds.gain ? ` · ${tr("trainChance", { up: odds.up, down: odds.down })}` : ` · ${tr("ceiling")}`}
+                  {` · ${chance}`}
                 </span>
               </span>
-              <span className="num text-lg font-extrabold text-gold">{odds.gain ? `${odds.up}%` : "—"}</span>
+              <span className="num text-lg font-extrabold text-gold">{odds.big ? "+3" : odds.up ? "+1" : "—"}</span>
             </button>
           );
         })}
@@ -1124,8 +1159,8 @@ function MatchScreen({ career, onReport, onMenu }: { career: Career; onReport: (
   const done = step >= report.events.length;
   const minute = current?.minute ?? 0;
   const ours = getClub(career.clubId).name;
-  const left = report.home ? ours : report.opponentName;
-  const right = report.home ? report.opponentName : ours;
+  const left = report.home ? ours : text(report.opponentName);
+  const right = report.home ? text(report.opponentName) : ours;
   const leftGoals = report.home ? (current?.us ?? 0) : (current?.them ?? 0);
   const rightGoals = report.home ? (current?.them ?? 0) : (current?.us ?? 0);
   const { tr, text } = useTx();
@@ -1249,7 +1284,7 @@ function ReportScreen({
       <h1 className="font-display mt-1 text-4xl">{report.missed ? tr("unused") : tr("matchReport")}</h1>
       <p className="mt-2 text-lg">{text(report.headline)}</p>
       <div className="panel mt-4 px-4 py-5 text-center">
-        <p className="text-sm text-muted">{report.home ? tr("home") : tr("away")} vs {report.opponentName}</p>
+        <p className="text-sm text-muted">{report.home ? tr("home") : tr("away")} vs {text(report.opponentName)}</p>
         <p className="num mt-1 text-5xl font-extrabold">
           {report.us}
           <span className="px-2 text-gold">–</span>
@@ -1294,7 +1329,7 @@ function ResultRow({ item }: { item: MatchLog }) {
     <div className="rounded-2xl border border-line bg-surface">
       <button type="button" className="flex min-h-11 w-full items-center justify-between gap-3 px-3 py-2 text-sm" onClick={() => setOpen((value) => !value)}>
         <span className="min-w-0 truncate text-start text-muted">
-          {text(item.roundLabel)} · {item.opponentName}
+          {text(item.roundLabel)} · {text(item.opponentName)}
         </span>
         <span className="num shrink-0 font-bold">
           {item.us}–{item.them}
@@ -1347,13 +1382,14 @@ function SummerScreen({
     return () => window.clearTimeout(id);
   }, [career, summer, onChange]);
   if (!summer) return null;
-  const title = tr(summer.kind === "world-cup" ? "summer.wc" : summer.kind === "euros" ? "summer.euros" : "summer.friendly");
+  const title = tr(summer.kind === "world-cup" ? "summer.wc" : summer.kind === "euros" ? "summer.euros" : summer.kind === "copa" ? "summer.copa" : "summer.friendly");
+  const nation = nationById(career.nationId || career.countryId);
   return (
     <Shell>
       <button type="button" className="mb-3 text-sm text-muted" onClick={onMenu}>
         {tr("menu")}
       </button>
-      <p className="text-sm font-semibold tracking-widest text-gold">{getCountry(career.countryId).national}</p>
+      <p className="text-sm font-semibold tracking-widest text-gold">{tr(`country.${nation.id}`)}</p>
       <h1 className="font-display text-4xl">{title}</h1>
       <p className="mt-2 text-sm leading-6 text-muted">{text(summer.reason)}</p>
       <p className="mt-2 text-sm text-muted">{tr("summer.caps", { n: career.totals.caps, g: career.totals.intlGoals })}</p>
@@ -1580,6 +1616,7 @@ function OffersScreen({
             : tr("whereCopy")}
       </p>
       {!career.race ? <SeasonBreak career={career} onBoost={onBoost} /> : null}
+      {!offers.some((offer) => offer.kind === "stay") ? <p className="mt-3 text-sm font-bold text-bad">{tr("noRenew")}</p> : null}
       <div className="mt-4 grid gap-3">
         {offers.map((offer) => {
           const club = getClub(offer.clubId);
@@ -1964,13 +2001,15 @@ function Retired({ career, legacyOn, onHome, onNew }: { career: Career; legacyOn
       <p className="eyebrow text-trophy">{tr("endRoad")}</p>
       <h1 className="font-display mt-1 text-4xl">{career.player.name}</h1>
       <p className="mt-2 text-sm leading-6 text-muted">
-        {tr("retiredLine", {
-          age: career.player.age,
-          seasons: career.totals.seasons,
-          goals: career.totals.goals,
-          trophies: career.trophies.length,
-          peak,
-        })}
+        {career.released
+          ? tr("releasedLine", { age: career.player.age })
+          : tr("retiredLine", {
+              age: career.player.age,
+              seasons: career.totals.seasons,
+              goals: career.totals.goals,
+              trophies: career.trophies.length,
+              peak,
+            })}
       </p>
       {gain ? (
         <div className="card mt-4 grid gap-2 px-4 py-4">

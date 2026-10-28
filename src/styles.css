@@ -622,7 +622,8 @@ html:lang(he) .daily-kick {
   font-size: 0.95rem;
   color: var(--color-muted);
 }
-.seg button[aria-pressed="true"] { background: var(--color-surface-2); color: var(--color-fg); }
+.seg-grow { width: 100%; }
+.seg-grow button { flex: 1; }
 
 /* Awards */
 .award-card {

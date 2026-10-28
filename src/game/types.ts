@@ -185,7 +185,7 @@ export type SeasonState = {
   leagueId: string;
 };
 
-export type SummerKind = "friendly" | "euros" | "world-cup";
+export type SummerKind = "friendly" | "euros" | "world-cup" | "copa";
 
 export type Shuffle = {
   year: number;
@@ -217,6 +217,7 @@ export type Career = {
   player: Player;
   reputation: number;
   countryId: string;
+  nationId?: string;
   clubId: string;
   difficulty: Difficulty;
   year: number;
@@ -249,5 +250,6 @@ export type Career = {
   daily: DailyState | null;
   race: string | null;
   retired: boolean;
+  released?: boolean;
   news: string[];
 };

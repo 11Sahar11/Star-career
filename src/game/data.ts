@@ -305,7 +305,38 @@ export const CLUBS: Club[] = [
   ]),
 ];
 
-export const NATIONS = ["England", "Spain", "Italy", "Germany", "France", "Netherlands", "Portugal", "Israel", "Brazil", "Argentina", "Croatia", "Belgium"];
+export type Nation = {
+  id: string;
+  euros: boolean;
+  copa: boolean;
+  bar: number;
+};
+
+export const NATIONS: Nation[] = [
+  { id: "eng", euros: true, copa: false, bar: 74 },
+  { id: "esp", euros: true, copa: false, bar: 74 },
+  { id: "ita", euros: true, copa: false, bar: 74 },
+  { id: "ger", euros: true, copa: false, bar: 74 },
+  { id: "fra", euros: true, copa: false, bar: 74 },
+  { id: "ned", euros: true, copa: false, bar: 68 },
+  { id: "por", euros: true, copa: false, bar: 68 },
+  { id: "bel", euros: true, copa: false, bar: 72 },
+  { id: "cro", euros: true, copa: false, bar: 70 },
+  { id: "isr", euros: true, copa: false, bar: 60 },
+  { id: "bra", euros: false, copa: true, bar: 76 },
+  { id: "arg", euros: false, copa: true, bar: 76 },
+  { id: "uru", euros: false, copa: true, bar: 70 },
+  { id: "col", euros: false, copa: true, bar: 70 },
+];
+
+export function nationById(id: string): Nation {
+  return NATIONS.find((item) => item.id === id) ?? NATIONS[0];
+}
+
+export function nationPool(kind: "friendly" | "euros" | "world-cup" | "copa", nationId: string): Nation[] {
+  const pool = kind === "euros" ? NATIONS.filter((item) => item.euros) : kind === "copa" ? NATIONS.filter((item) => item.copa) : NATIONS;
+  return pool.filter((item) => item.id !== nationId);
+}
 
 export const DAILY_OPPONENTS = [
   "The final's shadow",
