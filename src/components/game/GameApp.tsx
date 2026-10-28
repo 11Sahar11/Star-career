@@ -51,9 +51,10 @@ import {
 } from "@/game/engine";
 import { boostId, boostTaken, loadCareer, loadDailyAttempt, loadSound, markBoost, saveCareer, saveDailyAttempt, saveSound, touchStreak, type DailyAttempt } from "@/game/save";
 import { loadLang, setLang, show, t, type Lang } from "@/game/i18n";
+import { PERKS, applyPerks, buyPerk, canDouble, doubleLegacy, loadLegacy, payLegacy, perkState, type Legacy, type PerkId } from "@/game/legacy";
 import { ATTR_KEYS, type AttrKey, type Career, type Difficulty, type MatchLog, type MatchReport, type Role } from "@/game/types";
 
-type View = "boot" | "home" | "create" | "game" | "collection" | "summary" | "daily" | "privacy";
+type View = "boot" | "home" | "create" | "game" | "collection" | "summary" | "daily" | "privacy" | "legacy";
 
 const LangContext = createContext<Lang>("en");
 
@@ -187,6 +188,7 @@ export function GameApp() {
         onSummary={() => setView("summary")}
         onDaily={() => setView("daily")}
         onPrivacy={() => setView("privacy")}
+        onLegacy={() => setView("legacy")}
         streak={streak}
         onNew={() => {
           setPlaying("main");
@@ -202,7 +204,7 @@ export function GameApp() {
         onStart={(name, position, countryId, salt, difficulty) => {
           setPlaying("main");
           unlockAudio();
-          setCareer(createCareer(name, position, countryId, salt, difficulty));
+          setCareer(applyPerks(createCareer(name, position, countryId, salt, difficulty), loadLegacy().perks));
           setView("game");
         }}
       />
@@ -211,7 +213,8 @@ export function GameApp() {
   else if (view === "summary") screen = <Summary career={career} onBack={() => setView("home")} />;
   else if (view === "daily") {
     screen = <DailyLobby attempt={daily} onBack={() => setView("home")} onBegin={beginDaily} />;
-  } else if (view === "privacy") screen = <Privacy onBack={() => setView("home")} />; else if (!run) screen = <Splash />;
+  } else if (view === "privacy") screen = <Privacy onBack={() => setView("home")} />;
+  else if (view === "legacy") screen = <LegacyScreen onBack={() => setView("home")} />; else if (!run) screen = <Splash />;
   else if (run.screen === "camp" || run.screen === "break") {
     screen = <TrainingScreen career={run} onChange={update} onMenu={menu} />;
   } else if (run.screen === "match" && run.activeReport) {
@@ -254,6 +257,7 @@ export function GameApp() {
     screen = (
       <Retired
         career={run}
+        legacyOn={playing === "main"}
         onHome={menu}
         onNew={() => {
           if (playing === "daily") {
@@ -520,6 +524,7 @@ function Home({
   onSummary,
   onDaily,
   onPrivacy,
+  onLegacy,
   onNew,
   dailyBest,
   streak,
@@ -534,12 +539,15 @@ function Home({
   onSummary: () => void;
   onDaily: () => void;
   onPrivacy: () => void;
+  onLegacy: () => void;
   onNew: () => void;
   dailyBest: number | null;
   streak: number;
 }) {
   const { tr } = useTx();
   const [confirm, setConfirm] = useState(false);
+  const [legacyPts, setLegacyPts] = useState(0);
+  useEffect(() => setLegacyPts(loadLegacy().points), []);
   const closes = useClosesIn();
   const board = useMemo(() => dailyBoard(), []);
   const dailyClub = getClub(board.clubId);
@@ -637,6 +645,13 @@ function Home({
             <Flame className="size-3.5" />
             {tr("streak", { n: streak })}
           </p>
+          <button type="button" className="card flex min-h-12 items-center justify-between gap-3 px-4 py-2 text-start" onClick={onLegacy}>
+            <span>
+              <span className="block text-sm font-extrabold">{tr("legacy")}</span>
+              <span className="block text-xs text-muted">{tr("legacyShort")}</span>
+            </span>
+            <span className="font-num text-xl font-bold text-trophy">{legacyPts}</span>
+          </button>
         </div>
 
         {career ? (
@@ -1659,6 +1674,50 @@ function Summary({ career, onBack }: { career: Career | null; onBack: () => void
   );
 }
 
+function shareLine(seasons: number) {
+  return `${"⚽".repeat(Math.max(0, seasons - 1))}🏆`;
+}
+
+function ShareResult({ seasons, date, pos, club }: { seasons: number; date: string; pos: string; club: string }) {
+  const { tr } = useTx();
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const message = tr("shareText", {
+    date,
+    n: seasons,
+    pos,
+    club,
+    line: shareLine(seasons),
+    url: typeof window === "undefined" ? "" : window.location.origin,
+  });
+
+  async function share() {
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share({ text: message });
+        return;
+      }
+      await navigator.clipboard.writeText(message);
+      setState("copied");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setState("failed");
+    }
+  }
+
+  return (
+    <div className="award-card mt-4 text-center">
+      <p className="text-sm font-extrabold text-trophy">{tr("dailyWon", { n: seasons })}</p>
+      <p className="text-2xl tracking-widest" dir="ltr" aria-hidden="true">
+        {shareLine(seasons)}
+      </p>
+      <button type="button" className="btn-gold mt-1 h-12 w-full" onClick={share}>
+        {state === "copied" ? tr("copied") : tr("shareBtn")}
+      </button>
+      {state === "failed" ? <p className="select-all whitespace-pre-line text-start text-xs text-muted">{message}</p> : null}
+    </div>
+  );
+}
+
 function DailyLobby({ attempt, onBack, onBegin }: { attempt: DailyAttempt | null; onBack: () => void; onBegin: (career: Career) => void }) {
   const board = useMemo(() => dailyBoard(), []);
   const { tr } = useTx();
@@ -1677,7 +1736,7 @@ function DailyLobby({ attempt, onBack, onBegin }: { attempt: DailyAttempt | null
       <p className="text-sm font-semibold tracking-widest text-gold">{tr("dailyKicker")}</p>
       <h1 className="font-display text-4xl">{tr("dailyTitle")}</h1>
       <p className="mt-2 text-sm leading-6 text-muted">{tr("dailyCopy", { pos: tr(`pos.${board.position}`), club: club.name, league: league.name })}</p>
-      {best != null ? <p className="mt-3 text-sm font-extrabold text-gold">{tr("dailyWon", { n: best })}</p> : null}
+      {best != null ? <ShareResult seasons={best} date={board.date} pos={tr(`pos.${board.position}`)} club={club.name} /> : null}
       <div className="panel mt-4 px-4 py-4">
         <p className="text-xs font-semibold tracking-widest text-muted">{tr("starting")}</p>
         <div className="mt-3 grid gap-2">
@@ -1718,8 +1777,65 @@ function DailyLobby({ attempt, onBack, onBegin }: { attempt: DailyAttempt | null
   );
 }
 
-function Retired({ career, onHome, onNew }: { career: Career; onHome: () => void; onNew: () => void }) {
+function LegacyScreen({ onBack }: { onBack: () => void }) {
   const { tr } = useTx();
+  const [legacy, setLegacy] = useState<Legacy | null>(null);
+  useEffect(() => setLegacy(loadLegacy()), []);
+  if (!legacy) return <Splash />;
+  return (
+    <Shell>
+      <button type="button" className="mb-3 flex min-h-11 items-center gap-1 text-sm text-muted" onClick={onBack}>
+        <ChevronLeft className="size-4 rtl:-scale-x-100" />
+        {tr("menu")}
+      </button>
+      <p className="eyebrow text-trophy">{tr("legacyEarned", { n: legacy.earned })}</p>
+      <h1 className="font-display mt-1 text-4xl">{tr("legacy")}</h1>
+      <p className="mt-2 text-sm leading-6 text-muted">{tr("legacyHow")}</p>
+      <div className="award-card mt-4 justify-items-center text-center">
+        <span className="font-num text-5xl font-bold text-trophy">{legacy.points}</span>
+        <span className="text-xs text-muted">{tr("legacyAvail")}</span>
+      </div>
+      <div className="mt-4 grid gap-2">
+        {PERKS.map((perk) => {
+          const state = perkState(legacy, perk.id);
+          return (
+            <article key={perk.id} className="card flex items-center gap-3 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-extrabold">{tr(`perk.${perk.id}`)}</p>
+                <p className="text-xs leading-5 text-muted">{tr(`perkD.${perk.id}`)}</p>
+                {state === "locked" && perk.needs ? <p className="text-xs text-bad">{tr("perkNeeds", { name: tr(`perk.${perk.needs}`) })}</p> : null}
+              </div>
+              {state === "owned" ? (
+                <span className="chip chip-good shrink-0">
+                  <Check className="size-3.5" />
+                  {tr("perkOwned")}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className={`${state === "ready" ? "btn-gold" : "btn-ghost"} h-11 shrink-0 px-4 text-sm`}
+                  disabled={state !== "ready"}
+                  onClick={() => setLegacy(buyPerk(perk.id as PerkId))}
+                >
+                  {tr("perkBuy", { n: perk.cost })}
+                </button>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </Shell>
+  );
+}
+
+function Retired({ career, legacyOn, onHome, onNew }: { career: Career; legacyOn: boolean; onHome: () => void; onNew: () => void }) {
+  const { tr } = useTx();
+  const [gain, setGain] = useState<{ gained: number; total: number; double: boolean } | null>(null);
+  useEffect(() => {
+    if (!legacyOn) return;
+    const paid = payLegacy(career);
+    setGain({ gained: paid.gained, total: paid.legacy.points, double: canDouble(career) });
+  }, [career, legacyOn]);
   const peak = career.history.reduce((best, row) => Math.max(best, row.ovr), overall(career.player.position, career.player.attrs));
   return (
     <Shell>
@@ -1734,6 +1850,27 @@ function Retired({ career, onHome, onNew }: { career: Career; onHome: () => void
           peak,
         })}
       </p>
+      {gain ? (
+        <div className="card mt-4 grid gap-2 px-4 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-extrabold">{tr("legacyGain", { n: gain.gained })}</span>
+            <span className="text-xs text-muted">{tr("legacyPts", { n: gain.total })}</span>
+          </div>
+          {gain.double ? (
+            <button
+              type="button"
+              className="btn-ghost h-12 text-sm"
+              data-ad-slot="rewarded"
+              onClick={() => {
+                const next = doubleLegacy(career);
+                setGain({ gained: gain.gained * 2, total: next.points, double: false });
+              }}
+            >
+              {tr("legacyDouble")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="mt-4 grid grid-cols-2 gap-2">
         {career.trophies.length ? (
           career.trophies.map((trophy) => (
