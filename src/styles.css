@@ -1,19 +1,24 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Manrope", "Segoe UI", sans-serif;
-  --font-display: "Oswald", "Manrope", sans-serif;
-  --color-bg: #10141c;
-  --color-bg-2: #171d2b;
-  --color-surface: #1e2636;
-  --color-surface-2: #283248;
-  --color-fg: #f6f3ee;
-  --color-muted: #a7b0c2;
+  /* Latin faces first; Hebrew glyphs fall through to Heebo / Secular One. */
+  --font-sans: "Manrope", "Heebo", "Segoe UI", sans-serif;
+  --font-display: "Oswald", "Secular One", "Heebo", sans-serif;
+  --font-num: "Oswald", "Heebo", sans-serif;
+  --color-bg: #0b1020;
+  --color-bg-2: #121a33;
+  --color-surface: #151c30;
+  --color-surface-2: #1e2742;
+  --color-fg: #f2f4fa;
+  --color-muted: #9aa6c2;
+  --color-good: #2ed47a;
+  --color-trophy: #ffc24b;
+  --color-dim: #5b6788;
   --color-gold: #ff5c39;
   --color-gold-2: #ffd2c4;
   --color-gold-deep: #c43618;
   --color-ink: #2a100c;
-  --color-line: #3c465c;
+  --color-line: #2c3654;
   --color-bad: #ff4d6d;
 }
 
@@ -392,4 +397,263 @@
 
 .privacy-copy p {
   color: var(--color-muted);
+}
+
+/* ---------- v2 visual layer: floodlit night match ---------- */
+
+html:lang(he) {
+  --font-sans: "Heebo", "Manrope", "Segoe UI", sans-serif;
+}
+
+.font-num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+.eyebrow {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: var(--color-gold);
+}
+
+html:lang(he) .eyebrow,
+html:lang(he) .home-kicker,
+html:lang(he) .daily-kick {
+  letter-spacing: 0.04em;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 1.25rem;
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  direction: ltr;
+}
+
+/* Player card: the hero of the menu */
+.player-card {
+  position: relative;
+  width: min(100%, 19rem);
+  margin: 0 auto;
+  padding: 2px;
+  border-radius: 1.6rem;
+  background: linear-gradient(160deg, var(--color-gold-2), var(--color-gold) 42%, var(--color-gold-deep));
+  box-shadow: 0 24px 50px -24px color-mix(in oklab, var(--color-gold) 70%, transparent);
+  text-align: start;
+}
+
+.player-card-in {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1.1rem 1.1rem 1rem;
+  border-radius: calc(1.6rem - 2px);
+  background: linear-gradient(170deg, #241a2e 0%, var(--color-surface) 45%, #0f1528 100%);
+}
+
+.player-card .ovr {
+  font-family: var(--font-num);
+  font-size: 3.6rem;
+  font-weight: 700;
+  line-height: 0.95;
+}
+
+.player-card .shirt {
+  font-family: var(--font-num);
+  font-size: 2.1rem;
+  font-weight: 700;
+  line-height: 1;
+  color: color-mix(in oklab, var(--color-fg) 14%, transparent);
+}
+
+.card-rule {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-line), transparent);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: fit-content;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  background: var(--color-surface-2);
+  color: var(--color-muted);
+}
+
+.chip-trophy { background: color-mix(in oklab, var(--color-trophy) 15%, transparent); color: var(--color-trophy); }
+.chip-good { background: color-mix(in oklab, var(--color-good) 15%, transparent); color: var(--color-good); }
+.chip-bad { background: color-mix(in oklab, var(--color-bad) 15%, transparent); color: #ff7a92; }
+.chip-gold { background: var(--color-gold); color: var(--color-ink); }
+
+/* Ratings as coloured tiles */
+.rate {
+  display: flex;
+  flex: 1;
+  height: 1.7rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.55rem;
+  font-family: var(--font-num);
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: var(--color-surface-2);
+  color: #c9d1e4;
+}
+.rate.hot { background: color-mix(in oklab, var(--color-good) 18%, transparent); color: var(--color-good); }
+.rate.cold { background: color-mix(in oklab, var(--color-bad) 16%, transparent); color: #ff7a92; }
+.rate.out { color: var(--color-dim); }
+
+.meter {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+  overflow: hidden;
+}
+.meter > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--color-gold), var(--color-gold-2));
+}
+.meter > i.good { background: var(--color-good); }
+.meter > i.bad { background: var(--color-bad); }
+
+/* Split bar: grey = before, colour = this season's change */
+.split-bar {
+  display: flex;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+  overflow: hidden;
+}
+.split-bar > i { display: block; height: 100%; }
+.split-bar > .base { background: var(--color-dim); }
+.split-bar > .gain { background: var(--color-good); }
+.split-bar > .loss { background: var(--color-bad); }
+
+/* Compact league table */
+.ltable-row {
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr) 2.4rem 2.2rem;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.875rem;
+}
+.ltable-row + .ltable-row { border-top: 1px solid color-mix(in oklab, var(--color-line) 70%, transparent); }
+.ltable-row.is-me {
+  background: color-mix(in oklab, var(--color-gold) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--color-gold);
+  color: var(--color-gold-2);
+  font-weight: 800;
+}
+[dir="rtl"] .ltable-row.is-me { box-shadow: inset -3px 0 0 var(--color-gold); }
+.ltable-gap { border-top: 1px dashed var(--color-line) !important; }
+
+/* Live match */
+.scorebox {
+  background: linear-gradient(180deg, #1a2340, #121933);
+  border: 1px solid var(--color-line);
+  border-radius: 1.4rem;
+}
+.score-big {
+  font-family: var(--font-num);
+  font-size: 3.4rem;
+  font-weight: 700;
+  line-height: 1;
+  direction: ltr;
+}
+.live-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--color-bad);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-bad) 22%, transparent);
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+@keyframes live-pulse { 50% { opacity: 0.35; } }
+
+.event {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.7rem 0.85rem;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+}
+.event .min { min-width: 1.9rem; font-family: var(--font-num); color: var(--color-muted); direction: ltr; }
+.event.goal {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--color-gold) 24%, transparent), color-mix(in oklab, var(--color-gold) 6%, transparent));
+  border-color: color-mix(in oklab, var(--color-gold) 50%, transparent);
+  font-weight: 700;
+}
+.event.goal .min { color: var(--color-gold-2); }
+.event.bad { background: color-mix(in oklab, var(--color-bad) 8%, transparent); border-color: color-mix(in oklab, var(--color-bad) 30%, transparent); }
+.event.bad .min { color: #ff7a92; }
+.event.good { border-color: color-mix(in oklab, var(--color-good) 30%, transparent); }
+.event-new { animation: event-in 0.35s ease-out; }
+@keyframes event-in { from { opacity: 0; transform: translateY(-6px); } }
+
+.seg {
+  display: flex;
+  border: 1px solid var(--color-line);
+  border-radius: 1rem;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+.seg button {
+  min-width: 2.9rem;
+  height: 3rem;
+  font-family: var(--font-num);
+  font-size: 0.95rem;
+  color: var(--color-muted);
+}
+.seg button[aria-pressed="true"] { background: var(--color-surface-2); color: var(--color-fg); }
+
+/* Awards */
+.award-card {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.8rem;
+  border-radius: 1.1rem;
+  background: linear-gradient(160deg, color-mix(in oklab, var(--color-trophy) 18%, transparent), var(--color-surface) 70%);
+  border: 1px solid color-mix(in oklab, var(--color-trophy) 38%, transparent);
+}
+
+/* Offers */
+.offer-best {
+  padding: 2px;
+  border-radius: 1.4rem;
+  background: linear-gradient(160deg, var(--color-gold-2), var(--color-gold) 45%, var(--color-gold-deep));
+}
+.offer-best > .offer-in { border-radius: calc(1.4rem - 2px); background: #161d33; }
+.offer-in { display: grid; gap: 0.7rem; padding: 0.9rem; }
+.offer-plain { border-radius: 1.3rem; background: var(--color-surface); border: 1px solid var(--color-line); }
+
+.tile {
+  display: grid;
+  gap: 0.1rem;
+  justify-items: center;
+  padding: 0.5rem 0.25rem;
+  border-radius: 0.8rem;
+  background: var(--color-surface-2);
+  text-align: center;
+}
+.tile b { font-family: var(--font-num); font-size: 1.05rem; font-weight: 600; }
+.tile span { font-size: 0.7rem; color: var(--color-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot, .event-new { animation: none; }
 }
