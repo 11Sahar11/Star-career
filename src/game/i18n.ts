@@ -164,8 +164,8 @@ const en: Record<string, string> = {
   results: "Results",
   soon: "Matches are about to run.",
   table: "Table",
-  pause: "Pause",
-  resume: "Resume",
+  pause: "Pause matches",
+  resume: "Resume matches",
   skipBreak: "Skip to the break",
   skipEnd: "Skip to the end",
   preseason: "Pre-season",
@@ -437,6 +437,9 @@ const en: Record<string, string> = {
   "admin.done": "Done.",
   ability: "Ability",
   potentialWord: "Potential",
+  "wdl.w": "W",
+  "wdl.d": "D",
+  "wdl.l": "L",
 };
 
 const he: Record<string, string> = {
@@ -577,8 +580,8 @@ const he: Record<string, string> = {
   results: "תוצאות",
   soon: "המשחקים עומדים לרוץ.",
   table: "טבלה",
-  pause: "השהה",
-  resume: "המשך",
+  pause: "עצור את המשחקים",
+  resume: "הפעל את המשחקים",
   skipBreak: "דלג להפסקה",
   skipEnd: "דלג לסוף",
   preseason: "טרום עונה",
@@ -850,6 +853,9 @@ const he: Record<string, string> = {
   "admin.done": "בוצע.",
   ability: "יכולת",
   potentialWord: "פוטנציאל",
+  "wdl.w": "נ",
+  "wdl.d": "ת",
+  "wdl.l": "ה",
 };
 
 const es: Record<string, string> = {
@@ -1263,6 +1269,9 @@ const es: Record<string, string> = {
   "admin.done": "Hecho.",
   ability: "Habilidad",
   potentialWord: "Potencial",
+  "wdl.w": "V",
+  "wdl.d": "E",
+  "wdl.l": "D",
 };
 
 const fr: Record<string, string> = {
@@ -1676,6 +1685,9 @@ const fr: Record<string, string> = {
   "admin.done": "Fait.",
   ability: "Niveau",
   potentialWord: "Potentiel",
+  "wdl.w": "V",
+  "wdl.d": "N",
+  "wdl.l": "D",
 };
 
 const tables: Record<Lang, Record<string, string>> = { en, he, es, fr };

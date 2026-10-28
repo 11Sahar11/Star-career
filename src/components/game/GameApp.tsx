@@ -732,7 +732,7 @@ function Home({
           </span>
           <span className="min-w-0 flex-1">
             <span className="block font-semibold">{tr("legacy")}</span>
-            <span className="block truncate text-xs text-muted">{tr("legacyShort")}</span>
+            <span className="block text-xs leading-snug text-muted">{tr("legacyShort")}</span>
           </span>
           <span className="num font-semibold text-trophy">{legacyPts}</span>
         </button>
@@ -944,10 +944,10 @@ function AttrBar({ attr, value, delta }: { attr: AttrKey; value: number; hot?: b
     <div>
       <div className="mb-1 flex items-center justify-between text-sm">
         <span className="flex items-center gap-1.5 font-semibold">
-          <Icon className="size-3.5 text-accent" />
+          <Icon className="size-3.5 text-muted" />
           {tr(`attr.${attr}`)}
         </span>
-        <span className="num font-bold">
+        <span className={`num font-bold band-${band(value)}`}>
           {value}
           {delta ? (
             <span className={delta > 0 ? "text-accent" : "text-bad"}>
@@ -958,7 +958,7 @@ function AttrBar({ attr, value, delta }: { attr: AttrKey; value: number; hot?: b
         </span>
       </div>
       <div className="bar-track">
-        <div className="bar-fill" style={{ width: `${value}%` }} />
+        <div className="bar-fill" style={{ width: `${value}%`, background: `var(--color-band-${band(value)})` }} />
       </div>
     </div>
   );
@@ -1129,8 +1129,8 @@ function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c:
 
       <section className="mt-4">
         <h2 className="mb-2 text-sm font-semibold">{tr("results")}</h2>
-        <div className="grid gap-1">
-          {log.length === 0 ? <p className="text-sm text-muted">{tr("soon")}</p> : null}
+        {log.length === 0 ? <p className="text-sm text-muted">{tr("soon")}</p> : null}
+        <div className="results-list">
           {log.filter((item) => item.competition !== "europe").map((item, index) => (
             <ResultRow key={`${item.opponentName}-${index}`} item={item} />
           ))}
@@ -1232,7 +1232,7 @@ function MatchScreen({ career, onReport, onMenu }: { career: Career; onReport: (
         onBack={onMenu}
         right={
           done ? undefined : (
-            <span className="flex items-center gap-1.5 px-2 text-xs font-bold text-bad">
+            <span className="live-tag">
               <span className="live-dot" />
               {tr("live")}
             </span>
@@ -1242,7 +1242,7 @@ function MatchScreen({ career, onReport, onMenu }: { career: Career; onReport: (
 
       <div className="scorebox px-4 pt-4 pb-3">
         <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-center" dir="ltr">
-          <span className={`min-w-0 text-sm font-bold ${left === ours ? "text-accent-2" : ""}`} dir="auto">
+          <span className={`team-name ${left === ours ? "text-accent-2" : ""}`} dir="auto">
             {left}
           </span>
           <span className="score-big">
@@ -1250,7 +1250,7 @@ function MatchScreen({ career, onReport, onMenu }: { career: Career; onReport: (
             <span className="px-2 text-accent">:</span>
             {rightGoals}
           </span>
-          <span className={`min-w-0 text-sm font-bold ${right === ours ? "text-accent-2" : ""}`} dir="auto">
+          <span className={`team-name ${right === ours ? "text-accent-2" : ""}`} dir="auto">
             {right}
           </span>
         </div>
@@ -1264,7 +1264,7 @@ function MatchScreen({ career, onReport, onMenu }: { career: Career; onReport: (
         </div>
       </div>
 
-      <ol className="card mt-4 flex max-h-[22rem] flex-col overflow-auto">
+      <ol className="card mt-4 flex flex-col">
         {[...shown].reverse().map((event, index) => (
           <li
             key={`${event.minute}-${shown.length - index}`}
@@ -1276,12 +1276,13 @@ function MatchScreen({ career, onReport, onMenu }: { career: Career; onReport: (
         ))}
       </ol>
 
+      <div className="dock">
       {done ? (
-        <button type="button" className="btn-primary mt-4 h-13 w-full text-base" onClick={onReport}>
+        <button type="button" className="btn-primary h-13 w-full text-base" onClick={onReport}>
           {tr("report")}
         </button>
       ) : (
-        <div className="mt-4 flex gap-2">
+        <div className="flex gap-2">
           <div className="seg" role="group" aria-label={tr("speed")}>
             {([1, 2, 4] as const).map((value) => (
               <button key={value} type="button" aria-pressed={speed === value} onClick={() => setSpeed(value)}>
@@ -1294,6 +1295,7 @@ function MatchScreen({ career, onReport, onMenu }: { career: Career; onReport: (
           </button>
         </div>
       )}
+      </div>
     </Shell>
   );
 }
@@ -1357,20 +1359,25 @@ function Mini({ n, l }: { n: number; l: string }) {
 
 function ResultRow({ item }: { item: MatchLog }) {
   const [open, setOpen] = useState(false);
-  const { text } = useTx();
+  const { tr, text } = useTx();
+  const outcome = item.us > item.them ? "w" : item.us < item.them ? "l" : "d";
   return (
-    <div className="rounded-md border border-line bg-surface">
-      <button type="button" className="flex min-h-11 w-full items-center justify-between gap-3 px-3 py-2 text-sm" onClick={() => setOpen((value) => !value)}>
-        <span className="min-w-0 truncate text-start text-muted">
-          {text(item.roundLabel)} · {text(item.opponentName)}
+    <div className="result-row">
+      <button type="button" className="flex min-h-12 w-full items-center gap-3 px-3.5 py-2 text-sm" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        <span className={`wdl wdl-${outcome}`}>{tr(`wdl.${outcome}`)}</span>
+        <span className="min-w-0 flex-1 text-start">
+          <span className="block truncate font-medium">{text(item.opponentName)}</span>
+          <span className="block truncate text-xs text-muted">{text(item.roundLabel)}</span>
         </span>
-        <span className="num shrink-0 font-bold">
+        <span className="num shrink-0 font-semibold">
           {item.us}–{item.them}
-          {item.missed ? "" : <span className="text-accent"> {item.rating.toFixed(1)}</span>}
+        </span>
+        <span className={`num w-9 shrink-0 text-end text-sm ${item.missed ? "text-dim" : `band-${item.rating >= 7.5 ? "high" : item.rating >= 6.8 ? "good" : item.rating >= 6.2 ? "mid" : "low"}`}`}>
+          {item.missed ? "–" : item.rating.toFixed(1)}
         </span>
       </button>
       {open ? (
-        <div className="border-t border-line px-3 py-2">
+        <div className="border-t border-line px-3.5 py-2.5">
           <p className="text-sm">{text(item.headline)}</p>
           <div className="mt-2 grid gap-1">
             {item.events.map((event, index) => (
@@ -1422,7 +1429,7 @@ function SummerScreen({
       <ScreenHeader title={title} sub={tr(`country.${nation.id}`)} onBack={onMenu} />
       <p className="text-sm leading-6 text-muted">{text(summer.reason)}</p>
       <p className="mt-2 text-sm text-muted">{tr("summer.caps", { n: career.totals.caps, g: career.totals.intlGoals })}</p>
-      <div className="mt-4 grid gap-1">
+      <div className="results-list mt-4">
         {summer.played.map((item, index) => (
           <ResultRow key={`${item.opponentName}-${index}`} item={item} />
         ))}
@@ -1510,24 +1517,24 @@ function SeasonScreen({
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-4 gap-2">
-        <div className="tile">
-          <b>{career.season.apps}</b>
-          <span>{tr("apps")}</span>
+      <dl className="stat-row mt-3">
+        <div>
+          <dt>{tr("apps")}</dt>
+          <dd className="num">{career.season.apps}</dd>
         </div>
-        <div className="tile">
-          <b className="text-trophy">{career.season.goals}</b>
-          <span>{tr("goals")}</span>
+        <div>
+          <dt>{tr("goals")}</dt>
+          <dd className="num">{career.season.goals}</dd>
         </div>
-        <div className="tile">
-          <b>{career.season.assists}</b>
-          <span>{tr("assists")}</span>
+        <div>
+          <dt>{tr("assists")}</dt>
+          <dd className="num">{career.season.assists}</dd>
         </div>
-        <div className="tile">
-          <b className="text-good">{preview.avg ? preview.avg.toFixed(1) : "–"}</b>
-          <span>{tr("average")}</span>
+        <div>
+          <dt>{tr("average")}</dt>
+          <dd className={`num ${preview.avg >= 7 ? "text-good" : ""}`}>{preview.avg ? preview.avg.toFixed(1) : "–"}</dd>
         </div>
-      </div>
+      </dl>
 
       {preview.europe ? (
         <p className="card mt-3 px-4 py-3 text-sm font-semibold">
@@ -1565,26 +1572,28 @@ function SeasonScreen({
       </div>
 
       <h2 className="mt-5 text-base font-semibold">{tr("awardsHead")}</h2>
-      {preview.awards.length ? (
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          {preview.awards.map((award) => (
-            <div key={award.id} className="award-card">
-              <Trophy className="size-6 text-trophy" />
-              <span className="text-sm font-semibold">{text(award.name)}</span>
-              <span className="text-xs text-muted">{text(award.detail)}</span>
-            </div>
-          ))}
+      <div className="list mt-2">
+        {preview.awards.map((award) => (
+          <div key={award.id} className="list-row">
+            <span className="list-icon text-trophy">
+              <Trophy className="size-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold">{text(award.name)}</span>
+              <span className="block text-xs text-muted">{text(award.detail)}</span>
+            </span>
+          </div>
+        ))}
+        {preview.awards.length === 0 ? <p className="list-row text-sm text-muted">{tr("noTrophy")}</p> : null}
+        <div className="list-row">
+          <span className={`list-icon ${preview.ballonYours ? "text-trophy" : ""}`}>
+            <Medal className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs text-muted">{tr("award.ballon")}</span>
+            <span className={`block font-semibold ${preview.ballonYours ? "text-trophy" : ""}`}>{preview.ballon}</span>
+          </span>
         </div>
-      ) : (
-        <p className="mt-2 text-sm text-muted">{tr("noTrophy")}</p>
-      )}
-
-      <div className={`card mt-3 flex items-center gap-3 px-4 py-3 ${preview.ballonYours ? "border-trophy" : ""}`}>
-        <Medal className="size-5 text-trophy" />
-        <span>
-          <span className="block text-xs font-bold text-trophy">{tr("award.ballon")}</span>
-          <span className="block font-semibold">{preview.ballon}</span>
-        </span>
       </div>
 
       {career.shuffle?.year === career.year ? (
@@ -1653,7 +1662,7 @@ function OffersScreen({
                       {league.name} · {offerCountry.name}
                     </p>
                   </div>
-                  <span className={`chip shrink-0 ${offer.role === "Star" ? "chip-accent" : offer.role === "Bench" ? "chip-bad" : ""}`}>
+                  <span className={`chip shrink-0 ${offer.role === "Star" ? "chip-trophy" : offer.role === "Bench" ? "chip-bad" : ""}`}>
                     {tr(`role${offer.role}`)}
                   </span>
                 </div>
@@ -1770,7 +1779,7 @@ function Summary({ career, onBack }: { career: Career | null; onBack: () => void
         <PlayerHeader career={career} />
       </div>
       <LeagueTable career={career} />
-      <div className="mt-4 grid gap-2">
+      <div className="results-list mt-4">
         {career.season.fixturesPlayed
           .filter((log) => log.competition !== "europe")
           .map((log, index) => (
