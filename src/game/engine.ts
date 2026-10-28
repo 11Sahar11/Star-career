@@ -134,20 +134,19 @@ export function money(wage: number, currency = "€") {
 }
 
 function ageGrowth(age: number) {
-  if (age <= 17) return 1.4;
-  if (age <= 19) return 1.2;
-  if (age <= 21) return 1;
-  if (age <= 24) return 0.72;
-  if (age <= 27) return 0.42;
-  if (age <= 30) return 0.22;
-  if (age <= 32) return 0.08;
+  if (age <= 17) return 0.55;
+  if (age <= 19) return 0.42;
+  if (age <= 21) return 0.32;
+  if (age <= 24) return 0.2;
+  if (age <= 27) return 0.1;
+  if (age <= 30) return 0.04;
   return 0;
 }
 
 function gainCap(age: number, difficulty: Difficulty = "normal") {
-  let cap = age <= 19 ? 5 : age <= 24 ? 3 : 2;
-  if (difficulty === "easy") cap += 2;
-  if (difficulty === "hard") cap = Math.max(1, cap - 1);
+  let cap = age <= 21 ? 2 : 1;
+  if (difficulty === "easy") cap += 1;
+  if (difficulty === "hard") cap = 1;
   return cap;
 }
 
@@ -177,8 +176,8 @@ export function previewPlayer(name: string, position: PositionId, salt: number) 
   for (const key of ATTR_KEYS) {
     const cap = statCap(position, potential, key);
     const rel = RELEVANCE[position][key];
-    const gap = (rel > 1 ? 6 : rel > 0.8 ? 10 : 16) + Math.floor(rng.next() * 3);
-    attrs[key] = clamp(cap - gap, 64, 90);
+    const gap = (rel > 1 ? 18 : rel > 0.8 ? 22 : 28) + Math.floor(rng.next() * 5);
+    attrs[key] = clamp(cap - gap, 52, 76);
   }
   return {
     seed,
@@ -484,8 +483,8 @@ function lineFor(kind: string, position: PositionId, rng: () => number) {
 }
 
 function rateMatch(position: PositionId, attrs: Attrs, input: { goals: number; assists: number; tackles: number; keyPasses: number; saves: number; errors: number; dribbles: number; us: number; them: number; fitness: number }) {
-  let rating = 6.7;
-  rating += input.goals * 0.85;
+  let rating = 6.25;
+  rating += input.goals * 0.7;
   rating += input.assists * 0.45;
   rating += Math.min(input.keyPasses, 4) * 0.1;
   rating += Math.min(input.dribbles, 4) * (position === "W" || position === "CAM" || position === "ST" ? 0.14 : 0.08);
@@ -497,7 +496,7 @@ function rateMatch(position: PositionId, attrs: Attrs, input: { goals: number; a
   else if (input.us < input.them) rating -= 0.08;
   if (input.fitness < 50) rating -= (50 - input.fitness) / 120;
   const touch = (attrs.passing + attrs.dribbling + (position === "GK" ? attrs.physical : attrs.shooting)) / 3;
-  if (input.errors === 0) rating += Math.max(0, (touch - 64) / 70);
+  if (input.errors === 0) rating += Math.max(0, (touch - 74) / 80);
   if (position === "GK" && input.them === 0) rating += 0.3;
   if ((position === "CB" || position === "CDM" || position === "FB") && input.errors === 0 && input.tackles >= 2) rating += 0.2;
   rating = clamp(rating, 4.6, 10);
@@ -508,8 +507,8 @@ function rateMatch(position: PositionId, attrs: Attrs, input: { goals: number; a
 
 function microGrowth(position: PositionId, attrs: Attrs, potential: number, age: number, rating: number, rng: () => number): Attrs {
   const deltas = emptyAttrs();
-  if (rating < 7.7 || age > 23) return deltas;
-  if (rng() > 0.34) return deltas;
+  if (rating < 8.5 || age > 20) return deltas;
+  if (rng() > 0.12) return deltas;
   const keys = ATTR_KEYS.filter((key) => RELEVANCE[position][key] >= 1).sort((a, b) => RELEVANCE[position][b] - RELEVANCE[position][a]);
   const key = keys[0];
   if (!key) return deltas;
@@ -999,6 +998,7 @@ export function playStep(career: Career): Career {
   const applied = applyReport(career, report, roll, "run");
   applied.rng = rng.state();
   applied.recentDeltas = null;
+  applied.lastTrain = null;
   if (!applied.season.breakDone && applied.season.cursor >= applied.season.breakAt) {
     applied.screen = "break";
     applied.season = { ...applied.season, phase: "first" };
@@ -1019,53 +1019,81 @@ export function runToStop(career: Career): Career {
   return current;
 }
 
-export function breakGain(career: Career, key: AttrKey) {
-  const cap = statCap(career.player.position, career.player.potential, key);
-  const room = cap - career.player.attrs[key];
-  if (room <= 0) return 0;
-  const raw = career.player.age <= 21 ? 3 : career.player.age <= 28 ? 2 : 1;
-  const pace = career.difficulty === "easy" ? 1 : career.difficulty === "hard" ? -1 : 0;
-  return Math.min(room, Math.max(0, raw + pace));
+export function trainOdds(career: Career, key: AttrKey) {
+  const room = statCap(career.player.position, career.player.potential, key) - career.player.attrs[key];
+  const age = career.player.age;
+  let up = age <= 19 ? 64 : age <= 23 ? 54 : age <= 28 ? 42 : age <= 32 ? 30 : 18;
+  let down = 11;
+  if (career.difficulty === "easy") {
+    up += 12;
+    down = 6;
+  } else if (career.difficulty === "hard") {
+    up -= 12;
+    down = 20;
+  }
+  if (room <= 0) up = 0;
+  up = clamp(up, 0, 90);
+  down = clamp(down, 4, 35);
+  if (up + down > 97) up = 97 - down;
+  return { up, down, gain: room > 0 ? 1 : 0 };
+}
+
+function applyTrain(career: Career, key: AttrKey, which: "camp" | "break"): Career {
+  const odds = trainOdds(career, key);
+  const rng = makeRng(career.rng);
+  const roll = Math.floor(rng.next() * 100);
+  let delta = 0;
+  let spell = 0;
+  if (roll < odds.down) {
+    delta = -1;
+    spell = career.difficulty === "hard" ? 4 : career.difficulty === "easy" ? 2 : 3;
+  } else if (roll < odds.down + odds.up) {
+    delta = odds.gain;
+  }
+  const nextVal = clamp(career.player.attrs[key] + delta, 40, 99);
+  const real = nextVal - career.player.attrs[key];
+  const attrs = { ...career.player.attrs, [key]: nextVal };
+  const deltas = emptyAttrs();
+  deltas[key] = real;
+  const training = { ...career.season.training };
+  if (real > 0) training[key] += 2;
+  const injured = spell > 0;
+  const note = injured
+    ? `Training injury. ${ATTR_LABEL[key]} ${real}, out for ${spell} matches.`
+    : real > 0
+      ? `The session landed. ${ATTR_LABEL[key]} +${real}, now ${nextVal}.`
+      : `The session did nothing. ${ATTR_LABEL[key]} stays ${nextVal}.`;
+  return {
+    ...career,
+    rng: rng.state(),
+    player: {
+      ...career.player,
+      attrs,
+      morale: clamp(career.player.morale + (injured ? -8 : real > 0 ? 4 : 1), 5, 100),
+      fitness: injured ? clamp(career.player.fitness - 16, 28, 100) : which === "break" ? clamp(career.player.fitness + 6, 0, 100) : career.player.fitness,
+    },
+    season: {
+      ...career.season,
+      training,
+      prep: "train",
+      outFor: injured ? spell : career.season.outFor,
+      ...(which === "break" ? { phase: "second" as const, breakDone: true } : {}),
+    },
+    recentDeltas: deltas,
+    lastTrain: { key, delta: real, outFor: spell },
+    screen: "run",
+    news: pushNews(career.news, note),
+  };
 }
 
 export function answerCamp(career: Career, key: AttrKey): Career {
   if (career.screen !== "camp") return career;
-  const gain = breakGain(career, key);
-  const attrs = { ...career.player.attrs, [key]: career.player.attrs[key] + gain };
-  const training = { ...career.season.training, [key]: career.season.training[key] + 2 };
-  const deltas = emptyAttrs();
-  deltas[key] = gain;
-  const note = gain
-    ? `Pre-season. ${ATTR_LABEL[key]} +${gain}, now ${attrs[key]}. The league starts.`
-    : `Pre-season. ${ATTR_LABEL[key]} is already at its ceiling. The league starts.`;
-  return {
-    ...career,
-    player: { ...career.player, attrs, morale: clamp(career.player.morale + 4, 5, 100) },
-    season: { ...career.season, training, prep: "train" },
-    recentDeltas: deltas,
-    screen: "run",
-    news: pushNews(career.news, note),
-  };
+  return applyTrain(career, key, "camp");
 }
 
 export function answerBreak(career: Career, key: AttrKey): Career {
   if (career.screen !== "break") return career;
-  const gain = breakGain(career, key);
-  const attrs = { ...career.player.attrs, [key]: career.player.attrs[key] + gain };
-  const training = { ...career.season.training, [key]: career.season.training[key] + 2 };
-  const deltas = emptyAttrs();
-  deltas[key] = gain;
-  const note = gain
-    ? `Winter break. ${ATTR_LABEL[key]} +${gain}, now ${attrs[key]}. The second half starts.`
-    : `Winter break. ${ATTR_LABEL[key]} is already at its ceiling. The second half starts.`;
-  return {
-    ...career,
-    player: { ...career.player, attrs, morale: clamp(career.player.morale + 6, 5, 100), fitness: clamp(career.player.fitness + 8, 0, 100) },
-    season: { ...career.season, training, phase: "second", breakDone: true, prep: "train" },
-    recentDeltas: deltas,
-    screen: "run",
-    news: pushNews(career.news, note),
-  };
+  return applyTrain(career, key, "break");
 }
 
 export function train(career: Career, key: AttrKey): Career {
@@ -1102,27 +1130,30 @@ export function computeGrowth(career: Career): GrowthPreview {
   const avg = apps ? career.season.sumRating / apps : 0;
   const deltas = emptyAttrs();
   const before = { ...career.player.attrs };
+  const posNow = tablePosition(career);
+  const missed = !(posNow > 0 && posNow <= career.season.targetLine);
 
   for (const key of ATTR_KEYS) {
     const cap = statCap(career.player.position, career.player.potential, key);
     const room = cap - before[key];
     const rel = RELEVANCE[career.player.position][key];
     if (room <= 0) continue;
-    const perf = Math.max(0, avg - 6.4);
-    const base = ageGrowth(age) * rel * (0.85 + perf * 1.2) * (0.35 + 0.65 * (apps ? appsRatio : 0));
-    const fromTrain = career.season.training[key] * (age <= 21 ? 0.48 : 0.32) * rel;
+    const perf = Math.max(0, avg - 6.8);
+    const base = ageGrowth(age) * rel * (0.7 + perf) * (0.35 + 0.65 * (apps ? appsRatio : 0));
+    const fromTrain = career.season.training[key] * (age <= 21 ? 0.22 : 0.12) * Math.min(rel, 1.1);
     let gain = base + fromTrain;
     const ovrNow = overall(career.player.position, before);
-    if (career.player.potential - ovrNow >= 14 && age <= 23) gain *= 1.35;
-    if (room < 8) gain *= room / 8;
+    if (career.player.potential - ovrNow >= 16 && age <= 20) gain *= 1.08;
+    if (room < 6) gain *= room / 6;
     let rounded = Math.round(gain);
-    if (rel >= 1 && age <= 19 && apps >= 4 && avg >= 6.5 && room > 2) rounded = Math.max(rounded, 3);
-    else if (rel >= 1 && age <= 22 && apps >= 4 && avg >= 6.7 && room > 1) rounded = Math.max(rounded, 2);
-    else if (avg >= 7.3 && rel >= 0.9 && age <= 28 && apps > 0) rounded = Math.max(rounded, 1);
-    if (avg > 0 && avg < 6.15 && career.season.training[key] === 0) rounded = Math.min(rounded, age <= 18 ? 1 : 0);
     if (apps === 0 && career.season.training[key] === 0) rounded = 0;
-    const factor = career.difficulty === "easy" ? 1.5 : career.difficulty === "hard" ? 0.65 : 1;
-    if (factor !== 1 && rounded > 0) rounded = Math.max(1, Math.round(rounded * factor));
+    if (avg > 0 && avg < 6.6) rounded = career.difficulty === "easy" && age <= 18 && rel >= 1 ? Math.min(rounded, 1) : 0;
+    if (missed && career.difficulty === "hard") rounded = 0;
+    else if (missed && career.difficulty !== "easy" && avg < 7.2) rounded = Math.min(rounded, age <= 19 && rel >= 1 ? 1 : 0);
+    if (career.difficulty === "hard") {
+      rounded = Math.floor(rounded * 0.5);
+      if (!missed && avg >= 7.1 && rel >= 1 && age <= 27) rounded = Math.max(rounded, 1);
+    } else if (career.difficulty === "easy" && rounded > 0) rounded = Math.max(1, Math.round(rounded * 1.25));
     deltas[key] = clamp(rounded, 0, Math.min(room, gainCap(age, career.difficulty)));
   }
 

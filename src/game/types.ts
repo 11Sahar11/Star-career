@@ -245,6 +245,7 @@ export type Career = {
   growthPreview: GrowthPreview | null;
   activeReport: MatchReport | null;
   recentDeltas: Attrs | null;
+  lastTrain?: { key: AttrKey; delta: number; outFor: number } | null;
   daily: DailyState | null;
   race: string | null;
   retired: boolean;

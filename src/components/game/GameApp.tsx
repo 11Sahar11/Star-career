@@ -21,7 +21,6 @@ import {
   acceptOffer,
   answerBreak,
   answerCamp,
-  breakGain,
   careerAim,
   commitSeason,
   createCareer,
@@ -46,6 +45,7 @@ import {
   startSummer,
   tablePosition,
   todayKey,
+  trainOdds,
 } from "@/game/engine";
 import { boostId, boostTaken, loadCareer, loadDailyAttempt, loadSound, markBoost, saveCareer, saveDailyAttempt, saveSound, touchStreak, type DailyAttempt } from "@/game/save";
 import { loadLang, setLang, show, t, type Lang } from "@/game/i18n";
@@ -299,33 +299,13 @@ function FormPips({ logs }: { logs: MatchLog[] }) {
   );
 }
 
-function AdBanner() {
-  const { tr } = useTx();
-  return (
-    <aside className="ad-slot" data-ad-slot="banner" aria-label={tr("adLabel")}>
-      <span className="ad-tag">{tr("adLabel")}</span>
-      <span>{tr("adBanner")}</span>
-    </aside>
-  );
-}
-
 function SeasonBreak({ career, onBoost }: { career: Career; onBoost: (key: AttrKey) => void }) {
   const { tr } = useTx();
   const id = boostId(career.player.name, career.year);
-  const [open, setOpen] = useState(true);
   const [used, setUsed] = useState(() => boostTaken(id));
   const [pick, setPick] = useState(false);
   return (
     <div className="mt-4 grid gap-2">
-      {open ? (
-        <aside className="ad-slot ad-break" data-ad-slot="interstitial" aria-label={tr("adLabel")}>
-          <span className="ad-tag">{tr("adLabel")}</span>
-          <p>{tr("adBreak")}</p>
-          <button type="button" className="btn-ghost mt-3 h-11 w-full" onClick={() => setOpen(false)}>
-            {tr("adSkip")}
-          </button>
-        </aside>
-      ) : null}
       {used ? (
         <p className="text-xs text-muted">{tr("adRewardDone")}</p>
       ) : pick ? (
@@ -527,7 +507,6 @@ function Home({
             </span>
           </button>
           <p className="text-center text-xs font-bold text-gold">{tr("streak", { n: streak })}</p>
-          <AdBanner />
         </div>
 
         {career ? (
@@ -723,7 +702,7 @@ function AttrBar({ attr, value, delta }: { attr: AttrKey; value: number; hot?: b
 }
 
 function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c: Career) => void; onMenu: () => void }) {
-  const [paused, setPaused] = useState(false);
+  const [paused, setPaused] = useState(() => Boolean(career.lastTrain));
   const club = getClub(career.clubId);
   const league = getLeague(career.season.leagueId);
   const country = getCountry(career.countryId);
@@ -796,9 +775,13 @@ function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c:
         ) : (
           <p className="mt-3 text-sm text-muted">{tr("kickoff")}</p>
         )}
-        {career.recentDeltas && ATTR_KEYS.some((key) => career.recentDeltas?.[key]) ? (
-          <p className="mt-2 text-sm text-gold">
-            {ATTR_KEYS.filter((key) => career.recentDeltas?.[key]).map((key) => `${tr(`attr.${key}`)} +${career.recentDeltas?.[key]}`).join(" · ")}
+        {career.lastTrain ? (
+          <p className={`mt-2 text-sm font-extrabold ${career.lastTrain.delta < 0 || career.lastTrain.outFor > 0 ? "text-bad" : "text-gold"}`}>
+            {career.lastTrain.outFor > 0
+              ? tr("trainHurt", { attr: tr(`attr.${career.lastTrain.key}`), n: career.lastTrain.delta, m: career.lastTrain.outFor })
+              : career.lastTrain.delta > 0
+                ? tr("trainUp", { attr: tr(`attr.${career.lastTrain.key}`), n: career.lastTrain.delta })
+                : tr("trainFlat", { attr: tr(`attr.${career.lastTrain.key}`) })}
           </p>
         ) : null}
       </section>
@@ -869,7 +852,7 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
       </p>
       <div className="mt-4 grid gap-2">
         {ATTR_KEYS.map((key) => {
-          const gain = breakGain(career, key);
+          const odds = trainOdds(career, key);
           return (
             <button
               key={key}
@@ -885,10 +868,10 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
                 <span className="block font-extrabold">{tr(`drill.${key}`)}</span>
                 <span className="block text-xs text-muted">
                   {tr(`attr.${key}`)} {career.player.attrs[key]}
-                  {gain ? ` · ${tr(`hint.${key}`)}` : ` · ${tr("ceiling")}`}
+                  {odds.gain ? ` · ${tr("trainChance", { up: odds.up, down: odds.down })}` : ` · ${tr("ceiling")}`}
                 </span>
               </span>
-              <span className="num text-lg font-extrabold text-gold">{gain ? `+${gain}` : "—"}</span>
+              <span className="num text-lg font-extrabold text-gold">{odds.gain ? `${odds.up}%` : "—"}</span>
             </button>
           );
         })}
