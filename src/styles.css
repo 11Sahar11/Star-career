@@ -401,6 +401,8 @@
 
 /* ---------- v2 visual layer: floodlit night match ---------- */
 
+@layer components {
+
 html:lang(he) {
   --font-sans: "Heebo", "Manrope", "Segoe UI", sans-serif;
 }
@@ -656,4 +658,5 @@ html:lang(he) .daily-kick {
 
 @media (prefers-reduced-motion: reduce) {
   .live-dot, .event-new { animation: none; }
+}
 }

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState, createContext, type ReactNode } from "react";
+import { Fragment, useContext, useEffect, useMemo, useState, createContext, type ReactNode } from "react";
 import {
   ArrowLeftRight,
   Check,
@@ -51,7 +51,7 @@ import {
 } from "@/game/engine";
 import { boostId, boostTaken, loadCareer, loadDailyAttempt, loadSound, markBoost, saveCareer, saveDailyAttempt, saveSound, touchStreak, type DailyAttempt } from "@/game/save";
 import { loadLang, setLang, show, t, type Lang } from "@/game/i18n";
-import { ATTR_KEYS, type AttrKey, type Career, type Difficulty, type MatchLog, type MatchReport } from "@/game/types";
+import { ATTR_KEYS, type AttrKey, type Career, type Difficulty, type MatchLog, type MatchReport, type Role } from "@/game/types";
 
 type View = "boot" | "home" | "create" | "game" | "collection" | "summary" | "daily" | "privacy";
 
@@ -464,13 +464,8 @@ function Privacy({ onBack }: { onBack: () => void }) {
       <h1 className="font-display text-4xl">{tr("privacy")}</h1>
       <div className="privacy-copy mt-4 grid gap-3 text-sm leading-6">
         <p>{tr("privacyLead")}</p>
-        <p>
-          Ads have three seats. A banner lives on the menu and never covers a button. A skippable break appears after a season, before the next contract. A clip is optional: tap it to add 1 to one attribute, once a season. Nothing runs during a match. The daily race has no clip, so the Ballon d'Or time stays fair.
-        </p>
-        <p>
-          Google Play: package this HTTPS site as a Trusted Web Activity with Bubblewrap. Publish assetlinks.json using the Play App Signing certificate, or the store build shows a browser bar. Use AdMob test ids until the listing is approved. In Data safety, declare on-device storage and advertising. Do not sell the boost outside Play Billing.
-        </p>
-        <p>פרסומות רק בתפריט, אחרי עונה, או בקליפ שאתה בוחר. אין פרסומת באמצע משחק. הקריירה נשמרת על המכשיר ואין חשבון.</p>
+        <p>{tr("privacyData")}</p>
+        <p>{tr("privacyAds")}</p>
       </div>
     </Shell>
   );
@@ -1337,35 +1332,121 @@ function SeasonScreen({
     );
   }
   const names = (ids: string[]) => ids.map((id) => getClub(id).name).join(", ") || tr("none");
+  const ovrGain = preview.ovrAfter - preview.ovrBefore;
   return (
     <Shell>
-      <button type="button" className="mb-3 text-sm text-muted" onClick={onMenu}>
+      <button type="button" className="mb-3 min-h-11 text-start text-sm text-muted" onClick={onMenu}>
         {tr("menu")}
       </button>
-      <p className="text-sm font-semibold text-gold">{club.name}</p>
-      <h1 className="font-display text-4xl">{tr("season")} {seasonLabel(career.year)}</h1>
-      <p className="mt-1 text-muted">
-        {preview.tablePos}
-        {rows.length ? ` ${tr("of", { n: rows.length })}` : ""} · {league.name}
-        {preview.avg ? ` · ${preview.avg.toFixed(1)}` : ""} · {career.season.goals}
-      </p>
-      <p className={`mt-2 text-sm font-semibold ${preview.targetHit ? "text-gold" : "text-bad"}`}>
-        {preview.targetHit ? tr("targetMet") : tr("targetMiss")} · {text(preview.targetLabel)}
-      </p>
+      <div className="text-center">
+        <p className="eyebrow text-trophy">
+          {tr("season")} {seasonLabel(career.year)}
+        </p>
+        <h1 className="font-display mt-1 text-3xl">{club.name}</h1>
+        <p className="mt-1 text-sm text-muted">
+          {preview.tablePos}
+          {rows.length ? ` ${tr("of", { n: rows.length })}` : ""} · {league.name}
+        </p>
+        <p className={`mt-2 inline-flex chip ${preview.targetHit ? "chip-good" : "chip-bad"}`}>
+          {preview.targetHit ? tr("targetMet") : tr("targetMiss")} · {text(preview.targetLabel)}
+        </p>
+      </div>
+
+      <div className="card mt-4 flex items-center justify-center gap-5 px-4 py-4">
+        <div className="grid justify-items-center">
+          <span className="font-num text-4xl font-semibold text-dim">{preview.ovrBefore}</span>
+          <span className="text-xs text-muted">{tr("seasonStart")}</span>
+        </div>
+        <svg width="40" height="18" viewBox="0 0 40 18" aria-hidden="true" className="rtl:-scale-x-100">
+          <path d="M2 9h32M27 3l7 6-7 6" fill="none" stroke="var(--color-gold)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <div className="grid justify-items-center">
+          <span className="font-num text-6xl font-bold leading-none">{preview.ovrAfter}</span>
+          <span className={`text-xs font-extrabold ${ovrGain > 0 ? "text-good" : ovrGain < 0 ? "text-bad" : "text-muted"}`}>
+            {tr("ovrUp", { n: ovrGain > 0 ? `+${ovrGain}` : String(ovrGain) })}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-4 gap-2">
+        <div className="tile">
+          <b>{career.season.apps}</b>
+          <span>{tr("apps")}</span>
+        </div>
+        <div className="tile">
+          <b className="text-trophy">{career.season.goals}</b>
+          <span>{tr("goals")}</span>
+        </div>
+        <div className="tile">
+          <b>{career.season.assists}</b>
+          <span>{tr("assists")}</span>
+        </div>
+        <div className="tile">
+          <b className="text-good">{preview.avg ? preview.avg.toFixed(1) : "–"}</b>
+          <span>{tr("average")}</span>
+        </div>
+      </div>
+
       {preview.europe ? (
-        <p className="mt-2 text-sm font-semibold">
+        <p className="card mt-3 px-4 py-3 text-sm font-semibold">
           {tr(preview.europe.comp === "cl" ? "comp.cl" : "comp.el")} · {tr(`stage.${preview.europe.stage}`)}
         </p>
       ) : null}
-      <div className={`panel mt-4 flex items-center gap-3 px-4 py-3 ${preview.ballonYours ? "border-gold" : ""}`}>
-        <Trophy className="size-5 text-gold" />
+
+      <h2 className="mt-5 text-base font-extrabold">{tr("attrsMoved")}</h2>
+      <div className="mt-3 grid grid-cols-[4.5rem_minmax(0,1fr)_3.2rem] items-center gap-x-3 gap-y-2.5 text-sm">
+        {ATTR_KEYS.map((key) => {
+          const before = preview.before[key];
+          const delta = preview.deltas[key];
+          const base = delta >= 0 ? before : preview.after[key];
+          return (
+            <Fragment key={key}>
+              <span className="truncate">{tr(`attr.${key}`)}</span>
+              <div className="split-bar" dir="ltr">
+                <i className="base" style={{ width: `${base}%` }} />
+                {delta !== 0 ? <i className={delta > 0 ? "gain" : "loss"} style={{ width: `${Math.abs(delta)}%` }} /> : null}
+              </div>
+              <span className="font-num text-end" dir="ltr">
+                {preview.after[key]}{" "}
+                <span className={delta > 0 ? "text-good" : delta < 0 ? "text-bad" : "text-dim"}>{delta > 0 ? `+${delta}` : delta}</span>
+              </span>
+            </Fragment>
+          );
+        })}
+      </div>
+      <div className="mt-3 grid gap-2">
+        {preview.lines.map((line) => (
+          <p key={line} className="text-sm leading-6 text-muted">
+            {text(line)}
+          </p>
+        ))}
+      </div>
+
+      <h2 className="mt-5 text-base font-extrabold">{tr("awardsHead")}</h2>
+      {preview.awards.length ? (
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {preview.awards.map((award) => (
+            <div key={award.id} className="award-card">
+              <Trophy className="size-6 text-trophy" />
+              <span className="text-sm font-extrabold">{text(award.name)}</span>
+              <span className="text-xs text-muted">{text(award.detail)}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-muted">{tr("noTrophy")}</p>
+      )}
+
+      <div className={`card mt-3 flex items-center gap-3 px-4 py-3 ${preview.ballonYours ? "border-trophy" : ""}`}>
+        <Medal className="size-5 text-trophy" />
         <span>
-          <span className="block text-xs font-semibold tracking-wide text-gold">{tr("award.ballon")}</span>
+          <span className="block text-xs font-bold text-trophy">{tr("award.ballon")}</span>
           <span className="block font-extrabold">{preview.ballon}</span>
         </span>
       </div>
+
       {career.shuffle?.year === career.year ? (
-        <div className="panel mt-4 px-4 py-3 text-sm leading-6">
+        <div className="card mt-3 px-4 py-3 text-sm leading-6">
           <p className="font-extrabold">{tr("who")}</p>
           <p className="mt-1">{tr("up", { n: names(career.shuffle.promoted) })}</p>
           <p>{tr("down", { n: names(career.shuffle.relegated) })}</p>
@@ -1374,58 +1455,16 @@ function SeasonScreen({
         </div>
       ) : null}
 
-      <div className="panel mt-4 overflow-hidden">
-        {rows.map((row, index) => {
-          const mine = row.clubId === career.clubId;
-          return (
-            <div key={row.clubId} className={`flex items-center px-3 py-2 text-sm ${mine ? "bg-surface-2 text-gold" : ""} ${index ? "border-t border-line" : ""}`}>
-              <span className="num w-6">{index + 1}</span>
-              <span className="min-w-0 flex-1 truncate font-semibold">{getClub(row.clubId).name}</span>
-              <span className="num font-extrabold">{row.pts}</span>
-            </div>
-          );
-        })}
-      </div>
+      <LeagueTable career={career} compact />
 
-      <h2 className="mt-5 text-lg font-extrabold">{tr("attrsMoved")}</h2>
-      <div className="mt-3 grid gap-3">
-        {ATTR_KEYS.map((key) => (
-          <AttrBar key={key} attr={key} value={preview.after[key]} delta={preview.deltas[key]} />
-        ))}
-      </div>
-      <p className="mt-3 text-sm">
-        {tr("overall")} <span className="num">{preview.ovrBefore}</span>
-        <span className="text-muted"> {tr("to")} </span>
-        <span className="num text-gold">{preview.ovrAfter}</span>
-      </p>
-      <div className="mt-3 grid gap-2">
-        {preview.lines.map((line) => (
-          <p key={line} className="text-sm leading-6 text-muted">
-            {text(line)}
-          </p>
-        ))}
-      </div>
-      {preview.awards.length ? (
-        <div className="mt-4 grid gap-2">
-          {preview.awards.map((award) => (
-            <div key={award.id} className="panel flex items-center gap-3 px-3 py-3">
-              <Trophy className="size-5 text-gold" />
-              <span>
-                <span className="block font-extrabold">{text(award.name)}</span>
-                <span className="block text-xs text-muted">{text(award.detail)}</span>
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="mt-4 text-sm text-muted">{tr("noTrophy")}</p>
-      )}
       <button type="button" className="btn-gold mt-5 h-14 w-full text-lg" onClick={onSummer}>
         {claimRace ? tr("dailyClaim") : tr("summerBtn")}
       </button>
     </Shell>
   );
 }
+
+const ROLE_MINUTES: Record<Role, number> = { Star: 100, Starter: 100, Rotation: 78, Bench: 58 };
 
 function OffersScreen({
   career,
@@ -1443,19 +1482,20 @@ function OffersScreen({
   const [ask, setAsk] = useState(false);
   const offers = career.pendingOffers ?? [];
   const currency = getCountry(career.countryId).currency;
+  const { tr, text } = useTx();
   return (
     <Shell>
-      <button type="button" className="mb-3 text-sm text-muted" onClick={onMenu}>
-        Menu
+      <button type="button" className="mb-3 min-h-11 text-start text-sm text-muted" onClick={onMenu}>
+        {tr("menu")}
       </button>
-      <p className="text-sm font-semibold text-gold">Age {career.player.age}</p>
-      <h1 className="font-display text-4xl">Where you sign</h1>
+      <p className="eyebrow">{tr("ageN", { n: career.player.age })}</p>
+      <h1 className="font-display mt-1 text-4xl">{tr("where")}</h1>
       <p className="mt-2 text-sm leading-6 text-muted">
         {career.player.age >= farewellAge(career.player.position)
-          ? "This is the last contract anyone will offer. After it, the career ends."
+          ? tr("offerLast")
           : career.player.age >= 35
-            ? "The body is slower. You can still move, but clubs are pushing you toward the exit."
-            : "Stay until the window, or move when it opens. A bench role means fewer minutes."}
+            ? tr("offerOld")
+            : tr("whereCopy")}
       </p>
       {!career.race ? <SeasonBreak career={career} onBoost={onBoost} /> : null}
       <div className="mt-4 grid gap-3">
@@ -1463,42 +1503,65 @@ function OffersScreen({
           const club = getClub(offer.clubId);
           const league = getLeague(offer.leagueId);
           const offerCountry = getCountry(league.countryId);
+          const mins = ROLE_MINUTES[offer.role];
           return (
-            <article key={offer.clubId} className="panel px-4 py-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-xl font-extrabold">{club.name}</h2>
-                  <p className="text-sm text-muted">
-                    {league.name} · {offerCountry.name}
-                  </p>
+            <article key={offer.clubId} className="offer-plain">
+              <div className="offer-in">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-lg font-extrabold">{club.name}</h2>
+                    <p className="text-sm text-muted">
+                      {league.name} · {offerCountry.name}
+                    </p>
+                  </div>
+                  <span className={`chip shrink-0 ${offer.role === "Star" ? "chip-gold" : offer.role === "Bench" ? "chip-bad" : ""}`}>
+                    {tr(`role${offer.role}`)}
+                  </span>
                 </div>
-                <span className="rounded-full border border-line px-2 py-1 text-xs font-bold text-gold">{offer.role}</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="tile">
+                    <b dir="ltr">{money(offer.wage, offerCountry.currency || currency)}</b>
+                    <span>{tr("perMonth")}</span>
+                  </div>
+                  <div className="tile">
+                    <b>{offer.years}</b>
+                    <span>{tr("yearsShort")}</span>
+                  </div>
+                </div>
+                <div className="grid gap-1">
+                  <div className="flex justify-between text-xs text-muted">
+                    <span>{tr("minutes")}</span>
+                    <span className="num">~{mins}%</span>
+                  </div>
+                  <div className="meter">
+                    <i className={mins >= 90 ? "good" : mins < 70 ? "bad" : ""} style={{ width: `${mins}%` }} />
+                  </div>
+                </div>
+                <p className="text-sm leading-6">{text(offer.note)}</p>
+                <button type="button" className={`${offer.kind === "stay" ? "btn-ghost" : "btn-gold"} h-12 w-full`} onClick={() => onAccept(offer.clubId)}>
+                  {offer.kind === "stay" ? tr("stay") : offer.kind === "side" ? tr("move") : tr("sign")}
+                </button>
               </div>
-              <p className="num mt-2 text-sm">{money(offer.wage, offerCountry.currency || currency)} a month · {offer.years}-year deal</p>
-              <p className="mt-2 text-sm leading-6">{offer.note}</p>
-              <button type="button" className="btn-gold mt-3 h-12 w-full" onClick={() => onAccept(offer.clubId)}>
-                {offer.kind === "stay" ? "Stay" : offer.kind === "side" ? "Move" : "Sign"}
-              </button>
             </article>
           );
         })}
       </div>
       <div className="mt-5">
         {ask ? (
-          <div className="panel px-4 py-3">
-            <p className="text-sm">Hang up the boots at {career.player.age}?</p>
+          <div className="card px-4 py-3">
+            <p className="text-sm">{tr("retireAt", { n: career.player.age })}</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button type="button" className="btn-ghost h-11" onClick={() => setAsk(false)}>
-                One more year
+                {tr("oneMore")}
               </button>
               <button type="button" className="btn-gold h-11" onClick={onRetire}>
-                Retire
+                {tr("retireBtn")}
               </button>
             </div>
           </div>
         ) : (
-          <button type="button" className="text-sm text-muted" onClick={() => setAsk(true)}>
-            Retire from the game
+          <button type="button" className="min-h-11 text-sm text-muted underline" onClick={() => setAsk(true)}>
+            {tr("retire")}
           </button>
         )}
       </div>
@@ -1507,25 +1570,24 @@ function OffersScreen({
 }
 
 function Collection({ career, onBack }: { career: Career | null; onBack: () => void }) {
+  const { tr } = useTx();
   return (
     <Shell>
-      <button type="button" className="mb-3 flex items-center gap-1 text-sm text-muted" onClick={onBack}>
+      <button type="button" className="mb-3 flex min-h-11 items-center gap-1 text-sm text-muted" onClick={onBack}>
         <ChevronLeft className="size-4 rtl:-scale-x-100" />
-        Menu
+        {tr("menu")}
       </button>
-      <h1 className="font-display text-4xl">Trophies</h1>
+      <h1 className="font-display text-4xl">{tr("collection")}</h1>
       {!career || career.trophies.length === 0 ? (
-        <p className="panel mt-4 px-4 py-6 text-center text-sm leading-6 text-muted">The cabinet is empty. You start in the bottom division with nothing on the shelf.</p>
+        <p className="card mt-4 px-4 py-6 text-center text-sm leading-6 text-muted">{tr("emptyCabinet")}</p>
       ) : (
-        <div className="mt-4 grid gap-2">
+        <div className="mt-4 grid grid-cols-2 gap-2">
           {career.trophies.map((trophy) => (
-            <article key={trophy.id} className="panel flex items-center gap-3 px-3 py-3">
-              <Trophy className="size-5 shrink-0 text-gold" />
-              <span>
-                <span className="block font-extrabold">{trophy.name}</span>
-                <span className="block text-xs text-muted">
-                  {seasonLabel(trophy.year)} · {trophy.detail}
-                </span>
+            <article key={trophy.id} className="award-card">
+              <Trophy className="size-6 text-trophy" />
+              <span className="text-sm font-extrabold">{trophy.name}</span>
+              <span className="text-xs text-muted">
+                {seasonLabel(trophy.year)} · {trophy.detail}
               </span>
             </article>
           ))}
@@ -1533,15 +1595,15 @@ function Collection({ career, onBack }: { career: Career | null; onBack: () => v
       )}
       {career && career.history.length ? (
         <div className="mt-5">
-          <h2 className="mb-2 font-extrabold">Seasons</h2>
-          <div className="grid gap-2">
+          <h2 className="mb-2 font-extrabold">{tr("seasonsHead")}</h2>
+          <div className="card overflow-hidden">
             {career.history.map((row) => (
-              <div key={`${row.year}-${row.clubId}`} className="flex items-center justify-between rounded-2xl border border-line px-3 py-2 text-sm">
-                <span>
-                  {seasonLabel(row.year)} · {getClub(row.clubId).short}
+              <div key={`${row.year}-${row.clubId}`} className="flex items-center justify-between gap-3 border-b border-line px-3.5 py-2.5 text-sm last:border-b-0">
+                <span className="truncate">
+                  {seasonLabel(row.year)} · {getClub(row.clubId).name}
                 </span>
                 <span className="num text-muted">
-                  {row.pos} · {row.goals} goals · {row.ovr}
+                  #{row.pos} · {tr("goalsN", { n: row.goals })} · {row.ovr}
                 </span>
               </div>
             ))}
@@ -1553,14 +1615,15 @@ function Collection({ career, onBack }: { career: Career | null; onBack: () => v
 }
 
 function Summary({ career, onBack }: { career: Career | null; onBack: () => void }) {
+  const { tr } = useTx();
   if (!career) {
     return (
       <Shell>
-        <button type="button" className="mb-3 text-sm text-muted" onClick={onBack}>
-          Menu
+        <button type="button" className="mb-3 min-h-11 text-start text-sm text-muted" onClick={onBack}>
+          {tr("menu")}
         </button>
-        <h1 className="font-display text-4xl">Season</h1>
-        <p className="mt-3 text-sm text-muted">No career yet. Start one and come back after the first matches.</p>
+        <h1 className="font-display text-4xl">{tr("season")}</h1>
+        <p className="mt-3 text-sm text-muted">{tr("noCareer")}</p>
       </Shell>
     );
   }
@@ -1570,31 +1633,21 @@ function Summary({ career, onBack }: { career: Career | null; onBack: () => void
   const avg = apps ? career.season.sumRating / apps : 0;
   return (
     <Shell>
-      <button type="button" className="mb-3 flex items-center gap-1 text-sm text-muted" onClick={onBack}>
+      <button type="button" className="mb-3 flex min-h-11 items-center gap-1 text-sm text-muted" onClick={onBack}>
         <ChevronLeft className="size-4 rtl:-scale-x-100" />
-        Menu
+        {tr("menu")}
       </button>
-      <p className="text-sm text-gold">{seasonLabel(career.year)}</p>
+      <p className="eyebrow">{seasonLabel(career.year)}</p>
       <h1 className="font-display text-4xl">{career.player.name}</h1>
       <p className="mt-1 text-sm text-muted">
         {club.name} · {tablePosition(career)}
-        {rows.length ? ` of ${rows.length}` : ""} · {apps} apps · {career.season.goals} goals
-        {avg ? ` · avg ${avg.toFixed(1)}` : ""}
+        {rows.length ? ` ${tr("of", { n: rows.length })}` : ""} · {tr("appsN", { n: apps })} · {tr("goalsN", { n: career.season.goals })}
+        {avg ? ` · ${tr("avgN", { n: avg.toFixed(1) })}` : ""}
       </p>
-      <div className="mt-4 grid gap-3">
-        {ATTR_KEYS.map((key) => (
-          <AttrBar key={key} attr={key} value={career.player.attrs[key]} />
-        ))}
+      <div className="mt-4">
+        <PlayerCard career={career} />
       </div>
-      <div className="panel mt-4 overflow-hidden">
-        {rows.map((row, index) => (
-          <div key={row.clubId} className={`flex px-3 py-2 text-sm ${row.clubId === career.clubId ? "text-gold" : ""} ${index ? "border-t border-line" : ""}`}>
-            <span className="num w-6">{index + 1}</span>
-            <span className="flex-1">{getClub(row.clubId).short}</span>
-            <span className="num font-bold">{row.pts}</span>
-          </div>
-        ))}
-      </div>
+      <LeagueTable career={career} />
       <div className="mt-4 grid gap-2">
         {career.season.fixturesPlayed
           .filter((log) => log.competition !== "europe")
@@ -1666,30 +1719,38 @@ function DailyLobby({ attempt, onBack, onBegin }: { attempt: DailyAttempt | null
 }
 
 function Retired({ career, onHome, onNew }: { career: Career; onHome: () => void; onNew: () => void }) {
+  const { tr } = useTx();
   const peak = career.history.reduce((best, row) => Math.max(best, row.ovr), overall(career.player.position, career.player.attrs));
   return (
     <Shell>
-      <p className="text-sm font-semibold tracking-widest text-gold">END OF THE ROAD</p>
-      <h1 className="font-display text-4xl">{career.player.name}</h1>
+      <p className="eyebrow text-trophy">{tr("endRoad")}</p>
+      <h1 className="font-display mt-1 text-4xl">{career.player.name}</h1>
       <p className="mt-2 text-sm leading-6 text-muted">
-        Retired at {career.player.age}. {career.totals.seasons} seasons, {career.totals.goals} goals, {career.trophies.length} trophies. Peak overall: {peak}.
+        {tr("retiredLine", {
+          age: career.player.age,
+          seasons: career.totals.seasons,
+          goals: career.totals.goals,
+          trophies: career.trophies.length,
+          peak,
+        })}
       </p>
-      <div className="mt-4 grid gap-2">
+      <div className="mt-4 grid grid-cols-2 gap-2">
         {career.trophies.length ? (
           career.trophies.map((trophy) => (
-            <div key={trophy.id} className="panel px-3 py-3 text-sm font-bold">
-              {trophy.name}
+            <div key={trophy.id} className="award-card">
+              <Trophy className="size-5 text-trophy" />
+              <span className="text-sm font-bold">{trophy.name}</span>
             </div>
           ))
         ) : (
-          <p className="text-sm text-muted">No trophy in the cabinet, but a full career.</p>
+          <p className="col-span-2 text-sm text-muted">{tr("noTrophyCareer")}</p>
         )}
       </div>
       <button type="button" className="btn-gold mt-5 h-14 w-full" onClick={onNew}>
-        New career
+        {tr("newCareer")}
       </button>
       <button type="button" className="btn-ghost mt-2 h-12 w-full" onClick={onHome}>
-        Menu
+        {tr("menu")}
       </button>
     </Shell>
   );
