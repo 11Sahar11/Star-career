@@ -1652,7 +1652,7 @@ function OffersScreen({
 }
 
 function Collection({ career, onBack }: { career: Career | null; onBack: () => void }) {
-  const { tr } = useTx();
+  const { tr, text } = useTx();
   return (
     <Shell>
       <button type="button" className="mb-3 flex min-h-11 items-center gap-1 text-sm text-muted" onClick={onBack}>
@@ -1667,9 +1667,9 @@ function Collection({ career, onBack }: { career: Career | null; onBack: () => v
           {career.trophies.map((trophy) => (
             <article key={trophy.id} className="award-card">
               <Trophy className="size-6 text-trophy" />
-              <span className="text-sm font-extrabold">{trophy.name}</span>
+              <span className="text-sm font-extrabold">{text(trophy.name)}</span>
               <span className="text-xs text-muted">
-                {seasonLabel(trophy.year)} · {trophy.detail}
+                {seasonLabel(trophy.year)} · {text(trophy.detail)}
               </span>
             </article>
           ))}
@@ -1951,7 +1951,7 @@ function LegacyScreen({ onBack }: { onBack: () => void }) {
 }
 
 function Retired({ career, legacyOn, onHome, onNew }: { career: Career; legacyOn: boolean; onHome: () => void; onNew: () => void }) {
-  const { tr } = useTx();
+  const { tr, text } = useTx();
   const [gain, setGain] = useState<{ gained: number; total: number; double: boolean } | null>(null);
   useEffect(() => {
     if (!legacyOn) return;
@@ -1998,7 +1998,7 @@ function Retired({ career, legacyOn, onHome, onNew }: { career: Career; legacyOn
           career.trophies.map((trophy) => (
             <div key={trophy.id} className="award-card">
               <Trophy className="size-5 text-trophy" />
-              <span className="text-sm font-bold">{trophy.name}</span>
+              <span className="text-sm font-bold">{text(trophy.name)}</span>
             </div>
           ))
         ) : (
