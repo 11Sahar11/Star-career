@@ -1508,7 +1508,8 @@ function effectLines(career: Career, choice: "a" | "b", storyId: string, tr: (ke
   const story = STORIES.find((item) => item.id === storyId);
   if (!story) return [];
   const effect = story[choice];
-  const sign = (n: number) => (n > 0 ? `+${n}` : String(n));
+  // LTR isolate so "+3" never flips to "3+" inside Hebrew text.
+  const sign = (n: number) => `\u2066${n > 0 ? `+${n}` : String(n)}\u2069`;
   const lines: { text: string; good: boolean }[] = [];
   if (effect.attrDelta) lines.push({ text: `${tr(`attr.${storyAttr(career, effect)}`)} ${sign(effect.attrDelta)}`, good: effect.attrDelta > 0 });
   for (const key of ["morale", "form", "fitness", "reputation"] as const) {
@@ -2084,7 +2085,7 @@ function SeasonScreen({
         <div className="grid justify-items-center">
           <span className="font-num text-5xl font-bold leading-none">{preview.ovrAfter}</span>
           <span className={`text-xs font-semibold ${ovrGain > 0 ? "text-good" : ovrGain < 0 ? "text-bad" : "text-muted"}`}>
-            {ovrGain === 0 ? tr("ovrSame") : tr("ovrUp", { n: ovrGain > 0 ? `+${ovrGain}` : String(ovrGain) })}
+            {ovrGain === 0 ? tr("ovrSame") : tr("ovrUp", { n: `\u2066${ovrGain > 0 ? `+${ovrGain}` : String(ovrGain)}\u2069` })}
           </span>
         </div>
       </div>
@@ -3141,7 +3142,7 @@ function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career;
         <GearIcon key={`${worn.item}-${tier ?? "bronze"}`} item={worn.item} tier={tier ?? "bronze"} dim={!tier} className="gear-well mx-auto h-11 w-11 p-1" />
         <p className={`gear-tier-label mt-0.5 text-[10px] font-bold uppercase tracking-wide ${tier ? "" : "text-muted"}`}>
           {tier ? tr(`gear.tier.${tier}`) : tr("gear.empty")}
-          {tier ? <bdi dir="ltr"> +{tierInfo(tier).bonus}</bdi> : null}
+          {tier ? <>{" "}<bdi dir="ltr" className="num">+{tierInfo(tier).bonus}</bdi></> : null}
         </p>
         <p className="text-xs font-semibold leading-tight">{tr(`gear.item.${worn.item}`)}</p>
         <p className="text-[10px] leading-tight text-muted">{tr(`attr.${worn.attr}`)}</p>
