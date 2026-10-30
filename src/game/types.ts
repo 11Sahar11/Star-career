@@ -169,6 +169,10 @@ export type Player = {
   morale: number;
   /** Chosen skin tone, 1-6 (character art order). Missing = default art. */
   skin?: number;
+  /** Hair style id (see game/look.ts). Missing = default. */
+  hair?: string;
+  /** Hair colour id (see game/look.ts). Missing = default. */
+  hairColor?: string;
 };
 
 export type SeasonState = {
