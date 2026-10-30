@@ -1069,14 +1069,15 @@ function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c:
         right={
           <button
             type="button"
-            className="btn-primary flex h-12 shrink-0 items-center gap-1.5 px-3 text-sm"
+            className="btn-primary flex h-12 min-w-12 shrink-0 items-center justify-center gap-1.5 px-3 text-sm"
+            aria-label={career.season.breakDone ? tr("skipEnd") : tr("skipBreak")}
             onClick={() => {
               unlockAudio();
               playWhistle();
               onChange(runToStop(career));
             }}
           >
-            {career.season.breakDone ? tr("skipEnd") : tr("skipBreak")}
+            <span className="max-[380px]:sr-only">{career.season.breakDone ? tr("skipEnd") : tr("skipBreak")}</span>
             <Play className="size-3.5 rtl:-scale-x-100" />
           </button>
         }
