@@ -6,35 +6,43 @@
  * attribute numbers coloured by band. No gradients, no glows.
  */
 @theme {
+  /* Direction A "Night Stadium" — values from src/game/theme.ts (tokens). */
   --font-sans: "Rubik", "Segoe UI", system-ui, sans-serif;
-  --font-display: "Rubik", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Secular One", "Rubik", "Segoe UI", system-ui, sans-serif;
   --font-num: "Rubik", "Segoe UI", system-ui, sans-serif;
 
-  --color-bg: #14171c;
-  --color-bg-2: #191d23;
-  --color-surface: #1d2229;
-  --color-surface-2: #262c35;
-  --color-line: #303844;
-  --color-fg: #eef1f5;
-  --color-muted: #9aa4b2;
-  --color-dim: #6c7684;
+  --color-bg: #0b1433;
+  --color-bg-2: #0a1230;
+  --color-surface: #16244f;
+  --color-surface-2: #1e3166;
+  --color-line: rgba(140, 156, 196, 0.2);
+  --color-fg: #f2f6ff;
+  --color-muted: #8c9cc4;
+  --color-dim: #6b7aa3;
 
-  /* the one action colour: Continue, primary buttons, the player's own row */
-  --color-accent: #2fb463;
-  --color-accent-2: #6edc97;
-  --color-accent-deep: #23904e;
-  --color-ink: #06160c;
+  --color-accent: #2bff88;
+  --color-accent-2: #5cffa6;
+  --color-accent-deep: #0fb85c;
+  --color-ink: #0b1433;
+  --color-cyan: #36d6ff;
+  --color-cyan-deep: #1b7fa3;
+  --color-gold: #ffc83d;
+  --color-gold-light: #ffe08a;
+  --color-gold-deep: #c98f12;
+  --color-on-gold: #3a2600;
 
-  --color-good: #5cd68f;
-  --color-bad: #f06363;
-  --color-trophy: #e5b84a;
+  --color-good: #3ddc6e;
+  --color-bad: #ff4d5e;
+  --color-trophy: #ffc83d;
+  --color-tier-bronze: #c27a3a;
+  --color-tier-silver: #c9d3dc;
+  --color-tier-gold: #f5c542;
 
-  /* attribute bands, low to elite */
-  --color-band-low: #8f99a7;
-  --color-band-mid: #e5b84a;
-  --color-band-good: #b5d86b;
-  --color-band-high: #5cd68f;
-  --color-band-elite: #3fd0c9;
+  --color-band-low: #8c9cc4;
+  --color-band-mid: #ffc83d;
+  --color-band-good: #b5e86b;
+  --color-band-high: #3ddc6e;
+  --color-band-elite: #36d6ff;
 }
 
 @layer base {
@@ -50,7 +58,11 @@
     margin: 0;
     min-height: 100dvh;
     color: var(--color-fg);
-    background: var(--color-bg);
+    background:
+      linear-gradient(120deg, rgba(54, 214, 255, 0.16), transparent 35%) fixed,
+      linear-gradient(240deg, rgba(54, 214, 255, 0.16), transparent 35%) fixed,
+      radial-gradient(120% 60% at 50% 0%, #1e3166 0%, #0b1433 60%) fixed,
+      var(--color-bg);
     overflow-x: hidden;
   }
 
@@ -120,8 +132,13 @@
     gap: 0.5rem;
     margin: -1.25rem -1rem 1rem;
     padding: 0.4rem 0.5rem;
-    background: var(--color-bg);
+    background: color-mix(in oklab, var(--color-bg) 92%, transparent);
+    backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--color-line);
+  }
+  .topbar h1 {
+    font-family: var(--font-display);
+    font-weight: 400;
   }
 
   .topbar-back,
@@ -192,8 +209,13 @@
   .card,
   .panel {
     background: var(--color-surface);
-    border: 1px solid var(--color-line);
-    border-radius: 8px;
+    border: 1.5px solid rgba(43, 255, 136, 0.35);
+    border-radius: 16px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+  .card-alt {
+    background: var(--color-surface-2);
+    border-color: rgba(54, 214, 255, 0.3);
   }
 
   .card-rule {
@@ -205,8 +227,9 @@
     display: grid;
     overflow: hidden;
     background: var(--color-surface);
-    border: 1px solid var(--color-line);
-    border-radius: 8px;
+    border: 1.5px solid rgba(54, 214, 255, 0.3);
+    border-radius: 16px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.4);
   }
 
   .list-row {
@@ -243,40 +266,129 @@
 
   /* ---------- buttons ---------- */
 
+  /* Primary: green pill with a 3D lip and glow. */
   .btn-primary {
-    border-radius: 6px;
-    background: var(--color-accent);
+    border: 2px solid var(--color-accent-deep);
+    border-radius: 999px;
+    background: linear-gradient(#5cffa6, #2bff88);
     color: var(--color-ink);
-    font-weight: 600;
-    transition: background-color 120ms ease-out;
+    font-family: var(--font-display);
+    font-weight: 400;
+    box-shadow: 0 5px 0 #0fb85c, 0 0 18px rgba(43, 255, 136, 0.45);
+    margin-bottom: 5px;
+    transition: transform 80ms ease-out, box-shadow 80ms ease-out;
   }
-
-  .btn-primary:not(:disabled):hover {
-    background: var(--color-accent-2);
-  }
-
   .btn-primary:not(:disabled):active {
-    background: var(--color-accent-deep);
+    background: linear-gradient(#2bff88, #22e57a);
+    box-shadow: 0 1px 0 #0fb85c, 0 0 8px rgba(43, 255, 136, 0.3);
+    transform: translateY(4px);
   }
-
-  .btn-ghost {
-    border: 1px solid var(--color-line);
-    border-radius: 6px;
-    background: transparent;
-    color: var(--color-fg);
-    font-weight: 500;
-    transition: background-color 120ms ease-out;
-  }
-
-  .btn-ghost:not(:disabled):hover {
+  .btn-primary:disabled {
     background: var(--color-surface-2);
+    color: var(--color-muted);
+    border-color: #2a3d73;
+    box-shadow: 0 5px 0 #121e45;
+    opacity: 0.7;
+  }
+
+  /* Secondary: cyan outline pill. */
+  .btn-ghost {
+    border: 2px solid var(--color-cyan);
+    border-radius: 999px;
+    background: var(--color-surface-2);
+    color: var(--color-fg);
+    font-family: var(--font-display);
+    font-weight: 400;
+    box-shadow: 0 4px 0 #1b7fa3;
+    margin-bottom: 4px;
+    transition: transform 80ms ease-out, box-shadow 80ms ease-out;
+  }
+  .btn-ghost:not(:disabled):active {
+    background: var(--color-surface);
+    box-shadow: 0 1px 0 #1b7fa3;
+    transform: translateY(3px);
+  }
+  .btn-ghost:disabled {
+    background: var(--color-surface);
+    color: var(--color-muted);
+    border-color: #2a3d73;
+    box-shadow: 0 4px 0 #121e45;
+    opacity: 0.7;
+  }
+
+  /* Rewarded ad ("Watch video"): gold, always distinct from green coin-purchase buttons. */
+  [data-ad-slot="rewarded"] {
+    border: 2px solid var(--color-gold-deep);
+    border-radius: 999px;
+    background: linear-gradient(#ffe08a, #ffc83d);
+    color: var(--color-on-gold);
+    font-family: var(--font-display);
+    font-weight: 400;
+    box-shadow: 0 5px 0 #c98f12, 0 0 18px rgba(255, 200, 61, 0.45);
+  }
+  [data-ad-slot="rewarded"]:not(:disabled):active {
+    background: linear-gradient(#ffc83d, #f2b52a);
+    box-shadow: 0 1px 0 #c98f12, 0 0 8px rgba(255, 200, 61, 0.3);
+    transform: translateY(4px);
+  }
+  [data-ad-slot="rewarded"]:disabled {
+    background: var(--color-surface-2);
+    color: var(--color-muted);
+    border-color: #5a4a1e;
+    box-shadow: 0 5px 0 #121e45;
+    opacity: 0.7;
   }
 
   .btn-danger {
-    border-radius: 6px;
+    border-radius: 999px;
     background: var(--color-bad);
     color: #1c0505;
     font-weight: 600;
+  }
+
+  /* Bottom tab bar (hidden in matches and while loading). */
+  .bottom-nav {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    min-height: 78px;
+    padding: 6px 8px calc(env(safe-area-inset-bottom, 0px) + 6px);
+    background: #0a1230;
+    border-top: 1px solid var(--color-line);
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5);
+  }
+  .bottom-nav button {
+    display: flex;
+    min-height: 48px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border-radius: 12px;
+    color: var(--color-muted);
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .bottom-nav button[aria-current="page"] {
+    color: var(--color-accent);
+    background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  }
+  .bottom-nav button[aria-current="page"] img {
+    filter: brightness(0) saturate(100%) invert(80%) sepia(60%) saturate(900%) hue-rotate(80deg);
+  }
+  .bottom-nav img,
+  .bottom-nav svg {
+    width: 22px;
+    height: 22px;
+  }
+  .has-bottom-nav .app-shell {
+    padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px) + 1rem);
+  }
+  .has-bottom-nav .toast {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 86px);
   }
 
   .text-accent {
@@ -380,14 +492,14 @@
     gap: 0.3rem;
     width: fit-content;
     padding: 0.15rem 0.5rem;
-    border-radius: 4px;
+    border-radius: 999px;
     font-size: 0.72rem;
     font-weight: 600;
     background: var(--color-surface-2);
     color: var(--color-muted);
   }
 
-  .chip-trophy { background: color-mix(in oklab, var(--color-trophy) 16%, transparent); color: var(--color-trophy); }
+  .chip-trophy { background: var(--color-surface); border: 1.5px solid rgba(255, 200, 61, 0.5); color: var(--color-gold); box-shadow: 0 0 12px rgba(255, 200, 61, 0.25); }
   .chip-good { background: color-mix(in oklab, var(--color-good) 15%, transparent); color: var(--color-good); }
   .chip-bad { background: color-mix(in oklab, var(--color-bad) 16%, transparent); color: #ff8a8a; }
   .chip-accent { background: var(--color-accent); color: var(--color-ink); }
@@ -698,7 +810,7 @@
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: #14171c;
+  background: #0b1433;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -731,7 +843,7 @@
   margin-top: 0.4rem;
   font-family: "Rubik", system-ui, sans-serif;
   font-weight: 600;
-  color: #5ee27a;
+  color: #2bff88;
 }
 .loading-bottom {
   position: relative;
@@ -756,7 +868,7 @@
   inset-inline-start: 0;
   width: 100%;
   border-radius: inherit;
-  background: #3cc84f;
+  background: #2bff88;
   transform-origin: left;
   animation: loading-fill 0.6s ease-out both;
 }
@@ -787,4 +899,17 @@
 @media (prefers-reduced-motion: reduce) {
   .loading-fill { animation: none; }
   .loading-star { animation: none; }
+}
+
+/* Gear slot cards: tier-coloured frame (Night Stadium). Unlayered so it beats the border utilities. */
+[data-gear-slot] {
+  border-radius: 14px;
+  border-width: 2px;
+}
+[data-gear-slot][data-gear-tier="bronze"] { border-color: var(--color-tier-bronze); }
+[data-gear-slot][data-gear-tier="silver"] { border-color: var(--color-tier-silver); }
+[data-gear-slot][data-gear-tier="gold"] { border-color: var(--color-tier-gold); box-shadow: 0 0 14px rgba(245, 197, 66, 0.35); }
+.gear-well {
+  border-radius: 12px;
+  background: radial-gradient(#1e3166, #101c42);
 }

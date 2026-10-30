@@ -3,10 +3,12 @@ import { Fragment, useContext, useEffect, useMemo, useRef, useState, createConte
 import {
   ArrowLeftRight,
   Check,
+  CalendarDays,
   ChevronDown,
   ChevronLeft,
   Dumbbell,
   Flame,
+  House,
   Footprints,
   Medal,
   Play,
@@ -14,6 +16,7 @@ import {
   Shield,
   Target,
   Trophy,
+  UserRound,
   Volume2,
   VolumeX,
   Zap,
@@ -332,7 +335,7 @@ export function GameApp() {
   else if (storeOpen && playing === "main" && run.screen !== "bigmatch" && run.screen !== "match") {
     screen =
       storeOpen === "player" ? (
-        <MyPlayerScreen career={run} onChange={update} onBack={() => setStoreOpen(true)} />
+        <MyPlayerScreen career={run} onChange={update} onBack={() => setStoreOpen(true)} onStore={() => setStoreOpen(true)} />
       ) : (
         <StoreScreen career={run} onChange={update} onBack={() => setStoreOpen(false)} onPlayer={() => setStoreOpen("player")} />
       );
@@ -415,16 +418,78 @@ export function GameApp() {
     );
   } else screen = <RunScreen career={run} onChange={update} onMenu={menu} onStore={playing === "main" ? () => setStoreOpen(true) : undefined} />;
 
+  const inMatch = view === "game" && !!run && (run.screen === "match" || run.screen === "bigmatch");
+  const showNav = booted && minShown && !inMatch && ["home", "game", "collection", "summary", "achievements"].includes(view);
+  const navActive: NavTab | null =
+    view === "home" ? "home" : view === "collection" ? "trophies" : view === "game" ? (storeOpen === "player" ? "player" : "season") : null;
+
   return (
     <LangContext.Provider value={lang}>
       <ApplyContext.Provider value={apply}>
       <AdminContext.Provider value={admin}>
-        {screen}
+        <div className={showNav ? "has-bottom-nav" : undefined}>{screen}</div>
+        {showNav ? (
+          <BottomNav
+            active={navActive}
+            hasCareer={!!career && playing === "main"}
+            onTab={(tab) => {
+              if (tab === "home") {
+                setStoreOpen(false);
+                return menu();
+              }
+              if (tab === "trophies") {
+                setStoreOpen(false);
+                return setView("collection");
+              }
+              if (!career) return;
+              setPlaying("main");
+              unlockAudio();
+              setView("game");
+              setStoreOpen(tab === "player" ? "player" : false);
+            }}
+          />
+        ) : null}
         {toasts.length ? <AchievementToast id={toasts[0]} /> : null}
         {!booted || !minShown ? <LoadingScreen ready={booted} /> : null}
       </AdminContext.Provider>
     </ApplyContext.Provider>
     </LangContext.Provider>
+  );
+}
+
+type NavTab = "home" | "player" | "season" | "trophies";
+const NAV_TABS: { id: NavTab; Icon: typeof Trophy }[] = [
+  { id: "home", Icon: House },
+  { id: "player", Icon: UserRound },
+  { id: "season", Icon: CalendarDays },
+  { id: "trophies", Icon: Trophy },
+];
+
+/** Icon from /public/nav/{id}.svg (swappable art), falling back to a built-in icon if the file is missing. */
+function NavIcon({ id, Icon }: { id: NavTab; Icon: typeof Trophy }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <Icon aria-hidden="true" />;
+  return <img src={`/nav/${id}.svg`} alt="" aria-hidden="true" width={22} height={22} onError={() => setFailed(true)} />;
+}
+
+/** Bottom tab bar. DOM order Home→Trophies; in RTL the grid mirrors, so Home sits on the right. */
+function BottomNav({ active, hasCareer, onTab }: { active: NavTab | null; hasCareer: boolean; onTab: (tab: NavTab) => void }) {
+  const { tr } = useTx();
+  return (
+    <nav className="bottom-nav" aria-label={tr("nav.label")} data-no-ads>
+      {NAV_TABS.map(({ id, Icon }) => (
+        <button
+          key={id}
+          type="button"
+          aria-current={active === id ? "page" : undefined}
+          disabled={(id === "player" || id === "season") && !hasCareer}
+          onClick={() => onTab(id)}
+        >
+          <NavIcon id={id} Icon={Icon} />
+          <span>{tr(`nav.${id}`)}</span>
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -2866,7 +2931,7 @@ function GearOfferCard({ career, onChange }: { career: Career; onChange: (c: Car
   );
 }
 
-function MyPlayerScreen({ career, onChange, onBack }: { career: Career; onChange: (c: Career) => void; onBack: () => void }) {
+function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career; onChange: (c: Career) => void; onBack: () => void; onStore: () => void }) {
   const { tr } = useTx();
   const admin = useContext(AdminContext);
   const today = todayKey();
@@ -2884,7 +2949,7 @@ function MyPlayerScreen({ career, onChange, onBack }: { career: Career; onChange
     const check = nextTier ? canBuyGear(career, slot.id, nextTier, today, top, admin) : "owned";
     return (
       <div key={slot.id} className="rounded-md border border-line bg-surface px-2.5 py-2" data-gear-slot={slot.id} data-gear-tier={tier ?? "none"}>
-        <GearIcon key={`${worn.item}-${tier ?? "bronze"}`} item={worn.item} tier={tier ?? "bronze"} dim={!tier} className="mx-auto mb-1 h-14 w-14" />
+        <GearIcon key={`${worn.item}-${tier ?? "bronze"}`} item={worn.item} tier={tier ?? "bronze"} dim={!tier} className="gear-well mx-auto mb-1 h-14 w-14 p-1" />
         <p className="text-sm font-semibold">{tr(`gear.item.${worn.item}`)}</p>
         <p className="text-xs text-muted">
           {tr(`gear.for.${worn.item}`)} · {tr(`attr.${worn.attr}`)}
@@ -2948,6 +3013,9 @@ function MyPlayerScreen({ career, onChange, onBack }: { career: Career; onChange
         <div className="grid gap-2">{[3, 4, 5].map(slotCard)}</div>
       </div>
       <GearOfferCard career={career} onChange={onChange} />
+      <button type="button" className="btn-primary mt-3 flex h-14 w-full items-center justify-center gap-2 text-lg" onClick={onStore} data-store-entry>
+        {tr("eco.store")} <span className="chip chip-trophy num">● {formatCoins(career.coins)}</span>
+      </button>
       {rewardAvailable(career, "try-gold", today) ? (
         picking ? (
           <p className="mt-3 text-sm text-accent">{tr("gear.tryPick")}</p>
