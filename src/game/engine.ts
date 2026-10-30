@@ -1925,8 +1925,8 @@ export function commitSeason(career: Career): Career {
   aged.pendingOffers = buildOffers(aged, ovr, preview.tablePos);
   if (!aged.race) {
     let earned = preview.targetHit ? EARN.targetHit : 0;
-    // Salary bonus: every season, more for a top-half finish.
-    earned += EARN.salary + (preview.tablePos <= Math.floor(career.season.table.length / 2) ? EARN.salaryTopHalf : 0);
+    // Salary bonus from the end of season 2 on, more for a top-half finish.
+    if (career.totals.seasons >= 1) earned += EARN.salary + (preview.tablePos <= Math.floor(career.season.table.length / 2) ? EARN.salaryTopHalf : 0);
     for (const award of preview.awards) {
       if (award.id.startsWith("league-")) earned += EARN.trophy.league;
       else if (award.id.startsWith("cup-")) earned += EARN.trophy.cup;

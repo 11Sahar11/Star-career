@@ -7,7 +7,7 @@ import { POSITIONS } from "../../src/game/data";
 import type { Career } from "../../src/game/types";
 
 const CAREERS = Number(process.env.CAREERS ?? 200);
-const SEASONS = 10;
+const SEASONS = Number(process.env.SEASONS ?? 15);
 const earnBySeason: number[][] = Array.from({ length: SEASONS }, () => []);
 const itemsBySeason: number[][] = Array.from({ length: SEASONS }, () => []);
 const bronzeS1: number[] = [];
@@ -98,4 +98,4 @@ for (let s = 0; s < SEASONS; s += 1) {
   if (!earnBySeason[s].length) continue;
   console.log(`season ${s + 1}: n=${earnBySeason[s].length} coins avg ${avg(earnBySeason[s]).toFixed(0)} (p10 ${pct(earnBySeason[s], 0.1)}, p90 ${pct(earnBySeason[s], 0.9)}) · gear items bought avg ${avg(itemsBySeason[s]).toFixed(2)}`);
 }
-console.log(`full gold set: ${fullGold.length}/${CAREERS} careers within ${SEASONS} seasons${fullGold.length ? ` · earliest season ${Math.min(...fullGold)} · median ${pct(fullGold, 0.5)}` : ""}`);
+console.log(`full gold set: ${fullGold.length}/${CAREERS} (${((fullGold.length / CAREERS) * 100).toFixed(0)}%) within ${SEASONS} seasons${fullGold.length ? ` · p10 ${pct(fullGold, 0.1)} · median ${pct(fullGold, 0.5)} · p90 ${pct(fullGold, 0.9)} · earliest ${Math.min(...fullGold)}` : ""}`);

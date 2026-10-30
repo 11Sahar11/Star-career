@@ -107,7 +107,9 @@ export type GearCheck = "ok" | "coins" | "owned" | "locked" | "daily";
 
 export function gearPrice(career: Career, slot: GearSlotId, tier: GearTierId, today: string, admin = false) {
   if (admin) return 0;
-  const base = tierInfo(tier).price;
+  const current = career.gear?.[slot];
+  const owned = current && GEAR_TIERS.indexOf(current) < GEAR_TIERS.indexOf(tier) ? tierInfo(current).price : 0;
+  const base = Math.round(tierInfo(tier).price - owned * ECONOMY.gear.tradeIn);
   const offer = dailyGearOffer(career, today, true);
   if (offer && offer.slot === slot && offer.tier === tier && career.adState.gearOfferBoughtDate !== today) {
     const off = ECONOMY.gear.dailyOff + (career.adState.gearOfferAdDate === today ? ECONOMY.gear.dailyAdOff : 0);

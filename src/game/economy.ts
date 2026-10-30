@@ -56,6 +56,8 @@ export const ECONOMY = {
     },
     /** Gold can only be bought while playing in a country's top league. */
     goldNeedsTopLeague: true,
+    /** Upgrade trade-in: this share of the owned tier's price comes off the next tier (700-150, 1,400-350). */
+    tradeIn: 0.5,
     /** Most gear may add to one attribute, in total. Moment odds stay capped at 92%. */
     attrCap: 4,
     oddsCap: 92,
