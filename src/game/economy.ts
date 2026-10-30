@@ -172,7 +172,7 @@ export function canBuy(career: Career, id: StoreItemId, today: string, admin = f
     case "med-fast":
       return career.season.outFor > 0 ? "ok" : "notNeeded";
     case "med-rest":
-      return career.adState.restHalf === halfKey(career) ? "owned" : career.player.fitness >= 100 ? "notNeeded" : "ok";
+      return career.adState.restHalf === halfKey(career) ? "owned" : career.season.outFor > 0 ? "ok" : "notNeeded";
     case "cos-crest":
     case "cos-shirt":
     case "cos-legend":
@@ -219,7 +219,8 @@ export function buy(career: Career, id: StoreItemId, today: string, opts: { attr
       next.season = { ...career.season, outFor: Math.max(0, career.season.outFor - 2) };
       break;
     case "med-rest":
-      next.player = { ...career.player, fitness: Math.min(100, career.player.fitness + 22) };
+      // Halves the remaining time out (rounded down), once per half-season.
+      next.season = { ...career.season, outFor: Math.floor(career.season.outFor / 2) };
       next.adState = { ...next.adState, restHalf: halfKey(career) };
       break;
     case "cos-crest":

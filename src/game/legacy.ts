@@ -194,16 +194,16 @@ export function unlockCountry(countryId: string): DeviceEconomy {
   return next;
 }
 
-/** Retirement: 10% of the coins (max 300) start the next career; a top-league trophy or the 3rd career opens a country free. */
+/** Retirement: counts the finished career (coins reset; leagues open only by purchase). */
 export function settleRetirement(career: Career, nextLocked: string | null): DeviceEconomy {
   const device = loadDevice();
   const key = careerKey(career);
   if (device.settled.includes(key)) return device;
   const bonus = Math.min(ECONOMY.legacyMax, Math.floor((career.coins ?? 0) * ECONOMY.legacyShare));
   const finished = device.careersFinished + 1;
-  const topTrophy = career.trophies.some((item) => item.id.startsWith("league-") && career.history.some((row) => row.year === item.year && isTopLeague(row.leagueId)));
   const unlocked = [...device.unlockedCountries];
-  if (nextLocked && (topTrophy || finished >= 3) && !unlocked.includes(nextLocked)) unlocked.push(nextLocked);
+  // Leagues open only through the store (no free unlock path).
+  void nextLocked;
   const next = { ...device, coinBonus: bonus, careersFinished: finished, unlockedCountries: unlocked, settled: [...device.settled, key].slice(-50) };
   saveDevice(next);
   return next;

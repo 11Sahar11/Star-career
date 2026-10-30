@@ -34,7 +34,7 @@ export function migrateCareer(raw: unknown): Career | null {
   const id = boostId(data.player.name, data.year);
   upgraded.adState = { ...upgraded.adState, boostTaken: boostTaken(id), healTaken: healTaken(id) };
   // League unlocks live in the device profile; a career already running abroad keeps its country open.
-  if (!OPEN_COUNTRIES.includes(upgraded.countryId)) unlockCountry(upgraded.countryId);
+  if (!upgraded.race && !upgraded.daily && !OPEN_COUNTRIES.includes(upgraded.countryId)) unlockCountry(upgraded.countryId);
   return upgraded;
 }
 

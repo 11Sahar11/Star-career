@@ -1,5 +1,5 @@
 import { PRIVACY_EMAIL } from "@/game/contact";
-import { Fragment, useContext, useEffect, useMemo, useState, createContext, type ReactNode } from "react";
+import { Fragment, useContext, useEffect, useMemo, useRef, useState, createContext, type ReactNode } from "react";
 import {
   ArrowLeftRight,
   Check,
@@ -125,6 +125,8 @@ export function GameApp() {
   const [toasts, setToasts] = useState<string[]>([]);
   const [admin, setAdmin] = useState(false);
   const [storeOpen, setStoreOpen] = useState(false);
+  /** Set while the season-end interstitial is running, so a second tap cannot replay an old state. */
+  const summerLock = useRef(false);
 
   useEffect(() => {
     if (!toasts.length) return;
@@ -327,10 +329,19 @@ export function GameApp() {
         onSummer={() => {
           if (wonRace) return finishDaily(run);
           if (playing === "daily" || admin || !canShowSeasonInterstitial(run)) return update(startSummer(run));
+          if (summerLock.current) return;
+          summerLock.current = true;
           let counted = run;
           showInterstitial(
             "season-end",
-            () => update(startSummer(counted)),
+            () => {
+              // Idempotent: only move on if the career is still on this season screen.
+              setCareer((current) => {
+                summerLock.current = false;
+                if (!current || current.screen !== "season" || current.year !== counted.year) return current;
+                return startSummer(counted);
+              });
+            },
             () => {
               counted = countInterstitial(run);
             },
@@ -1117,6 +1128,7 @@ function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onCh
         }
       />
       {onStore && !career.race ? <EconomyBar career={career} onChange={onChange} onStore={onStore} /> : null}
+      {onStore && !career.race && career.activeReport && career.coinsFixtureId === career.activeReport.fixtureId ? <DoubleCoins career={career} onChange={onChange} /> : null}
 
       <section className="scorebox px-4 py-3.5">
         <div className="flex items-center gap-3">
@@ -2389,19 +2401,16 @@ function Retired({ career, legacyOn, onHome, onNew }: { career: Career; legacyOn
             <span className="text-xs text-muted">{tr("legacyPts", { n: gain.total })}</span>
           </div>
           {gain.double ? (
-            <button
-              type="button"
-              className="btn-ghost h-12 text-sm"
-              data-ad-slot="rewarded"
-              onClick={() =>
-                showRewarded("legacy-double", () => {
-                  const next = doubleLegacy(career);
-                  setGain({ gained: gain.gained * 2, total: next.points, double: false });
-                })
-              }
-            >
-              {tr("legacyDouble")}
-            </button>
+            <RewardButton
+              name="legacy-double"
+              className="btn-ghost h-12 w-full text-sm"
+              label={tr("legacyDouble")}
+              onReward={() => {
+                if (!canDouble(career)) return;
+                const next = doubleLegacy(career);
+                setGain({ gained: gain.gained * 2, total: next.points, double: false });
+              }}
+            />
           ) : null}
         </div>
       ) : null}
