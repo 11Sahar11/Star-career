@@ -95,6 +95,8 @@ type View = "boot" | "home" | "create" | "game" | "collection" | "summary" | "da
 const LangContext = createContext<Lang>("en");
 /** Admin (decided on the server): everything open, no interstitials, rewards without a clip. */
 const AdminContext = createContext(false);
+/** Applies a change to the CURRENT run (functional), for rewards that land after an ad closes. */
+const ApplyContext = createContext<(fn: (c: Career) => Career) => void>(() => {});
 
 function useTx() {
   const lang = useContext(LangContext);
@@ -128,7 +130,7 @@ export function GameApp() {
   const [view, setView] = useState<View>("home");
   const [streak, setStreak] = useState(1);
   const [sound, setSound] = useState(true);
-  const [lang, setLangState] = useState<Lang>("en");
+  const [lang, setLangState] = useState<Lang>(() => (typeof window === "undefined" ? "en" : loadLang()));
   const [access, setAccess] = useState<ViewerAccess | null>(null);
   const [toasts, setToasts] = useState<string[]>([]);
   const [admin, setAdmin] = useState(false);
@@ -182,6 +184,20 @@ export function GameApp() {
   useEffect(() => {
     if (booted) saveCareer(career);
   }, [career, booted]);
+
+  /** Functional update on whichever run is active, so ad rewards never restore a stale snapshot. */
+  function apply(fn: (c: Career) => Career) {
+    if (playing === "daily") {
+      setDaily((prev) => {
+        if (!prev?.career) return prev;
+        const attempt: DailyAttempt = { ...prev, career: fn(prev.career) };
+        saveDailyAttempt(attempt);
+        return attempt;
+      });
+      return;
+    }
+    setCareer((prev) => (prev ? fn(prev) : prev));
+  }
 
   function update(next: Career | null) {
     if (playing === "daily") {
@@ -397,11 +413,13 @@ export function GameApp() {
 
   return (
     <LangContext.Provider value={lang}>
+      <ApplyContext.Provider value={apply}>
       <AdminContext.Provider value={admin}>
         {screen}
         {toasts.length ? <AchievementToast id={toasts[0]} /> : null}
         {!booted || !minShown ? <LoadingScreen /> : null}
       </AdminContext.Provider>
+    </ApplyContext.Provider>
     </LangContext.Provider>
   );
 }
@@ -431,7 +449,7 @@ function ScreenHeader({
       )}
       <div className="min-w-0 flex-1">
         <h1 dir="auto" className="line-clamp-2 text-start text-[1.05rem] font-bold leading-tight">{title}</h1>
-        {sub ? <p dir="auto" className="truncate text-start text-xs text-muted">{sub}</p> : null}
+        {sub ? <p dir="auto" className="line-clamp-2 text-start text-xs text-muted">{sub}</p> : null}
       </div>
       {right ?? null}
     </header>
@@ -2335,7 +2353,7 @@ function AchievementToast({ id }: { id: string }) {
       </span>
       <span className="min-w-0">
         <span className="block text-xs text-muted">{tr("ach.unlocked")}</span>
-        <span className="block truncate font-semibold">{tr(`ach.${id}`)}</span>
+        <span dir="auto" className="block line-clamp-2 font-semibold">{tr(`ach.${id}`)}</span>
       </span>
     </div>
   );
@@ -2577,8 +2595,9 @@ function EconomyBar({ career, onChange, onStore }: { career: Career; onChange: (
   );
 }
 
-function DoubleCoins({ career, onChange }: { career: Career; onChange: (c: Career) => void }) {
+function DoubleCoins({ career }: { career: Career; onChange: (c: Career) => void }) {
   const { tr } = useTx();
+  const apply = useContext(ApplyContext);
   const earned = career.coinsEarnedLast ?? 0;
   if (career.race || !earned) return null;
   const available = rewardAvailable(career, "double-coins", todayKey());
@@ -2588,7 +2607,7 @@ function DoubleCoins({ career, onChange }: { career: Career; onChange: (c: Caree
         {tr("eco.earned", { n: formatCoins(earned) })} · <CoinChip n={career.coins} />
       </p>
       {available ? (
-        <RewardButton name="double-coins" className="btn-ghost h-12 w-full text-sm" label={tr("eco.double", { n: formatCoins(earned) })} onReward={() => onChange(grantDoubleCoins(career))} />
+        <RewardButton name="double-coins" className="btn-ghost h-12 w-full text-sm" label={tr("eco.double", { n: formatCoins(earned) })} onReward={() => apply(grantDoubleCoins)} />
       ) : career.coinsFixtureId && career.adState.doubledFixtureIds.includes(career.coinsFixtureId) ? (
         <p className="text-xs text-good">{tr("eco.doubled")}</p>
       ) : (
@@ -2720,13 +2739,15 @@ function gearTopLeague(career: Career) {
 function GearOfferCard({ career, onChange }: { career: Career; onChange: (c: Career) => void }) {
   const { tr } = useTx();
   const admin = useContext(AdminContext);
+  const apply = useContext(ApplyContext);
+  const buying = useRef(false);
   const today = todayKey();
   const top = gearTopLeague(career);
   const offer = dailyGearOffer(career, today, top);
   if (career.race || !offer || career.adState.gearOfferBoughtDate === today) return null;
   const slot = GEAR_SLOTS.find((item) => item.id === offer.slot)!;
   const worn = slotFor(slot, career.player.position);
-  const price = gearPrice(career, offer.slot, offer.tier, today, admin);
+  const price = gearPrice(career, offer.slot, offer.tier, today, admin, top);
   const check = canBuyGear(career, offer.slot, offer.tier, today, top, admin);
   const off = Math.round((ECONOMY.gear.dailyOff + (career.adState.gearOfferAdDate === today ? ECONOMY.gear.dailyAdOff : 0)) * 100);
   return (
@@ -2741,12 +2762,17 @@ function GearOfferCard({ career, onChange }: { career: Career; onChange: (c: Car
             {tr(`attr.${worn.attr}`)} <bdi dir="ltr">+{tierInfo(offer.tier).bonus}</bdi>
           </span>
         </span>
-        <button type="button" className="btn-primary h-12 min-w-20 shrink-0 px-3 text-sm" disabled={check !== "ok"} onClick={() => onChange(buyGear(career, offer.slot, offer.tier, today, top, admin))}>
+        <button type="button" className="btn-primary h-12 min-w-20 shrink-0 px-3 text-sm" disabled={check !== "ok"} onClick={() => {
+          if (buying.current) return;
+          buying.current = true;
+          window.setTimeout(() => (buying.current = false), 600);
+          onChange(buyGear(career, offer.slot, offer.tier, today, top, admin));
+        }}>
           <span className="num">{formatCoins(price)}</span>
         </button>
       </div>
       {rewardAvailable(career, "gear-offer", today) ? (
-        <RewardButton name="gear-offer" className="btn-ghost h-12 w-full text-sm" label={tr("gear.offerAd", { n: Math.round(ECONOMY.gear.dailyAdOff * 100) })} onReward={() => onChange(grantGearOfferAd(career, today))} />
+        <RewardButton name="gear-offer" className="btn-ghost h-12 w-full text-sm" label={tr("gear.offerAd", { n: Math.round(ECONOMY.gear.dailyAdOff * 100) })} onReward={() => apply((current) => grantGearOfferAd(current, today))} />
       ) : null}
     </section>
   );
@@ -2759,6 +2785,8 @@ function MyPlayerScreen({ career, onChange, onBack }: { career: Career; onChange
   const top = gearTopLeague(career);
   const bonus = gearBonus(career);
   const [picking, setPicking] = useState(false);
+  /** Blocks a fast second tap from buying the next tier off the same render. */
+  const buying = useRef(false);
   const reason: Record<string, string> = { coins: tr("eco.short"), owned: tr("eco.owned"), locked: tr("gear.goldLocked"), daily: tr("eco.short") };
   const slotCard = (index: number) => {
     const slot = GEAR_SLOTS[index];
@@ -2795,8 +2823,13 @@ function MyPlayerScreen({ career, onChange, onBack }: { career: Career; onChange
             {tr("gear.tier.gold")}
           </button>
         ) : nextTier ? (
-          <button type="button" className="btn-primary mt-2 h-12 w-full text-sm" disabled={check !== "ok"} onClick={() => onChange(buyGear(career, slot.id, nextTier, today, top, admin))}>
-            {tr(`gear.tier.${nextTier}`)} · <span className="num">{formatCoins(gearPrice(career, slot.id, nextTier, today, admin))}</span>
+          <button type="button" className="btn-primary mt-2 h-12 w-full text-sm" disabled={check !== "ok"} onClick={() => {
+            if (buying.current) return;
+            buying.current = true;
+            window.setTimeout(() => (buying.current = false), 600);
+            onChange(buyGear(career, slot.id, nextTier, today, top, admin));
+          }}>
+            {tr(`gear.tier.${nextTier}`)} · <span className="num">{formatCoins(gearPrice(career, slot.id, nextTier, today, admin, top))}</span>
           </button>
         ) : (
           <p className="mt-2 text-xs text-good">{tr("gear.maxed")}</p>

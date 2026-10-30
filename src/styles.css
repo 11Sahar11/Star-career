@@ -660,7 +660,7 @@
 
   .toast {
     position: fixed;
-    top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 0.75rem);
     left: 50%;
     z-index: 40;
     display: flex;
@@ -675,7 +675,7 @@
     transform: translateX(-50%);
     animation: toast-in 380ms cubic-bezier(0.16, 1, 0.3, 1);
   }
-  @keyframes toast-in { from { opacity: 0; transform: translate(-50%, -12px); } }
+  @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 12px); } }
 
   @media (prefers-reduced-motion: reduce) {
     .live-dot,
@@ -765,7 +765,9 @@
 }
 .loading-star {
   position: absolute;
-  inset-inline-end: -14px;
+  inset-inline-start: 100%;
+  margin-inline-start: -14px;
+  animation: loading-star 0.6s ease-out both;
   top: 50%;
   transform: translateY(-50%);
   font-size: 28px;
@@ -777,6 +779,12 @@
   from { transform: scaleX(0.05); }
   to { transform: scaleX(1); }
 }
+/* Star rides the leading edge of the fill (same timing as loading-fill). */
+@keyframes loading-star {
+  from { inset-inline-start: 5%; }
+  to { inset-inline-start: 100%; }
+}
 @media (prefers-reduced-motion: reduce) {
   .loading-fill { animation: none; }
+  .loading-star { animation: none; }
 }

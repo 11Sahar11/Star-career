@@ -30,6 +30,13 @@ export const Route = createRootRoute({
     <html lang="en" dir="ltr" className="antialiased" suppressHydrationWarning>
       <head>
         <HeadContent />
+        {/* Set lang/dir from the saved language before first paint (no LTR flash in Hebrew). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              'try{var l=localStorage.getItem("star-lang");if(l==="he"||l==="es"||l==="fr"){document.documentElement.lang=l;document.documentElement.dir=l==="he"?"rtl":"ltr"}}catch(e){}',
+          }}
+        />
       </head>
       <body>
         <PreviewHostBridge />

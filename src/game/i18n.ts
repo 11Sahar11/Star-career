@@ -1,19 +1,24 @@
 export type Lang = "en" | "he" | "es" | "fr";
 
 const KEY = "star-lang";
-let current: Lang = "en";
+function readLang(): Lang {
+  try {
+    if (typeof localStorage === "undefined") return "en";
+    const saved = localStorage.getItem(KEY);
+    return saved === "he" || saved === "es" || saved === "fr" ? saved : "en";
+  } catch {
+    return "en";
+  }
+}
+/** Read synchronously at import so the first client render is already in the saved language. */
+let current: Lang = readLang();
 
 export function getLang(): Lang {
   return current;
 }
 
 export function loadLang(): Lang {
-  try {
-    const saved = localStorage.getItem(KEY);
-    current = saved === "he" || saved === "es" || saved === "fr" ? saved : "en";
-  } catch {
-    current = "en";
-  }
+  current = readLang();
   return current;
 }
 
@@ -691,7 +696,7 @@ const en: Record<string, string> = {
   "gear.for.gk-dive": "Diving saves",
   "gear.short.gk-dive": "gloves",
   "gear.item.gk-claim": "Handling gloves",
-  "gear.for.gk-claim": "Holding and claiming",
+  "gear.for.gk-claim": "One-on-ones: standing tall",
   "gear.short.gk-claim": "gloves",
   "eco.desc.cos-crest": "Looks only.",
   "eco.desc.cos-shirt": "Looks only.",
@@ -1363,7 +1368,7 @@ const he: Record<string, string> = {
   "gear.for.gk-dive": "הצלות בצלילה",
   "gear.short.gk-dive": "כפפות",
   "gear.item.gk-claim": "כפפות תפיסה",
-  "gear.for.gk-claim": "תפיסה ויציאה",
+  "gear.for.gk-claim": "אחד על אחד: לעמוד מול החלוץ",
   "gear.short.gk-claim": "כפפות",
   "eco.desc.cos-crest": "מראה בלבד.",
   "eco.desc.cos-shirt": "מראה בלבד.",
@@ -2035,7 +2040,7 @@ const es: Record<string, string> = {
   "gear.for.gk-dive": "Paradas en estirada",
   "gear.short.gk-dive": "guantes",
   "gear.item.gk-claim": "Guantes de blocaje",
-  "gear.for.gk-claim": "Blocar y salir",
+  "gear.for.gk-claim": "Mano a mano: aguantar de pie",
   "gear.short.gk-claim": "guantes",
   "eco.desc.cos-crest": "Solo estética.",
   "eco.desc.cos-shirt": "Solo estética.",
@@ -2707,7 +2712,7 @@ const fr: Record<string, string> = {
   "gear.for.gk-dive": "Arrêts en plongeon",
   "gear.short.gk-dive": "gants",
   "gear.item.gk-claim": "Gants de prise",
-  "gear.for.gk-claim": "Prise et sortie",
+  "gear.for.gk-claim": "Face-à-face : rester debout",
   "gear.short.gk-claim": "gants",
   "eco.desc.cos-crest": "Purement visuel.",
   "eco.desc.cos-shirt": "Purement visuel.",

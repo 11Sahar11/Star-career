@@ -105,12 +105,13 @@ export function injuryFactor(career: Career) {
 
 export type GearCheck = "ok" | "coins" | "owned" | "locked" | "daily";
 
-export function gearPrice(career: Career, slot: GearSlotId, tier: GearTierId, today: string, admin = false) {
+/** `topLeague` must match the one used to show the daily offer, so the price shown is the price charged. */
+export function gearPrice(career: Career, slot: GearSlotId, tier: GearTierId, today: string, admin = false, topLeague = true) {
   if (admin) return 0;
   const current = career.gear?.[slot];
   const owned = current && GEAR_TIERS.indexOf(current) < GEAR_TIERS.indexOf(tier) ? tierInfo(current).price : 0;
   const base = Math.round(tierInfo(tier).price - owned * ECONOMY.gear.tradeIn);
-  const offer = dailyGearOffer(career, today, true);
+  const offer = dailyGearOffer(career, today, topLeague);
   if (offer && offer.slot === slot && offer.tier === tier && career.adState.gearOfferBoughtDate !== today) {
     const off = ECONOMY.gear.dailyOff + (career.adState.gearOfferAdDate === today ? ECONOMY.gear.dailyAdOff : 0);
     return Math.round(base * (1 - off));
@@ -123,15 +124,15 @@ export function canBuyGear(career: Career, slot: GearSlotId, tier: GearTierId, t
   const current = career.gear?.[slot];
   if (current && GEAR_TIERS.indexOf(current) >= GEAR_TIERS.indexOf(tier)) return "owned";
   if (tier === "gold" && ECONOMY.gear.goldNeedsTopLeague && !topLeague && !admin) return "locked";
-  if (career.coins < gearPrice(career, slot, tier, today, admin)) return "coins";
+  if (career.coins < gearPrice(career, slot, tier, today, admin, topLeague)) return "coins";
   return "ok";
 }
 
 /** Buys (or upgrades to) a tier in a slot. Full tier price; the old item is replaced. */
 export function buyGear(career: Career, slot: GearSlotId, tier: GearTierId, today: string, topLeague: boolean, admin = false): Career {
   if (canBuyGear(career, slot, tier, today, topLeague, admin) !== "ok") return career;
-  const price = gearPrice(career, slot, tier, today, admin);
-  const offer = dailyGearOffer(career, today, true);
+  const price = gearPrice(career, slot, tier, today, admin, topLeague);
+  const offer = dailyGearOffer(career, today, topLeague);
   const usedOffer = !!offer && offer.slot === slot && offer.tier === tier && career.adState.gearOfferBoughtDate !== today;
   return {
     ...career,
