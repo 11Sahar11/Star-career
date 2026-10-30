@@ -3010,6 +3010,9 @@ function GearOfferCard({ career, onChange }: { career: Career; onChange: (c: Car
   );
 }
 
+/** Character art for My Player; swap the file to change the figure. */
+const PLAYER_FIGURE = "/character/player.webp";
+
 function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career; onChange: (c: Career) => void; onBack: () => void; onStore: () => void }) {
   const { tr } = useTx();
   const admin = useContext(AdminContext);
@@ -3027,27 +3030,20 @@ function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career;
     const nextTier = tier ? GEAR_TIERS[GEAR_TIERS.indexOf(tier) + 1] : "bronze";
     const check = nextTier ? canBuyGear(career, slot.id, nextTier, today, top, admin) : "owned";
     return (
-      <div key={slot.id} className="rounded-md border border-line bg-surface px-2.5 py-2" data-gear-slot={slot.id} data-gear-tier={tier ?? "none"}>
-        <GearIcon key={`${worn.item}-${tier ?? "bronze"}`} item={worn.item} tier={tier ?? "bronze"} dim={!tier} className="gear-well mx-auto mb-1 h-14 w-14 p-1" />
-        <p className="text-sm font-semibold">{tr(`gear.item.${worn.item}`)}</p>
-        <p className="text-xs text-muted">
-          {tr(`gear.for.${worn.item}`)} · {tr(`attr.${worn.attr}`)}
+      <div key={slot.id} className="gear-slot rounded-md border border-line bg-surface px-1.5 py-1.5 text-center" data-gear-slot={slot.id} data-gear-tier={tier ?? "none"}>
+        <GearIcon key={`${worn.item}-${tier ?? "bronze"}`} item={worn.item} tier={tier ?? "bronze"} dim={!tier} className="gear-well mx-auto h-11 w-11 p-1" />
+        <p className={`gear-tier-label mt-0.5 text-[10px] font-bold uppercase tracking-wide ${tier ? "" : "text-muted"}`}>
+          {tier ? tr(`gear.tier.${tier}`) : tr("gear.empty")}
+          {tier ? <bdi dir="ltr"> +{tierInfo(tier).bonus}</bdi> : null}
         </p>
-        <p className="mt-1 text-xs">
-          {tier ? (
-            <>
-              {tr(`gear.tier.${tier}`)} <bdi dir="ltr">+{tierInfo(tier).bonus}</bdi>
-            </>
-          ) : (
-            <span className="text-muted">{tr("gear.empty")}</span>
-          )}
-          {career.gearTrial === slot.id ? <span className="ms-1 text-trophy">· {tr("gear.trialOn")}</span> : null}
-        </p>
-        {worn.injury && tier ? <p className="text-xs text-good">{tr("gear.injury", { n: Math.round(ECONOMY.gear.injuryCut[tier] * 100) })}</p> : null}
+        <p className="text-xs font-semibold leading-tight">{tr(`gear.item.${worn.item}`)}</p>
+        <p className="text-[10px] leading-tight text-muted">{tr(`attr.${worn.attr}`)}</p>
+        {career.gearTrial === slot.id ? <p className="text-[10px] text-trophy">{tr("gear.trialOn")}</p> : null}
+        {worn.injury && tier ? <p className="text-[10px] text-good">{tr("gear.injury", { n: Math.round(ECONOMY.gear.injuryCut[tier] * 100) })}</p> : null}
         {picking ? (
           <button
             type="button"
-            className="btn-ghost mt-2 h-12 w-full text-sm"
+            className="btn-ghost mt-1 h-11 w-full px-1 text-xs"
             onClick={() => {
               onChange(grantTryGold(career, slot.id));
               setPicking(false);
@@ -3056,40 +3052,44 @@ function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career;
             {tr("gear.tier.gold")}
           </button>
         ) : nextTier ? (
-          <button type="button" className="btn-primary mt-2 h-12 w-full text-sm" disabled={check !== "ok"} onClick={() => {
+          <button type="button" className="btn-primary mt-1 h-11 w-full px-1 text-xs" disabled={check !== "ok"} aria-label={`${tr(`gear.tier.${nextTier}`)} ${tr(`gear.item.${worn.item}`)}`} onClick={() => {
             if (buying.current) return;
             buying.current = true;
             window.setTimeout(() => (buying.current = false), 600);
             onChange(buyGear(career, slot.id, nextTier, today, top, admin));
           }}>
-            {tr(`gear.tier.${nextTier}`)} · <span className="num">{formatCoins(gearPrice(career, slot.id, nextTier, today, admin, top))}</span>
+            <span className="num">{formatCoins(gearPrice(career, slot.id, nextTier, today, admin, top))}</span>
           </button>
         ) : (
-          <p className="mt-2 text-xs text-good">{tr("gear.maxed")}</p>
+          <p className="mt-1 text-[10px] text-good">{tr("gear.maxed")}</p>
         )}
-        {!picking && nextTier && check !== "ok" && check !== "coins" ? <p className="mt-1 text-xs text-muted">{reason[check]}</p> : null}
+        {!picking && nextTier && check !== "ok" && check !== "coins" ? <p className="mt-0.5 text-[10px] leading-tight text-muted">{reason[check]}</p> : null}
       </div>
     );
   };
   return (
     <Shell>
       <ScreenHeader title={tr("gear.myPlayer")} sub={tr("gear.sub", { n: ECONOMY.gear.attrCap })} onBack={onBack} right={<CoinChip n={career.coins} />} />
-      <div className="grid grid-cols-3 items-center gap-2">
-        <div className="grid gap-2">{[0, 1, 2].map(slotCard)}</div>
-        <div className="flex flex-col items-center gap-1 text-center">
-          <div className="ovr-badge">
-            <span className="num">{overall(career.player.position, effectiveAttrs(career))}</span>
+      <div className="myplayer-grid">
+        <div className="grid content-start gap-2">{[0, 1, 2].map(slotCard)}</div>
+        <div className="flex flex-col items-center text-center">
+          <div className="player-figure">
+            <img src={PLAYER_FIGURE} alt="" width={230} height={665} decoding="async" />
+            <div className="ovr-badge player-ovr">
+              <span className="num">{overall(career.player.position, effectiveAttrs(career))}</span>
+            </div>
           </div>
-          <p className="text-sm font-bold">{career.player.name}</p>
+          <p className="mt-1 text-sm font-bold leading-tight">{career.player.name}</p>
           <p className="text-xs text-muted">
-            {ATTR_KEYS.filter((key) => bonus[key]).map((key) => (
-              <span key={key} className="block">
-                {tr(`attr.${key}`)} <bdi dir="ltr">+{bonus[key]}</bdi>
-              </span>
-            ))}
+            {tr(`pos.${career.player.position}`)} · {tr("ageN", { n: career.player.age })}
           </p>
         </div>
-        <div className="grid gap-2">{[3, 4, 5].map(slotCard)}</div>
+        <div className="grid content-start gap-2">{[3, 4, 5].map(slotCard)}</div>
+      </div>
+      <div className="mt-3 grid gap-2 rounded-md border border-line bg-surface p-3" data-myplayer-attrs>
+        {ATTR_KEYS.map((key) => (
+          <AttrBar key={key} attr={key} value={effectiveAttrs(career)[key]} delta={bonus[key] || undefined} />
+        ))}
       </div>
       <GearOfferCard career={career} onChange={onChange} />
       {rewardAvailable(career, "try-gold", today) ? (

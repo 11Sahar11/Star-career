@@ -956,3 +956,12 @@
   border-radius: 12px;
   background: radial-gradient(#1e3166, #101c42);
 }
+
+/* My Player: figure centred, 3 gear slots each side. */
+.myplayer-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1fr); gap: 0.5rem; align-items: start; }
+.player-figure { position: relative; width: 100%; max-width: 130px; margin-top: 0.5rem; border-radius: 1rem; background: radial-gradient(ellipse at 50% 85%, rgba(43, 255, 136, 0.18), transparent 65%); }
+.player-figure img { display: block; width: 100%; height: auto; max-height: 240px; object-fit: contain; }
+.player-ovr { position: absolute; top: 0; inset-inline-end: -6px; }
+[data-gear-slot][data-gear-tier="bronze"] .gear-tier-label { color: var(--color-tier-bronze); }
+[data-gear-slot][data-gear-tier="silver"] .gear-tier-label { color: var(--color-tier-silver); }
+[data-gear-slot][data-gear-tier="gold"] .gear-tier-label { color: var(--color-tier-gold); }
