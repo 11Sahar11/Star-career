@@ -1,4 +1,4 @@
-import { EARN, ECONOMY, earnForReport, freshAdState } from "./economy";
+import { EARN, ECONOMY, earnForReport, earnSeasonCoins, emptySeasonCoins, freshAdState } from "./economy";
 import { gearBonus, gearItemFor, injuryFactor } from "./gear";
 import {
   ATTR_LABEL,
@@ -1035,6 +1035,7 @@ export function applyReport(career: Career, report: MatchReport, rng: () => numb
   if (!next.race) {
     const earned = Math.round(earnForReport(report, false) * coinMultiplier(career));
     next.coins = (next.coins ?? 0) + earned;
+    next.seasonCoins = earnSeasonCoins(next, "matches", earned);
     next.coinsEarnedLast = earned;
     next.coinsFixtureId = report.fixtureId;
   }
@@ -1407,6 +1408,7 @@ export function finishBigMatch(career: Career): Career {
   // Key matches weigh double in the table and lift the cup run.
   if (!applied.race) {
     const earned = Math.round(earnForReport(report, true, pending.moments) * coinMultiplier(career));
+    applied.seasonCoins = earnSeasonCoins(applied, "matches", earned - (applied.coinsEarnedLast ?? 0));
     applied.coins = applied.coins - (applied.coinsEarnedLast ?? 0) + earned;
     applied.coinsEarnedLast = earned;
   }
@@ -1935,6 +1937,7 @@ export function commitSeason(career: Career): Career {
       else earned += EARN.award;
     }
     aged.coins = (aged.coins ?? 0) + earned;
+    aged.seasonCoins = earnSeasonCoins(aged, "bonuses", earned);
   }
   aged.bigTrial = aged.race ? null : makeBigTrial(aged, ovr);
   // Season items end here; the agent and the trial call were used by buildOffers. Gear stays with the career.
@@ -2021,6 +2024,7 @@ export function acceptOffer(career: Career, clubId: string): Career {
   };
   const rng = makeRng(next.rng);
   next.season = freshSeason(next, () => rng.next());
+  next.seasonCoins = emptySeasonCoins();
   next.rng = rng.state();
   const club = getClub(offer.clubId);
   const country = getCountry(getLeague(club.leagueId).countryId);
@@ -2125,6 +2129,7 @@ export function playSummer(career: Career): Career {
     rng: rng.state(),
     trophies,
     coins,
+    seasonCoins: earnSeasonCoins(career, "bonuses", coins - (career.coins ?? 0)),
     summer: {
       ...career.summer,
       fixtures,

@@ -1,5 +1,5 @@
 import { isGearSlot, normalizeGear } from "./gear";
-import type { AdState, Career, MatchReport, Moment } from "./types";
+import type { AdState, Career, MatchReport, Moment, SeasonCoins } from "./types";
 
 // Every economy number lives here. All are design proposals to tune with real data.
 
@@ -154,6 +154,7 @@ export function withEconomy(career: Career): Career {
   return {
     ...career,
     coins: typeof career.coins === "number" && career.coins >= 0 ? Math.floor(career.coins) : 0,
+    seasonCoins: cleanSeasonCoins(career.seasonCoins),
     gear: normalizeGear(career.gear),
     gearTrial: isGearSlot(career.gearTrial) ? career.gearTrial : null,
     agentHired: career.agentHired === true,
@@ -291,12 +292,29 @@ export function rewardAvailable(career: Career, id: RewardId, today: string, fix
   }
 }
 
+export function emptySeasonCoins(): SeasonCoins {
+  return { matches: 0, bonuses: 0, ads: 0 };
+}
+
+/** Adds earned income (never purchases/trade-ins) to this season's tally. */
+export function earnSeasonCoins(career: Career, source: keyof SeasonCoins, n: number): SeasonCoins {
+  const base = career.seasonCoins ?? emptySeasonCoins();
+  return { ...base, [source]: Math.max(0, (base[source] ?? 0) + n) };
+}
+
+function cleanSeasonCoins(raw: unknown): SeasonCoins {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Partial<Record<keyof SeasonCoins, unknown>>;
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
+  return { matches: num(r.matches), bonuses: num(r.bonuses), ads: num(r.ads) };
+}
+
 export function grantDoubleCoins(career: Career): Career {
   if (!career.coinsEarnedLast || !career.coinsFixtureId) return career;
   const ad = career.adState;
   return {
     ...career,
     coins: career.coins + career.coinsEarnedLast,
+    seasonCoins: earnSeasonCoins(career, "ads", career.coinsEarnedLast),
     adState: { ...ad, doubleCoinsThisSeason: ad.doubleCoinsThisSeason + 1, doubledFixtureIds: [...ad.doubledFixtureIds, career.coinsFixtureId] },
   };
 }

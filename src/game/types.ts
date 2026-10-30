@@ -88,6 +88,8 @@ export type MatchReport = {
   headline: string;
 };
 
+export type SeasonCoins = { matches: number; bonuses: number; ads: number };
+
 export type MatchLog = {
   opponentName: string;
   competition: Competition;
@@ -266,6 +268,8 @@ export type Career = {
   /** Coins from the last match, for the double-coins clip. */
   coinsEarnedLast?: number;
   coinsFixtureId?: string | null;
+  /** Coins earned this season by source (purchases and trade-ins excluded); reset when a new season starts. */
+  seasonCoins?: SeasonCoins;
   /** Equipment by slot (save v10); belongs to the career, counts in simulation and odds, never written into player.attrs. */
   gear: GearLoadout;
   /** "Try gold" clip: this slot plays at gold tier in the next key match only. */

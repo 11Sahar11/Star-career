@@ -78,6 +78,7 @@ import {
   formatCoins,
   grantDiscount,
   grantDoubleCoins,
+  earnSeasonCoins,
   grantFreeCamp,
   itemPrice,
   rewardAvailable,
@@ -1858,6 +1859,9 @@ function SeasonScreen({
   const [showResults, setShowResults] = useState(false);
   const logs = career.season.fixturesPlayed;
   const keyLogs = logs.filter((log) => log.key);
+  const sc = career.seasonCoins ?? { matches: 0, bonuses: 0, ads: 0 };
+  const earnedTotal = sc.matches + sc.bonuses + sc.ads;
+  const earnedAds = sc.ads;
   const record = { w: 0, d: 0, l: 0 };
   for (const log of logs) record[log.us > log.them ? "w" : log.us < log.them ? "l" : "d"] += 1;
   if (!preview) {
@@ -1885,6 +1889,12 @@ function SeasonScreen({
           <p className="text-xs text-muted" dir="auto">
             {tr("seasonRecord", { w: record.w, d: record.d, l: record.l })} · {tr("goals")} <span className="num">{career.season.goals}</span> · {tr("assists")} <span className="num">{career.season.assists}</span>
           </p>
+          {!career.race ? (
+            <p className="text-xs font-semibold text-trophy" data-season-coins>
+              {tr("seasonCoins", { n: formatCoins(earnedTotal) })}
+              {earnedAds > 0 ? ` ${tr("seasonCoinsAds", { n: formatCoins(earnedAds) })}` : ""}
+            </p>
+          ) : null}
         </div>
         <span className={`chip shrink-0 ${preview.targetHit ? "chip-good" : "chip-bad"}`}>{preview.targetHit ? tr("targetMet") : tr("targetMiss")}</span>
       </div>
@@ -2594,7 +2604,10 @@ function EconomyBar({ career, onChange, onStore }: { career: Career; onChange: (
     if (!chest) return;
     markChest(today);
     setChest(null);
-    if (chest.kind === "coins") onChange({ ...career, coins: career.coins + chest.coins * (double ? 2 : 1) });
+    if (chest.kind === "coins") {
+      const withBase = { ...career, seasonCoins: earnSeasonCoins(career, "bonuses", chest.coins) };
+      onChange({ ...withBase, coins: career.coins + chest.coins * (double ? 2 : 1), seasonCoins: double ? earnSeasonCoins(withBase, "ads", chest.coins) : withBase.seasonCoins });
+    }
     else onChange({ ...grantFreeCamp(career, career.adState.freeCampDate ?? ""), keyCampBonus: ECONOMY.keyCampBonus * (double ? 2 : 1) });
   };
   return (
