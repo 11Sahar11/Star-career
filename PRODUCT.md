@@ -13,7 +13,7 @@ Football fans of all ages, from school-age teens to adults, playing on a phone i
 STAR is a single-player football career game. One player, one career: train, play through simulated seasons, take contract offers, retire. Success is a player who comes back every day, mainly for the daily race, and starts a new career after the last one ends.
 
 ## Positioning
-The daily race: every player starts the same day from the same position, club and attributes, and races to the Ballon d'Or in the fewest seasons. The result is comparable and shareable between friends. The main career mode and the legacy system feed the habit; the daily race is the reason to open the game today.
+The daily race: every player starts the same day from the same position, club and attributes, and races to the Golden Star Award in the fewest seasons. The result is comparable and shareable between friends. The main career mode and the legacy system feed the habit; the daily race is the reason to open the game today.
 
 ## Operating Context
 - Phone browser or an installed web app (planned Google Play release as a Trusted Web Activity).

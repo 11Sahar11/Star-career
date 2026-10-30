@@ -430,8 +430,8 @@ function PlayerHeader({ career }: { career: Career }) {
           <p className="truncate text-sm text-muted">
             {tr(`pos.${player.position}`)} · {club.name}
           </p>
-          <p className="truncate text-xs text-muted">
-            {tr("ageN", { n: player.age })} · {league.name}
+          <p className="truncate text-xs text-muted" dir="ltr" style={{ textAlign: "start" }}>
+            {tr("ageN", { n: player.age })} · <bdi>{league.name}</bdi>
           </p>
         </div>
         <span className="num self-start text-sm font-semibold text-muted">#{shirtNumber(player.position)}</span>
@@ -611,13 +611,13 @@ function LangSwitch({ onLang }: { onLang: (lang: Lang) => void }) {
     { id: "fr", label: "FR" },
   ];
   return (
-    <div className="lang-switch" role="group" aria-label={tr("kicker")}>
+    <select className="lang-select" aria-label={tr("kicker")} value={lang} onChange={(e) => onLang(e.target.value as Lang)}>
       {langs.map((item) => (
-        <button key={item.id} type="button" aria-pressed={lang === item.id} className={lang === item.id ? "is-on" : ""} onClick={() => onLang(item.id)}>
+        <option key={item.id} value={item.id}>
           {item.label}
-        </button>
+        </option>
       ))}
-    </div>
+    </select>
   );
 }
 

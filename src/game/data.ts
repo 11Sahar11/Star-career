@@ -254,7 +254,7 @@ export const CLUBS: Club[] = [
     ["Lorient Falcons", "Lorient"], ["Montpellier Herons", "Montpellier"],
   ]),
   ...row("fra-l1", [
-    ["Paris Orbit", "Paris O"], ["Marseille Hawks", "Marseille"], ["Lyon Ravens", "Lyon"], ["Monaco Bison", "Monaco"],
+    ["Paris Orbit", "Paris O"], ["Marseille Hawks", "Marseille"], ["Lyon Ravens", "Lyon"], ["Monaco Bison", "Bison"],
     ["Lille Titans", "Lille"], ["Nice Stags", "Nice"], ["Lens Bears", "Lens"], ["Rennes Knights", "Rennes"],
     ["Toulouse Mavericks", "Toulouse"], ["Strasbourg Mariners", "Strasbourg"], ["Reims Bears", "Reims"], ["Brest Phoenix", "Brest"],
     ["Nantes Knights", "Nantes"], ["Auxerre Royals", "Auxerre"], ["Angers Orbit", "Angers"], ["Le Havre Storm", "Le Havre"],

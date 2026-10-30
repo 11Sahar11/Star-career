@@ -81,11 +81,11 @@ bubblewrap build
 **English listing**
 - Title: STAR – Football Career
 - Short description: Build a football star from 16. Big-match moments, transfers, a daily race.
-- Full description: Start at 16 in a lower league and climb to a European final. Play a full season in minutes, make the call in the big moments (shoot, take on the keeper, or square it), handle the press and your agent between matches, compare contract offers, and race everyone to the Ballon d'Or in the daily challenge. Finished careers earn legacy perks for the next one.
+- Full description: Start at 16 in a lower league and climb to a European final. Play a full season in minutes, make the call in the big moments (shoot, take on the keeper, or square it), handle the press and your agent between matches, compare contract offers, and race everyone to the Golden Star Award in the daily challenge. Finished careers earn legacy perks for the next one.
 
 ## לפני ההשקה: נקודות פתוחות
 
-1. **שמות אמיתיים:** המשחק משתמש בשמות אמיתיים של קבוצות וליגות, ושל "Champions League" ו"Ballon d'Or". אלה סימנים רשומים, וגוגל מסירה אפליקציות בגלל תלונות על קניין רוחני. מומלץ לעבור לשמות בדיוניים (למשל "מכבי חוף", "גביע היבשת", "כדור הזהב") לפני ההעלאה.
+1. **שמות:** כל שמות הקבוצות, הליגות, הגביעים, הפרסים והשחקנים במשחק בדויים. שמות המדינות אמיתיים, וזה מותר.
 2. **התווית "Created with Grok":** הפלטפורמה של Grok מזריקה תווית לאתר. באפליקציה בחנות זה ייראה לא מקצועי. מכבים אותה בהגדרות הפרויקט ב־Grok, לא בקוד.
 3. **הפעלת חשבונות:** בהגדרות הפרויקט ב־Grok צריך להפעיל התחברות (`VITE_AUTH_ENABLED`). בלי זה עמוד ההרשמה לא פעיל.
 4. **מדידה:** מומלץ לחבר Google Analytics או Firebase לפני ההשקה, כדי לדעת כמה שחקנים חוזרים אחרי יום ואחרי שבוע.
