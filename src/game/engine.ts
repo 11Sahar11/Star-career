@@ -1705,11 +1705,39 @@ function collectAwards(career: Career, avg: number, pos: number, europe: EuropeR
   return awards;
 }
 
+/** End-of-season coins (target, salary, trophies, awards) split into salary and other bonuses. */
+function seasonBonus(career: Career, preview: GrowthPreview) {
+  let other = preview.targetHit ? EARN.targetHit : 0;
+  // Salary bonus from the end of season 2 on, more for a top-half finish.
+  const salary = career.totals.seasons >= 1 ? EARN.salary + (preview.tablePos <= Math.floor(career.season.table.length / 2) ? EARN.salaryTopHalf : 0) : 0;
+  for (const award of preview.awards) {
+    if (award.id.startsWith("league-")) other += EARN.trophy.league;
+    else if (award.id.startsWith("cup-")) other += EARN.trophy.cup;
+    else if (award.id.startsWith("eu-")) other += EARN.trophy.europe;
+    else if (award.id.startsWith("ballon-")) other += EARN.ballon;
+    else other += EARN.award;
+  }
+  return { salary, other };
+}
+
+/** Pays the season's bonuses once per year (idempotent via seasonBonusYear). `source` is the pre-season-end career for the rules. */
+function paySeasonBonus(target: Career, source: Career, preview: GrowthPreview): Partial<Career> {
+  if (target.race || target.seasonBonusYear === source.year) return {};
+  const { salary, other } = seasonBonus(source, preview);
+  const withOther = { ...target, seasonCoins: earnSeasonCoins(target, "bonuses", other) };
+  return {
+    coins: (target.coins ?? 0) + salary + other,
+    seasonCoins: earnSeasonCoins(withOther, "salary", salary),
+    seasonBonusYear: source.year,
+  };
+}
+
 export function openSeason(career: Career): Career {
   if (nextFixture(career)) return career;
   const growthPreview = computeGrowth(career);
+  const paid = paySeasonBonus(career, career, growthPreview);
   if (career.shuffle?.year === career.year) {
-    return { ...career, screen: "season", growthPreview, activeReport: null };
+    return { ...career, ...paid, screen: "season", growthPreview, activeReport: null };
   }
   const moved = shufflePyramid(career);
   const clubName = getClub(career.clubId).name;
@@ -1723,6 +1751,7 @@ export function openSeason(career: Career): Career {
         : `${clubName} are relegated to ${getLeague(after).name}.`;
   return {
     ...career,
+    ...paid,
     divisions: moved.divisions,
     shuffle: moved.shuffle,
     screen: "season",
@@ -1925,20 +1954,8 @@ export function commitSeason(career: Career): Career {
     news: pushNews(career.news, preview.targetHit ? "The board is pleased with the season." : "The board wanted a higher finish."),
   };
   aged.pendingOffers = buildOffers(aged, ovr, preview.tablePos);
-  if (!aged.race) {
-    let earned = preview.targetHit ? EARN.targetHit : 0;
-    // Salary bonus from the end of season 2 on, more for a top-half finish.
-    if (career.totals.seasons >= 1) earned += EARN.salary + (preview.tablePos <= Math.floor(career.season.table.length / 2) ? EARN.salaryTopHalf : 0);
-    for (const award of preview.awards) {
-      if (award.id.startsWith("league-")) earned += EARN.trophy.league;
-      else if (award.id.startsWith("cup-")) earned += EARN.trophy.cup;
-      else if (award.id.startsWith("eu-")) earned += EARN.trophy.europe;
-      else if (award.id.startsWith("ballon-")) earned += EARN.ballon;
-      else earned += EARN.award;
-    }
-    aged.coins = (aged.coins ?? 0) + earned;
-    aged.seasonCoins = earnSeasonCoins(aged, "bonuses", earned);
-  }
+  // Older saves that reached the summary before bonuses moved to openSeason get paid here, once.
+  Object.assign(aged, paySeasonBonus(aged, career, preview));
   aged.bigTrial = aged.race ? null : makeBigTrial(aged, ovr);
   // Season items end here; the agent and the trial call were used by buildOffers. Gear stays with the career.
   aged.gearTrial = null;
@@ -2024,7 +2041,6 @@ export function acceptOffer(career: Career, clubId: string): Career {
   };
   const rng = makeRng(next.rng);
   next.season = freshSeason(next, () => rng.next());
-  next.seasonCoins = emptySeasonCoins();
   next.rng = rng.state();
   const club = getClub(offer.clubId);
   const country = getCountry(getLeague(club.leagueId).countryId);
@@ -2087,6 +2103,8 @@ export function startSummer(career: Career): Career {
   }
   return {
     ...career,
+    // The summary has been shown: this season's tally closes; summer and later income counts toward the next one.
+    seasonCoins: emptySeasonCoins(),
     screen: "summer",
     summer: { kind, called: called && fixtures.length > 0, reason, fixtures, cursor: 0, played: [], done: !called || fixtures.length === 0 },
     news: pushNews(career.news, reason),

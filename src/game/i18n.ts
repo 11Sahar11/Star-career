@@ -10,8 +10,8 @@ function readLang(): Lang {
     return "en";
   }
 }
-/** Read synchronously at import so the first client render is already in the saved language. */
-let current: Lang = readLang();
+/** "en" until loadLang() runs after hydration, so server and first client render match. */
+let current: Lang = "en";
 
 export function getLang(): Lang {
   return current;
@@ -399,6 +399,7 @@ const en: Record<string, string> = {
   "seasonCoins": "Coins earned this season: {n}",
   "seasonCoinsAds": "(+{n} from doubling)",
   "seasonCoinsHint": "Doubling available every match",
+  "seasonSalary": "Salary bonus: {n} (included)",
   "keyTag": "Key",
   "keyBonusNote": "Key matches count double: a win adds +3 bonus points, a draw +1, and each key win boosts your cup run. Key wins this season: {n}.",
   seasonStart: "Start of season",
@@ -701,7 +702,7 @@ const en: Record<string, string> = {
   "gear.for.gk-dive": "Diving saves",
   "gear.short.gk-dive": "gloves",
   "gear.item.gk-claim": "Handling gloves",
-  "gear.for.gk-claim": "One-on-ones: standing tall",
+  "gear.for.gk-claim": "One-on-ones: facing the striker",
   "gear.short.gk-claim": "gloves",
   "eco.desc.cos-crest": "Looks only.",
   "eco.desc.cos-shirt": "Looks only.",
@@ -1076,6 +1077,7 @@ const he: Record<string, string> = {
   "seasonCoins": "מטבעות שהרווחת העונה: {n}",
   "seasonCoinsAds": "(+{n} מהכפלה)",
   "seasonCoinsHint": "אפשר להכפיל מטבעות בכל משחק",
+  "seasonSalary": "בונוס משכורת: {n} (כלול)",
   "keyTag": "מפתח",
   "keyBonusNote": "משחקי מפתח שווים כפול: ניצחון מוסיף 3+ נקודות בונוס, תיקו 1+, וכל ניצחון במשחק מפתח מחזק את הריצה בגביע. ניצחונות מפתח העונה: {n}.",
   seasonStart: "תחילת עונה",
@@ -1753,6 +1755,7 @@ const es: Record<string, string> = {
   "seasonCoins": "Monedas ganadas esta temporada: {n}",
   "seasonCoinsAds": "(+{n} por duplicar)",
   "seasonCoinsHint": "Puedes duplicar en cada partido",
+  "seasonSalary": "Bonus de salario: {n} (incluido)",
   "keyTag": "Clave",
   "keyBonusNote": "Los partidos clave valen doble: una victoria suma +3 puntos extra, un empate +1, y cada victoria clave impulsa tu copa. Victorias clave esta temporada: {n}.",
   seasonStart: "Inicio de temporada",
@@ -2055,7 +2058,7 @@ const es: Record<string, string> = {
   "gear.for.gk-dive": "Paradas en estirada",
   "gear.short.gk-dive": "guantes",
   "gear.item.gk-claim": "Guantes de blocaje",
-  "gear.for.gk-claim": "Mano a mano: aguantar de pie",
+  "gear.for.gk-claim": "Mano a mano: frente al delantero",
   "gear.short.gk-claim": "guantes",
   "eco.desc.cos-crest": "Solo estética.",
   "eco.desc.cos-shirt": "Solo estética.",
@@ -2430,6 +2433,7 @@ const fr: Record<string, string> = {
   "seasonCoins": "Pièces gagnées cette saison : {n}",
   "seasonCoinsAds": "(+{n} grâce au doublement)",
   "seasonCoinsHint": "Doublement possible à chaque match",
+  "seasonSalary": "Prime de salaire : {n} (incluse)",
   "keyTag": "Clé",
   "keyBonusNote": "Les matchs clés comptent double : une victoire rapporte +3 points bonus, un nul +1, et chaque victoire clé booste ton parcours en coupe. Victoires clés cette saison : {n}.",
   seasonStart: "Début de saison",
@@ -2732,7 +2736,7 @@ const fr: Record<string, string> = {
   "gear.for.gk-dive": "Arrêts en plongeon",
   "gear.short.gk-dive": "gants",
   "gear.item.gk-claim": "Gants de prise",
-  "gear.for.gk-claim": "Face-à-face : rester debout",
+  "gear.for.gk-claim": "Face-à-face : face à l'attaquant",
   "gear.short.gk-claim": "gants",
   "eco.desc.cos-crest": "Purement visuel.",
   "eco.desc.cos-shirt": "Purement visuel.",

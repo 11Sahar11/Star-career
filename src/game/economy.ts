@@ -155,6 +155,7 @@ export function withEconomy(career: Career): Career {
     ...career,
     coins: typeof career.coins === "number" && career.coins >= 0 ? Math.floor(career.coins) : 0,
     seasonCoins: cleanSeasonCoins(career.seasonCoins),
+    seasonBonusYear: typeof career.seasonBonusYear === "number" ? career.seasonBonusYear : null,
     gear: normalizeGear(career.gear),
     gearTrial: isGearSlot(career.gearTrial) ? career.gearTrial : null,
     agentHired: career.agentHired === true,
@@ -293,7 +294,7 @@ export function rewardAvailable(career: Career, id: RewardId, today: string, fix
 }
 
 export function emptySeasonCoins(): SeasonCoins {
-  return { matches: 0, bonuses: 0, ads: 0 };
+  return { matches: 0, bonuses: 0, salary: 0, ads: 0 };
 }
 
 /** Adds earned income (never purchases/trade-ins) to this season's tally. */
@@ -305,7 +306,7 @@ export function earnSeasonCoins(career: Career, source: keyof SeasonCoins, n: nu
 function cleanSeasonCoins(raw: unknown): SeasonCoins {
   const r = (raw && typeof raw === "object" ? raw : {}) as Partial<Record<keyof SeasonCoins, unknown>>;
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
-  return { matches: num(r.matches), bonuses: num(r.bonuses), ads: num(r.ads) };
+  return { matches: num(r.matches), bonuses: num(r.bonuses), salary: num(r.salary), ads: num(r.ads) };
 }
 
 export function grantDoubleCoins(career: Career): Career {

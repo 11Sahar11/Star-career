@@ -132,7 +132,9 @@ export function GameApp() {
   const [view, setView] = useState<View>("home");
   const [streak, setStreak] = useState(1);
   const [sound, setSound] = useState(true);
-  const [lang, setLangState] = useState<Lang>(() => (typeof window === "undefined" ? "en" : loadLang()));
+  // Starts as "en" to match the server render (no hydration mismatch); the saved language is applied right after
+  // hydration, while the loading screen keeps its text hidden (see LoadingScreen `ready`).
+  const [lang, setLangState] = useState<Lang>("en");
   const [access, setAccess] = useState<ViewerAccess | null>(null);
   const [toasts, setToasts] = useState<string[]>([]);
   const [admin, setAdmin] = useState(false);
@@ -419,7 +421,7 @@ export function GameApp() {
       <AdminContext.Provider value={admin}>
         {screen}
         {toasts.length ? <AchievementToast id={toasts[0]} /> : null}
-        {!booted || !minShown ? <LoadingScreen /> : null}
+        {!booted || !minShown ? <LoadingScreen ready={booted} /> : null}
       </AdminContext.Provider>
     </ApplyContext.Provider>
     </LangContext.Provider>
@@ -462,7 +464,7 @@ const LOADING_MIN_MS = 600;
 const LOADING_TIPS = 5;
 
 /** Boot screen over the app while it hydrates. Ads may load in the background; none is ever shown here. */
-function LoadingScreen() {
+function LoadingScreen({ ready }: { ready: boolean }) {
   const { tr } = useTx();
   const [tip, setTip] = useState(0);
   useEffect(() => {
@@ -473,10 +475,12 @@ function LoadingScreen() {
       <img className="loading-bg" src="/loading-bg.webp" alt="" width={576} height={1024} decoding="async" fetchPriority="high" />
       <div className="loading-top">
         <h1 className="loading-logo">STAR</h1>
-        <p className="loading-sub">{tr("loadingSub")}</p>
+        <p className="loading-sub" style={ready ? undefined : { visibility: "hidden" }}>{tr("loadingSub")}</p>
       </div>
       <div className="loading-bottom">
-        <p className="loading-tip">{tr(`loadTip.${tip + 1}`)}</p>
+        <p className="loading-tip" style={ready ? undefined : { visibility: "hidden" }}>
+          {tr(`loadTip.${tip + 1}`)}
+        </p>
         <div className="loading-bar" aria-hidden="true">
           <span className="loading-fill" />
           <span className="loading-star">★</span>
@@ -1872,8 +1876,8 @@ function SeasonScreen({
   const [showResults, setShowResults] = useState(false);
   const logs = career.season.fixturesPlayed;
   const keyLogs = logs.filter((log) => log.key);
-  const sc = career.seasonCoins ?? { matches: 0, bonuses: 0, ads: 0 };
-  const earnedTotal = sc.matches + sc.bonuses + sc.ads;
+  const sc = career.seasonCoins ?? { matches: 0, bonuses: 0, salary: 0, ads: 0 };
+  const earnedTotal = sc.matches + sc.bonuses + (sc.salary ?? 0) + sc.ads;
   const earnedAds = sc.ads;
   const adsShown = useAdsShown();
   const record = { w: 0, d: 0, l: 0 };
@@ -1907,6 +1911,11 @@ function SeasonScreen({
             <p className="text-xs font-semibold text-trophy" data-season-coins>
               {tr("seasonCoins", { n: formatCoins(earnedTotal) })}
               {earnedAds > 0 ? ` ${tr("seasonCoinsAds", { n: formatCoins(earnedAds) })}` : ""}
+            </p>
+          ) : null}
+          {!career.race && sc.salary > 0 ? (
+            <p className="text-xs text-muted" data-season-salary>
+              {tr("seasonSalary", { n: formatCoins(sc.salary) })}
             </p>
           ) : null}
           {!career.race && earnedAds === 0 && adsShown ? (

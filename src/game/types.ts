@@ -88,7 +88,8 @@ export type MatchReport = {
   headline: string;
 };
 
-export type SeasonCoins = { matches: number; bonuses: number; ads: number };
+/** `salary` is shown on its own line; total earned = matches + bonuses + salary + ads. */
+export type SeasonCoins = { matches: number; bonuses: number; salary: number; ads: number };
 
 export type MatchLog = {
   opponentName: string;
@@ -270,6 +271,8 @@ export type Career = {
   coinsFixtureId?: string | null;
   /** Coins earned this season by source (purchases and trade-ins excluded); reset when a new season starts. */
   seasonCoins?: SeasonCoins;
+  /** Year whose end-of-season bonuses were paid (when the summary opened), so they are never paid twice. */
+  seasonBonusYear?: number | null;
   /** Equipment by slot (save v10); belongs to the career, counts in simulation and odds, never written into player.attrs. */
   gear: GearLoadout;
   /** "Try gold" clip: this slot plays at gold tier in the next key match only. */
