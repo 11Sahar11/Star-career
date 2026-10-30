@@ -353,7 +353,7 @@
     bottom: 0;
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     min-height: 78px;
     padding: 6px 8px calc(env(safe-area-inset-bottom, 0px) + 6px);
     background: #0a1230;
@@ -367,10 +367,49 @@
     align-items: center;
     justify-content: center;
     gap: 2px;
+    min-width: 44px;
     border-radius: 12px;
     color: #8c9cc4;
     font-size: 11px;
+    line-height: 1.15;
+    text-align: center;
     font-weight: 500;
+  }
+  .nav-icon-wrap {
+    position: relative;
+    display: inline-flex;
+  }
+  .nav-dot {
+    position: absolute;
+    top: -2px;
+    inset-inline-end: -4px;
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: var(--color-gold);
+    box-shadow: 0 0 0 2px #0a1230, 0 0 8px rgba(255, 200, 61, 0.6);
+  }
+  /* Store: centred, raised gold-ringed button. */
+  .bottom-nav .nav-store {
+    margin-top: -18px;
+    color: var(--color-gold);
+  }
+  .bottom-nav .nav-store .nav-icon-wrap {
+    width: 48px;
+    height: 48px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--color-surface-2);
+    border: 2px solid var(--color-gold);
+    box-shadow: 0 0 18px rgba(255, 200, 61, 0.45), 0 4px 0 #c98f12;
+  }
+  .bottom-nav .nav-store .nav-dot {
+    top: 0;
+    inset-inline-end: 0;
+  }
+  .bottom-nav .nav-store[aria-current="page"] {
+    background: transparent;
   }
   .bottom-nav button[aria-current="page"] {
     color: #2bff88;
@@ -718,7 +757,7 @@
 
   .stat-row {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     margin: 0;
     background: var(--color-surface);
     border: 1px solid var(--color-line);

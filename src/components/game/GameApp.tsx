@@ -14,6 +14,7 @@ import {
   Play,
   RotateCcw,
   Shield,
+  ShoppingBag,
   Target,
   Trophy,
   UserRound,
@@ -418,17 +419,34 @@ export function GameApp() {
     );
   } else screen = <RunScreen career={run} onChange={update} onMenu={menu} onStore={playing === "main" ? () => setStoreOpen(true) : undefined} />;
 
+  const signals = useMemo(() => storeSignals(playing === "main" ? career : null, admin), [career, playing, admin]);
+  const [storeSeen, setStoreSeen] = useState<string[]>([]);
+  useEffect(() => setStoreSeen(loadStoreSeen()), []);
+  const storeIsOpen = view === "game" && storeOpen === true && playing === "main";
+  useEffect(() => {
+    // Opening the store marks everything available now as seen; the dot returns only for something new.
+    if (!storeIsOpen || !signals.length) return;
+    setStoreSeen((seen) => {
+      const merged = Array.from(new Set([...signals, ...seen]));
+      if (merged.length === seen.length) return seen;
+      saveStoreSeen(merged);
+      return merged;
+    });
+  }, [storeIsOpen, signals]);
   const inMatch = view === "game" && !!run && (run.screen === "match" || run.screen === "bigmatch");
   const showNav = booted && minShown && !inMatch && ["home", "game", "collection", "summary", "achievements"].includes(view);
+  const storeDot = booted && playing === "main" && !inMatch && !storeIsOpen && signals.some((key) => !storeSeen.includes(key));
   const navActive: NavTab | null =
     view === "home"
       ? "home"
       : view === "collection" || view === "achievements"
         ? "trophies"
         : view === "game"
-          ? storeOpen && playing === "main"
+          ? storeOpen === "player" && playing === "main"
             ? "player"
-            : "season"
+            : storeOpen === true && playing === "main"
+              ? "store"
+              : "season"
           : null;
 
   return (
@@ -441,6 +459,7 @@ export function GameApp() {
           <BottomNav
             active={navActive}
             hasCareer={!!career && playing === "main"}
+            storeDot={storeDot}
             onTab={(tab) => {
               if (tab === "home") {
                 setStoreOpen(false);
@@ -455,7 +474,7 @@ export function GameApp() {
               setPlaying("main");
               unlockAudio();
               setView("game");
-              setStoreOpen(tab === "player" ? "player" : false);
+              setStoreOpen(tab === "player" ? "player" : tab === "store");
             }}
           />
         ) : null}
@@ -468,10 +487,11 @@ export function GameApp() {
   );
 }
 
-type NavTab = "home" | "player" | "season" | "trophies";
+type NavTab = "home" | "player" | "store" | "season" | "trophies";
 const NAV_TABS: { id: NavTab; Icon: typeof Trophy }[] = [
   { id: "home", Icon: House },
   { id: "player", Icon: UserRound },
+  { id: "store", Icon: ShoppingBag },
   { id: "season", Icon: CalendarDays },
   { id: "trophies", Icon: Trophy },
 ];
@@ -491,7 +511,44 @@ function NavIcon({ id, Icon }: { id: NavTab; Icon: typeof Trophy }) {
 }
 
 /** Bottom tab bar. DOM order Home→Trophies; in RTL the grid mirrors, so Home sits on the right. */
-function BottomNav({ active, hasCareer, onTab }: { active: NavTab | null; hasCareer: boolean; onTab: (tab: NavTab) => void }) {
+const STORE_SEEN_KEY = "star-store-seen";
+
+/** Keys for everything the store could offer right now: affordable items/upgrades, today's chest, today's gear offer. */
+function storeSignals(career: Career | null, admin: boolean): string[] {
+  if (!career || career.race) return [];
+  const today = todayKey();
+  const top = gearTopLeague(career);
+  const keys: string[] = [];
+  for (const item of CATALOG) if (canBuy(career, item.id, today, admin) === "ok") keys.push(`item:${item.id}`);
+  for (const slot of GEAR_SLOTS) {
+    const tier = slotTier(career, slot.id);
+    const next = tier ? GEAR_TIERS[GEAR_TIERS.indexOf(tier) + 1] : "bronze";
+    if (next && canBuyGear(career, slot.id, next, today, top, admin) === "ok") keys.push(`gear:${slot.id}:${next}`);
+  }
+  if (chestToday(today)) keys.push(`chest:${today}`);
+  const offer = dailyGearOffer(career, today, top); // null while the offer flag is off
+  if (offer && career.adState.gearOfferBoughtDate !== today) keys.push(`offer:${today}:${offer.slot}:${offer.tier}`);
+  return keys;
+}
+
+function loadStoreSeen(): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORE_SEEN_KEY) ?? "[]");
+    return Array.isArray(raw) ? raw.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveStoreSeen(keys: string[]) {
+  try {
+    localStorage.setItem(STORE_SEEN_KEY, JSON.stringify(keys.slice(0, 200)));
+  } catch {
+    /* private mode */
+  }
+}
+
+function BottomNav({ active, hasCareer, storeDot, onTab }: { active: NavTab | null; hasCareer: boolean; storeDot: boolean; onTab: (tab: NavTab) => void }) {
   const { tr } = useTx();
   return (
     <nav className="bottom-nav" aria-label={tr("nav.label")} data-no-ads>
@@ -500,10 +557,14 @@ function BottomNav({ active, hasCareer, onTab }: { active: NavTab | null; hasCar
           key={id}
           type="button"
           aria-current={active === id ? "page" : undefined}
-          disabled={(id === "player" || id === "season") && !hasCareer}
+          className={id === "store" ? "nav-store" : undefined}
+          disabled={id !== "home" && id !== "trophies" && !hasCareer}
           onClick={() => onTab(id)}
         >
-          <NavIcon id={id} Icon={Icon} />
+          <span className="nav-icon-wrap">
+            <NavIcon id={id} Icon={Icon} />
+            {id === "store" && storeDot ? <span className="nav-dot" data-store-dot aria-label={tr("nav.storeNew")} /> : null}
+          </span>
           <span>{tr(`nav.${id}`)}</span>
         </button>
       ))}
@@ -3031,9 +3092,6 @@ function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career;
         <div className="grid gap-2">{[3, 4, 5].map(slotCard)}</div>
       </div>
       <GearOfferCard career={career} onChange={onChange} />
-      <button type="button" className="btn-primary mt-3 flex h-14 w-full items-center justify-center gap-2 text-lg" onClick={onStore} data-store-entry>
-        {tr("eco.store")} <span className="chip chip-trophy num">● {formatCoins(career.coins)}</span>
-      </button>
       {rewardAvailable(career, "try-gold", today) ? (
         picking ? (
           <p className="mt-3 text-sm text-accent">{tr("gear.tryPick")}</p>
