@@ -32,7 +32,7 @@ export const ECONOMY = {
     "cos-legend": 500,
   },
   caps: {
-    doubleCoinsPerSeason: 3,
+    doubleCoinsPerSeason: 4,
     retryPerSeason: 2,
     maxGear: 2,
     interstitialsPerSeason: 2,
