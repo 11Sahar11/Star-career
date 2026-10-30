@@ -32,6 +32,17 @@ export function setLang(lang: Lang) {
 }
 
 const en: Record<string, string> = {
+  "nextMatch": "Next match",
+  "playMatch": "Play match",
+  "vs": "vs",
+  "seasonGoal": "Season goal",
+  "eco.videoCoins": "Watch video · +{n} coins",
+  "eco.openPlain": "Or open it now: +{n}",
+  "eco.openPlainCamp": "Or open it now: free camp",
+  "gear.head": "Gear",
+  "gear.capShort": "Max +{n} per attribute",
+  "gear.tryShort": "Try gold",
+  "settings": "Settings",
   "lang.en": "EN",
   "lang.he": "עב",
   "lang.es": "ES",
@@ -712,6 +723,17 @@ const en: Record<string, string> = {
 };
 
 const he: Record<string, string> = {
+  "nextMatch": "המשחק הבא",
+  "playMatch": "שחק משחק",
+  "vs": "נגד",
+  "seasonGoal": "יעד העונה",
+  "eco.videoCoins": "צפה בסרטון · \u200e+{n} מטבעות",
+  "eco.openPlain": "או לפתוח עכשיו: \u200e+{n}",
+  "eco.openPlainCamp": "או לפתוח עכשיו: מחנה חינם",
+  "gear.head": "ציוד",
+  "gear.capShort": "עד \u200e+{n} לתכונה",
+  "gear.tryShort": "נסה זהב",
+  "settings": "הגדרות",
   "lang.en": "EN",
   "lang.he": "עב",
   "lang.es": "ES",
@@ -1392,6 +1414,17 @@ const he: Record<string, string> = {
 };
 
 const es: Record<string, string> = {
+  "nextMatch": "Próximo partido",
+  "playMatch": "Jugar partido",
+  "vs": "vs",
+  "seasonGoal": "Objetivo de la temporada",
+  "eco.videoCoins": "Ver vídeo · +{n} monedas",
+  "eco.openPlain": "O ábrelo ya: +{n}",
+  "eco.openPlainCamp": "O ábrelo ya: campo gratis",
+  "gear.head": "Equipo",
+  "gear.capShort": "Máx. +{n} por atributo",
+  "gear.tryShort": "Probar oro",
+  "settings": "Ajustes",
   "lang.en": "EN",
   "lang.he": "עב",
   "lang.es": "ES",
@@ -2072,6 +2105,17 @@ const es: Record<string, string> = {
 };
 
 const fr: Record<string, string> = {
+  "nextMatch": "Prochain match",
+  "playMatch": "Jouer le match",
+  "vs": "vs",
+  "seasonGoal": "Objectif de la saison",
+  "eco.videoCoins": "Regarder la vidéo · +{n} pièces",
+  "eco.openPlain": "Ou l’ouvrir maintenant : +{n}",
+  "eco.openPlainCamp": "Ou l’ouvrir maintenant : stage gratuit",
+  "gear.head": "Équipement",
+  "gear.capShort": "Max +{n} par attribut",
+  "gear.tryShort": "Essayer l’or",
+  "settings": "Réglages",
   "lang.en": "EN",
   "lang.he": "עב",
   "lang.es": "ES",
