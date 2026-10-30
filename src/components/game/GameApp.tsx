@@ -69,7 +69,7 @@ import {
   trainOdds,
 } from "@/game/engine";
 import { loadCareer, loadDailyAttempt, loadSound, saveCareer, saveDailyAttempt, saveSound, touchStreak, type DailyAttempt } from "@/game/save";
-import { loadLang, setLang, show, t, type Lang } from "@/game/i18n";
+import { cname, loadLang, setLang, show, t, type Lang } from "@/game/i18n";
 import { authEnabled } from "@/lib/auth/client";
 import { STORIES, answerStory, storyAttr } from "@/game/stories";
 import { ACHIEVEMENTS, checkAchievements, loadUnlocked } from "@/game/achievements";
@@ -740,7 +740,7 @@ function PlayerRow({ career, status }: { career: Career; status?: ReactNode }) {
       <div className="min-w-0 flex-1">
         <h1 className="player-name">{player.name}</h1>
         <p className="player-meta">
-          {tr(`pos.${player.position}`)} · <bdi>{keepHyphens(club.name)}</bdi> · <b className="num">{ovr} OVR</b>
+          {tr(`pos.${player.position}`)} · <bdi>{keepHyphens(cname(club.name))}</bdi> · <b className="num">{ovr} {tr("ovr")}</b>
         </p>
         {status ? <p className="caps-status mt-1.5">{status}</p> : null}
       </div>
@@ -770,7 +770,8 @@ function NextMatchCard({ career, children }: { career: Career; children?: ReactN
   const fixture = nextFixture(career);
   if (!fixture) return null;
   const ours = getClub(career.clubId);
-  const theirs = { id: fixture.opponentId, name: text(fixture.opponentName) };
+  // Keep the data name for the code and crest; the display name is translated where it is shown.
+  const theirs = { id: fixture.opponentId, name: fixture.opponentName.startsWith("@") ? text(fixture.opponentName) : fixture.opponentName };
   const sides = fixture.home ? [{ id: ours.id, name: ours.name }, theirs] : [theirs, { id: ours.id, name: ours.name }];
   return (
     <section className="match-card" aria-label={tr("nextMatch")}>
@@ -781,8 +782,8 @@ function NextMatchCard({ career, children }: { career: Career; children?: ReactN
             <div className={`min-w-0 ${index === 0 ? "text-start" : "text-end"}`}>
               <Crest clubId={side.id} name={side.name} monogram={false} className={`mb-2 h-9 w-9 ${index === 0 ? "" : "ms-auto"}`} />
               <span className="match-code">{clubCode(side.id, side.name)}</span>
-              <span className="match-club" dir="auto">
-                {keepHyphens(side.name)}
+              <span className="match-club">
+                {keepHyphens(cname(side.name))}
               </span>
             </div>
           </Fragment>
@@ -932,7 +933,7 @@ function LeagueTable({ career, compact }: { career: Career; compact?: boolean })
           return (
             <div key={row.clubId} className={`ltable-row ${me ? "is-me" : ""} ${gap ? "ltable-gap" : ""}`}>
               <span className="font-num text-muted">{index + 1}</span>
-              <span className="flex min-w-0 items-center gap-1.5"><Crest clubId={row.clubId} name={getClub(row.clubId).name} monogram={false} className="h-5 w-5 shrink-0" /><span className="truncate">{getClub(row.clubId).name}</span></span>
+              <span className="flex min-w-0 items-center gap-1.5"><Crest clubId={row.clubId} name={getClub(row.clubId).name} monogram={false} className="h-5 w-5 shrink-0" /><span className="truncate">{cname(getClub(row.clubId).name)}</span></span>
               <span className="num text-center text-muted">{diff > 0 ? `+${diff}` : diff}</span>
               <span className="font-num text-center font-bold">{row.pts}</span>
             </div>
@@ -1147,7 +1148,7 @@ function Home({
           <span className="min-w-0 flex-1">
             <span className="list-title">{tr("dailyTitle")}</span>
             <span className="list-sub">
-              {tr("closes", { n: closes })} · {tr("today", { pos: dailyPos, club: dailyClub.name })}
+              {tr("closes", { n: closes })} · {tr("today", { pos: dailyPos, club: cname(dailyClub.name) })}
             </span>
             {dailyBest != null ? <span className="list-sub text-good">{tr("dailyDone", { n: dailyBest })}</span> : null}
           </span>
@@ -1609,7 +1610,7 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
   const { tr } = useTx();
   return (
     <Shell>
-      <ScreenHeader title={tr("coach")} sub={`${camp ? tr("preseason") : tr("winter")} · ${club.name}`} onBack={onMenu} right={career.race ? <span className="chip chip-trophy">{tr("raceTag")}</span> : undefined} />
+      <ScreenHeader title={tr("coach")} sub={`${camp ? tr("preseason") : tr("winter")} · ${cname(club.name)}`} onBack={onMenu} right={career.race ? <span className="chip chip-trophy">{tr("raceTag")}</span> : undefined} />
       <p className="text-sm leading-6 text-muted">
         {camp ? tr("campAsk") : tr("breakAsk", { avg: avg ? tr("avgBit", { n: avg.toFixed(1) }) : "" })}
       </p>
@@ -1755,7 +1756,7 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
         <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-center" dir="ltr">
           <span className={`team-name ${left === ours ? "text-accent-2" : ""}`} dir="auto">
             <NameCrest name={left} />
-            {keepHyphens(left)}
+            {keepHyphens(cname(left))}
           </span>
           <span className="score-big">
             {leftGoals}
@@ -1764,7 +1765,7 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
           </span>
           <span className={`team-name ${right === ours ? "text-accent-2" : ""}`} dir="auto">
             <NameCrest name={right} />
-            {keepHyphens(right)}
+            {keepHyphens(cname(right))}
           </span>
         </div>
         <div className="mt-3 flex items-center gap-3">
@@ -1904,7 +1905,7 @@ function MatchScreen({ career, onReport, onMenu }: { career: Career; onReport: (
         <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-center" dir="ltr">
           <span className={`team-name ${left === ours ? "text-accent-2" : ""}`} dir="auto">
             <NameCrest name={left} />
-            {keepHyphens(left)}
+            {keepHyphens(cname(left))}
           </span>
           <span className="score-big">
             {leftGoals}
@@ -1913,7 +1914,7 @@ function MatchScreen({ career, onReport, onMenu }: { career: Career; onReport: (
           </span>
           <span className={`team-name ${right === ours ? "text-accent-2" : ""}`} dir="auto">
             <NameCrest name={right} />
-            {keepHyphens(right)}
+            {keepHyphens(cname(right))}
           </span>
         </div>
         <div className="mt-3 flex items-center gap-3">
@@ -2177,11 +2178,11 @@ function SeasonScreen({
       </Shell>
     );
   }
-  const names = (ids: string[]) => ids.map((id) => getClub(id).name).join(", ") || tr("none");
+  const names = (ids: string[]) => ids.map((id) => cname(getClub(id).name)).join(", ") || tr("none");
   const ovrGain = preview.ovrAfter - preview.ovrBefore;
   return (
     <Shell>
-      <ScreenHeader title={`${tr("season")} ${seasonLabel(career.year)}`} sub={club.name} onBack={onMenu} />
+      <ScreenHeader title={`${tr("season")} ${seasonLabel(career.year)}`} sub={cname(club.name)} onBack={onMenu} />
       {/* The verdict is announced, not tagged: a club-colour band when the target is met. */}
       <p className={`verdict ${preview.targetHit ? "is-met" : "is-missed"}`}>{preview.targetHit ? tr("targetMet") : tr("targetMiss")}</p>
       <div className="card mt-3 px-4 py-3">
@@ -2410,7 +2411,7 @@ function OffersScreen({
                   <div className="flex min-w-0 items-center gap-2.5">
                     <Crest clubId={club.id} name={club.name} className="h-11 w-11 shrink-0" />
                     <div className="min-w-0">
-                      <h2>{keepHyphens(club.name)}</h2>
+                      <h2>{keepHyphens(cname(club.name))}</h2>
                       <p className="text-sm font-semibold opacity-80">
                         <bdi>{leagueLabel(tr, league.name)}</bdi>
                       </p>
@@ -2500,7 +2501,7 @@ function Collection({ career, onBack, onPlay }: { career: Career | null; onBack:
             {career.history.map((row) => (
               <div key={`${row.year}-${row.clubId}`} className="flex items-center justify-between gap-3 border-b border-line px-3.5 py-2.5 text-sm last:border-b-0">
                 <span className="truncate">
-                  {seasonLabel(row.year)} · {getClub(row.clubId).name}
+                  {seasonLabel(row.year)} · {cname(getClub(row.clubId).name)}
                 </span>
                 <span className="num text-muted">
                   #{row.pos} · {tr("goalsN", { n: row.goals })} · {row.ovr}
@@ -2532,7 +2533,7 @@ function Summary({ career, onBack }: { career: Career | null; onBack: () => void
     <Shell>
       <ScreenHeader title={career.player.name} sub={seasonLabel(career.year)} onBack={onBack} />
       <p className="text-sm text-muted">
-        {club.name} · {tablePosition(career)}
+        {cname(club.name)} · {tablePosition(career)}
         {rows.length ? ` ${tr("of", { n: rows.length })}` : ""} · {tr("appsN", { n: apps })} · {tr("goalsN", { n: career.season.goals })}
         {avg ? ` · ${tr("avgN", { n: avg.toFixed(1) })}` : ""}
       </p>
@@ -2607,8 +2608,8 @@ function DailyLobby({ attempt, onBack, onBegin }: { attempt: DailyAttempt | null
   return (
     <Shell>
       <ScreenHeader title={tr("dailyTitle")} sub={tr("dailyKicker")} onBack={onBack} />
-      <p className="text-sm leading-6 text-muted">{tr("dailyCopy", { pos: tr(`pos.${board.position}`), club: club.name, league: leagueLabel(tr, league.name) })}</p>
-      {best != null ? <ShareResult seasons={best} date={board.date} pos={tr(`pos.${board.position}`)} club={club.name} /> : null}
+      <p className="text-sm leading-6 text-muted">{tr("dailyCopy", { pos: tr(`pos.${board.position}`), club: cname(club.name), league: leagueLabel(tr, league.name) })}</p>
+      {best != null ? <ShareResult seasons={best} date={board.date} pos={tr(`pos.${board.position}`)} club={cname(club.name)} /> : null}
       <div className="panel mt-4 px-4 py-4">
         <p className="text-xs font-semibold text-muted">{tr("starting")}</p>
         <div className="mt-3 grid gap-2">
@@ -2988,7 +2989,7 @@ function BigTrialCard({ career, onChange }: { career: Career; onChange: (c: Care
           <div className="flex min-w-0 items-center gap-2.5">
             <Crest clubId={club.id} name={club.name} className="h-11 w-11 shrink-0" />
             <div className="min-w-0">
-              <h2>{keepHyphens(club.name)}</h2>
+              <h2>{keepHyphens(cname(club.name))}</h2>
               {/* Two lines, so the Latin league name never wraps around the Hebrew phrase. */}
               <p className="text-sm font-semibold opacity-80">{tr("eco.trialTitle")}</p>
               <p className="text-sm font-semibold opacity-80">
@@ -3338,7 +3339,7 @@ function MyPlayerScreen({ career, onChange }: { career: Career; onChange: (c: Ca
   };
   return (
     <Shell>
-      <TabHeader title={tr("gear.myPlayer")} sub={getClub(career.clubId).name} right={<CoinChip n={career.coins} />} />
+      <TabHeader title={tr("gear.myPlayer")} sub={cname(getClub(career.clubId).name)} right={<CoinChip n={career.coins} />} />
       <div className="gear-stage">
         <div className="myplayer-grid">
           {[0, 1, 2].map((i) => (
@@ -3355,7 +3356,7 @@ function MyPlayerScreen({ career, onChange }: { career: Career; onChange: (c: Ca
             <PlayerCharacter career={career}>
               <span className="ovr-badge player-ovr">
                 <span className="num">{overall(career.player.position, attrs)}</span>
-                <small>OVR</small>
+                <small>{tr("ovr")}</small>
               </span>
             </PlayerCharacter>
             <span className="look-badge" aria-hidden="true">

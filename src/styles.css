@@ -1007,10 +1007,7 @@
     border-color: var(--color-ink);
     color: #ffffff;
   }
-  .scorebox.is-dark .text-muted { color: var(--color-on-ink-muted); }
   .scorebox.is-dark .meter { background: #2a2f36; }
-  .scorebox.is-dark .text-accent,
-  .scorebox.is-dark .text-accent-2 { color: #6fd39b; }
 
   .score-big {
     font-family: var(--font-display);
@@ -1482,3 +1479,8 @@
 /* the canvas is wider than the column: the body is half its width, so he fills the band like the reference */
 .myplayer-stage .player-figure { width: 150%; max-width: none; margin: 0 -25%; }
 .myplayer-stage .character-canvas { max-height: none; }
+
+/* On the dark score box, unlayered so it beats the text utilities: the own-team name in an on-ink green (10:1). */
+.scorebox.is-dark .text-muted { color: var(--color-on-ink-muted); }
+.scorebox.is-dark .text-accent,
+.scorebox.is-dark .text-accent-2 { color: #6fd39b; }

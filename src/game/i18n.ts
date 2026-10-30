@@ -1,3 +1,4 @@
+import { localClub } from "./clubnames";
 export type Lang = "en" | "he" | "es" | "fr";
 
 const KEY = "star-lang";
@@ -32,6 +33,7 @@ export function setLang(lang: Lang) {
 }
 
 const en: Record<string, string> = {
+  "ovr": "OVR",
   "div.Premier": "{country} Premier Division",
   "div.First": "{country} First Division",
   "div.Second": "{country} Second Division",
@@ -728,6 +730,7 @@ const en: Record<string, string> = {
 };
 
 const he: Record<string, string> = {
+  "ovr": "דירוג",
   "div.Premier": "ליגת העל של {country}",
   "div.First": "הליגה הראשונה של {country}",
   "div.Second": "הליגה השנייה של {country}",
@@ -1424,6 +1427,7 @@ const he: Record<string, string> = {
 };
 
 const es: Record<string, string> = {
+  "ovr": "MED",
   "div.Premier": "Primera división de {country}",
   "div.First": "Segunda división de {country}",
   "div.Second": "Tercera división de {country}",
@@ -2120,6 +2124,7 @@ const es: Record<string, string> = {
 };
 
 const fr: Record<string, string> = {
+  "ovr": "GÉN",
   "div.Premier": "Première division ({country})",
   "div.First": "Deuxième division ({country})",
   "div.Second": "Troisième division ({country})",
@@ -2826,8 +2831,14 @@ export function t(key: string, vars?: Record<string, string | number>, lang: Lan
   return text;
 }
 
+/** A club name in the current (or given) language. */
+export function cname(name: string, lang: Lang = current): string {
+  return localClub(name, lang);
+}
+
 export function show(raw: string, lang: Lang = current): string {
-  if (!raw || !raw.startsWith("@")) return raw;
+  if (!raw) return raw;
+  if (!raw.startsWith("@")) return localClub(raw, lang);
   const body = raw.slice(1);
   const hash = body.indexOf("#");
   const main = hash >= 0 ? body.slice(0, hash) : body;
@@ -2836,7 +2847,7 @@ export function show(raw: string, lang: Lang = current): string {
   const key = parts[0] ?? "";
   const a = parts[1] ?? "";
   const b = parts[2] ?? "";
-  const named = (value: string) => (value.includes(".") ? t(value, undefined, lang) : value);
+  const named = (value: string) => (value.includes(".") ? t(value, undefined, lang) : localClub(value, lang));
   const name = named(a);
   const second = ["Quarter-final", "Semi-final", "Final", "Winners"].includes(b) ? t(`stage.${b}`, undefined, lang) : named(b);
   let text = t(key, { n: b ? second : name, name, p: second, g: second, y: a }, lang);

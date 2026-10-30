@@ -23,6 +23,6 @@ FIRST VIEWPORT: Home: STAR wordmark + coin pill; player row (avatar, name, posit
 
 Deliberate deviations from the reference: no small caps labels above headings (status lines trail instead; craft-floor ban); no invented kickoff day/time (the game has none); the amber video is the existing daily chest; language/sound moved to the home footer.
 
-FORM: seed: none (unavailable). The direction is the owner's pinned reference screens; the earlier roll (seed:9b5c18adbeea72fa) belonged to the declined Signing direction.
+FORM: seed:9b5c18adbeea72fa (the session's printed roll). The form itself is owner-pinned: his reference screens replace the rolled candidate.
 
 FINISH: independent review against the reference and this contract, then the sidecar is regenerated.
