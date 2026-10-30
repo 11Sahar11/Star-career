@@ -66,7 +66,7 @@ import { loadLang, setLang, show, t, type Lang } from "@/game/i18n";
 import { authEnabled } from "@/lib/auth/client";
 import { STORIES, answerStory, storyAttr } from "@/game/stories";
 import { ACHIEVEMENTS, checkAchievements, loadUnlocked } from "@/game/achievements";
-import { initAds, setAdsSuppressed, showInterstitial, showRewarded } from "@/game/ads";
+import { adsEnabled, adsSuppressed, initAds, setAdsSuppressed, showInterstitial, showRewarded } from "@/game/ads";
 import {
   CATALOG,
   COSMETIC_IDS,
@@ -1838,6 +1838,19 @@ function SummerScreen({
   );
 }
 
+/** True when rewarded clips can actually run: an ad client is configured, not admin, and no remove-ads entitlement. */
+function useAdsShown() {
+  const [shown] = useState(() => {
+    if (!adsEnabled || adsSuppressed()) return false;
+    try {
+      return !loadDevice().removeAds.owned;
+    } catch {
+      return false;
+    }
+  });
+  return shown;
+}
+
 function SeasonScreen({
   career,
   onStore,
@@ -1862,6 +1875,7 @@ function SeasonScreen({
   const sc = career.seasonCoins ?? { matches: 0, bonuses: 0, ads: 0 };
   const earnedTotal = sc.matches + sc.bonuses + sc.ads;
   const earnedAds = sc.ads;
+  const adsShown = useAdsShown();
   const record = { w: 0, d: 0, l: 0 };
   for (const log of logs) record[log.us > log.them ? "w" : log.us < log.them ? "l" : "d"] += 1;
   if (!preview) {
@@ -1893,6 +1907,11 @@ function SeasonScreen({
             <p className="text-xs font-semibold text-trophy" data-season-coins>
               {tr("seasonCoins", { n: formatCoins(earnedTotal) })}
               {earnedAds > 0 ? ` ${tr("seasonCoinsAds", { n: formatCoins(earnedAds) })}` : ""}
+            </p>
+          ) : null}
+          {!career.race && earnedAds === 0 && adsShown ? (
+            <p className="text-xs text-muted" data-doubling-hint>
+              {tr("seasonCoinsHint")}
             </p>
           ) : null}
         </div>
