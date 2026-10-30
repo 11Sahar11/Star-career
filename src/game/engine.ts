@@ -589,6 +589,20 @@ function roundLabel(round: RoundId, cupName: string, _europeName: string | null,
   return `@round.nat|${national}`;
 }
 
+/** Division tier for coin income: bottom of the country's ladder, middle, or top. */
+export function leagueTier(leagueId: string): "low" | "mid" | "top" {
+  const league = getLeague(leagueId);
+  const ladder = leaguesIn(league.countryId);
+  const index = ladder.findIndex((item) => item.id === league.id);
+  if (index === ladder.length - 1) return "top";
+  return index <= 0 ? "low" : "mid";
+}
+
+/** Coin multiplier for match and moment income at the career's current club. */
+export function coinMultiplier(career: Career) {
+  return EARN.leagueMultiplier[leagueTier(leagueOf(career, career.clubId))];
+}
+
 export function isTopLeague(leagueId: string) {
   const league = getLeague(leagueId);
   const ladder = leaguesIn(league.countryId);
@@ -1019,7 +1033,7 @@ export function applyReport(career: Career, report: MatchReport, rng: () => numb
   const scoreBit = `${report.us}–${report.them} vs ${report.opponentName}`;
   next.news = pushNews(next.news, report.missed ? `${report.headline}` : `${scoreBit}. Rating ${report.rating.toFixed(1)}${deltaText ? ` · ${deltaText}` : ""}`);
   if (!next.race) {
-    const earned = earnForReport(report, false);
+    const earned = Math.round(earnForReport(report, false) * coinMultiplier(career));
     next.coins = (next.coins ?? 0) + earned;
     next.coinsEarnedLast = earned;
     next.coinsFixtureId = report.fixtureId;
@@ -1392,7 +1406,7 @@ export function finishBigMatch(career: Career): Career {
   const applied = applyReport({ ...career, pending: null }, report, roll, "report");
   // Key matches weigh double in the table and lift the cup run.
   if (!applied.race) {
-    const earned = earnForReport(report, true, pending.moments);
+    const earned = Math.round(earnForReport(report, true, pending.moments) * coinMultiplier(career));
     applied.coins = applied.coins - (applied.coinsEarnedLast ?? 0) + earned;
     applied.coinsEarnedLast = earned;
   }
@@ -1911,6 +1925,8 @@ export function commitSeason(career: Career): Career {
   aged.pendingOffers = buildOffers(aged, ovr, preview.tablePos);
   if (!aged.race) {
     let earned = preview.targetHit ? EARN.targetHit : 0;
+    // Salary bonus: every season, more for a top-half finish.
+    earned += EARN.salary + (preview.tablePos <= Math.floor(career.season.table.length / 2) ? EARN.salaryTopHalf : 0);
     for (const award of preview.awards) {
       if (award.id.startsWith("league-")) earned += EARN.trophy.league;
       else if (award.id.startsWith("cup-")) earned += EARN.trophy.cup;

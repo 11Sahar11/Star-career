@@ -17,6 +17,11 @@ export const ECONOMY = {
     targetHit: 100,
     award: 50,
     ballon: 500,
+    /** Multiplier on all match and key-moment coins, by league tier in the country (bottom / middle / top division). */
+    leagueMultiplier: { low: 1.0, mid: 1.25, top: 1.5 },
+    /** End-of-season salary bonus, plus extra when the club finished in the top half. */
+    salary: 200,
+    salaryTopHalf: 100,
   },
   prices: {
     "unlock-country": 2500,
@@ -61,6 +66,9 @@ export const ECONOMY = {
     dailyAdOff: 0.25,
     /** "Try gold" rewarded clip: a gold item for one key match. */
     tryGoldPerSeason: 1,
+    /** Off until the owner approves: the UI hides both when false. */
+    dailyOfferEnabled: false,
+    tryGoldEnabled: false,
   },
   // Coins are per career and reset on a new career (owner decision): no carry-over.
   legacyShare: 0,
@@ -275,9 +283,9 @@ export function rewardAvailable(career: Career, id: RewardId, today: string, fix
     case "injury-return":
       return !ad.healTaken && career.season.outFor > 0;
     case "gear-offer":
-      return !career.race && ad.gearOfferAdDate !== today && ad.gearOfferBoughtDate !== today;
+      return ECONOMY.gear.dailyOfferEnabled && !career.race && ad.gearOfferAdDate !== today && ad.gearOfferBoughtDate !== today;
     case "try-gold":
-      return !career.race && !ad.tryGoldTaken && !career.gearTrial;
+      return ECONOMY.gear.tryGoldEnabled && !career.race && !ad.tryGoldTaken && !career.gearTrial;
   }
 }
 

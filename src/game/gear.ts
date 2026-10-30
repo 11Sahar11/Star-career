@@ -150,6 +150,7 @@ function hash(text: string) {
  * `topLeague` true). Returns null when every slot is maxed.
  */
 export function dailyGearOffer(career: Career, today: string, topLeague: boolean): { slot: GearSlotId; tier: GearTierId } | null {
+  if (!ECONOMY.gear.dailyOfferEnabled) return null;
   const start = hash(today) % GEAR_SLOTS.length;
   for (let i = 0; i < GEAR_SLOTS.length; i += 1) {
     const slot = GEAR_SLOTS[(start + i) % GEAR_SLOTS.length].id;
@@ -169,6 +170,6 @@ export function grantGearOfferAd(career: Career, today: string): Career {
 
 /** Rewarded "try gold": the slot plays gold in the next key match. Once a season. */
 export function grantTryGold(career: Career, slot: GearSlotId): Career {
-  if (career.adState.tryGoldTaken || career.gearTrial) return career;
+  if (!ECONOMY.gear.tryGoldEnabled || career.adState.tryGoldTaken || career.gearTrial) return career;
   return { ...career, gearTrial: slot, adState: { ...career.adState, tryGoldTaken: true } };
 }
