@@ -598,7 +598,7 @@ function silentEurope(career: Career): EuropeRun | null {
   if (career.europeComp !== "cl" && career.europeComp !== "el") return null;
   const rng = makeRng(hashString(`${career.player.name}|europe|${career.year}|${career.europeComp}`) || 1);
   const ovr = overall(career.player.position, career.player.attrs);
-  const name = career.europeComp === "cl" ? "Champions League" : "Europa League";
+  const name = career.europeComp === "cl" ? "Continental Elite Cup" : "Continental Trophy";
   const rounds = ["Quarter-final", "Semi-final", "Final"] as const;
   let won = false;
   let stage: EuropeRun["stage"] = "Quarter-final";
@@ -1465,7 +1465,7 @@ function isFinal(label: string) {
   return label.startsWith("@round.cupF");
 }
 
-const BALLON_FIELD = ["Mbappé", "Haaland", "Bellingham", "Vinícius", "Yamal", "Rodri", "Salah", "Kane", "Musiala", "Wirtz"];
+const BALLON_FIELD = ["Theo Valcourt", "Sindre Bakkevik", "Owen Hartwell", "Caio Rezende", "Iker Solano", "Mateo Ibarra", "Youssef Darwish", "Callum Pryce", "Lukas Wendt", "Niklas Ohlendorf"];
 
 function ballonName(career: Career, avg: number, pos: number, europe: EuropeRun | null, ovr: number) {
   const league = getLeague(leagueOf(career, career.clubId));
@@ -1478,7 +1478,7 @@ function ballonName(career: Career, avg: number, pos: number, europe: EuropeRun 
     (pos <= 2 || europe?.stage === "Winners" || europe?.stage === "Final" || career.season.leagueGoals >= 18);
   if (yours) return { name: career.player.name, yours: true };
   const pool = BALLON_FIELD.filter((name) => name.toLowerCase() !== career.player.name.trim().toLowerCase());
-  return { name: pool[hashString(`${career.year}|ballon`) % pool.length] ?? "Haaland", yours: false };
+  return { name: pool[hashString(`${career.year}|ballon`) % pool.length] ?? "Sindre Bakkevik", yours: false };
 }
 
 function collectAwards(career: Career, avg: number, pos: number, europe: EuropeRun | null, ballonYours: boolean): Award[] {
