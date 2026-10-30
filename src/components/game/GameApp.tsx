@@ -90,7 +90,7 @@ import { GEAR_SLOTS, GEAR_TIERS, buyGear, canBuyGear, dailyGearOffer, gearBonus,
 import { attemptBigTrial, boostBigTrial, effectiveAttrs, isTopLeague, keyFixtureIds, leagueOf, retryMoment } from "@/game/engine";
 import { getIsAdmin, getViewerAccess, type ViewerAccess } from "@/lib/access";
 import { PERKS, adminGrant, adminUnlockAll, applyPerks, buyPerk, canDouble, doubleLegacy, loadLegacy, payLegacy, perkState, type Legacy, type PerkId } from "@/game/legacy";
-import { ATTR_KEYS, type AttrKey, type Career, type Difficulty, type MatchLog, type MatchReport, type Role } from "@/game/types";
+import { ATTR_KEYS, type AttrKey, type Career, type Difficulty, type GearTierId, type MatchLog, type MatchReport, type Role } from "@/game/types";
 
 type View = "boot" | "home" | "create" | "game" | "collection" | "summary" | "daily" | "privacy" | "legacy" | "admin" | "achievements";
 
@@ -2776,6 +2776,25 @@ function gearTopLeague(career: Career) {
   return isTopLeague(leagueOf(career, career.clubId));
 }
 
+/** Gear art from /public/gear/{item}-{tier}.webp; hides itself if the file is missing (text-only card stays). */
+function GearIcon({ item, tier, dim = false, className = "h-12 w-12" }: { item: string; tier: GearTierId; dim?: boolean; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <img
+      src={`/gear/${item}-${tier}.webp`}
+      alt=""
+      aria-hidden="true"
+      width={128}
+      height={128}
+      loading="lazy"
+      decoding="async"
+      className={`${className} shrink-0 object-contain ${dim ? "opacity-35 grayscale" : ""}`}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function GearOfferCard({ career, onChange }: { career: Career; onChange: (c: Career) => void }) {
   const { tr } = useTx();
   const admin = useContext(AdminContext);
@@ -2794,6 +2813,7 @@ function GearOfferCard({ career, onChange }: { career: Career; onChange: (c: Car
     <section className="card mt-3 grid gap-2 px-3 py-2.5" data-gear-offer={`${offer.slot}:${offer.tier}`}>
       <p className="text-xs font-semibold text-accent-2">{tr("gear.offer", { n: off })}</p>
       <div className="flex items-center gap-3">
+        <GearIcon key={`${worn.item}-${offer.tier}`} item={worn.item} tier={offer.tier} />
         <span className="min-w-0 flex-1">
           <span className="block font-semibold">
             {tr(`gear.item.${worn.item}`)} · {tr(`gear.tier.${offer.tier}`)}
@@ -2836,6 +2856,7 @@ function MyPlayerScreen({ career, onChange, onBack }: { career: Career; onChange
     const check = nextTier ? canBuyGear(career, slot.id, nextTier, today, top, admin) : "owned";
     return (
       <div key={slot.id} className="rounded-md border border-line bg-surface px-2.5 py-2" data-gear-slot={slot.id} data-gear-tier={tier ?? "none"}>
+        <GearIcon key={`${worn.item}-${tier ?? "bronze"}`} item={worn.item} tier={tier ?? "bronze"} dim={!tier} className="mx-auto mb-1 h-14 w-14" />
         <p className="text-sm font-semibold">{tr(`gear.item.${worn.item}`)}</p>
         <p className="text-xs text-muted">
           {tr(`gear.for.${worn.item}`)} · {tr(`attr.${worn.attr}`)}
