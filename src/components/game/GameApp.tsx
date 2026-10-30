@@ -3128,6 +3128,9 @@ function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career;
   const bonus = gearBonus(career);
   const [picking, setPicking] = useState(false);
   const [look, setLook] = useState(false);
+  // Same rule as canBuyGear: gold needs a top league unless admin.
+  const goldLocked = ECONOMY.gear.goldNeedsTopLeague && !top && !admin;
+  const allGold = GEAR_SLOTS.every((slot) => slotTier(career, slot.id) === "gold");
   /** Blocks a fast second tap from buying the next tier off the same render. */
   const buying = useRef(false);
   const reason: Record<string, string> = { coins: tr("eco.short"), owned: tr("eco.owned"), locked: tr("gear.goldLocked"), daily: tr("eco.short") };
@@ -3211,7 +3214,7 @@ function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career;
           </div>
         )
       ) : null}
-      {!top ? <p className="mt-3 text-xs text-muted">{tr("gear.goldLocked")}</p> : null}
+      {goldLocked && !allGold ? <p className="mt-3 text-xs text-muted">{tr("gear.goldLocked")}</p> : null}
       {look ? <LookSheet career={career} onChange={onChange} onClose={() => setLook(false)} /> : null}
     </Shell>
   );
