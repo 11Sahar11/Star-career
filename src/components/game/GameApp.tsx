@@ -3,6 +3,7 @@ import { Fragment, useContext, useEffect, useMemo, useRef, useState, createConte
 import {
   ArrowLeftRight,
   Check,
+  ChevronDown,
   ChevronLeft,
   Dumbbell,
   Flame,
@@ -1854,6 +1855,11 @@ function SeasonScreen({
   const league = getLeague(career.season.leagueId);
   const rows = sortTable(career.season.table);
   const { tr, text } = useTx();
+  const [showResults, setShowResults] = useState(false);
+  const logs = career.season.fixturesPlayed;
+  const keyLogs = logs.filter((log) => log.key);
+  const record = { w: 0, d: 0, l: 0 };
+  for (const log of logs) record[log.us > log.them ? "w" : log.us < log.them ? "l" : "d"] += 1;
   if (!preview) {
     return (
       <Shell>
@@ -1876,6 +1882,9 @@ function SeasonScreen({
             {rows.length ? ` ${tr("of", { n: rows.length })}` : ""} · {league.name}
           </p>
           <p className="truncate text-xs text-muted">{text(preview.targetLabel)}</p>
+          <p className="text-xs text-muted" dir="auto">
+            {tr("seasonRecord", { w: record.w, d: record.d, l: record.l })} · {tr("goals")} <span className="num">{career.season.goals}</span> · {tr("assists")} <span className="num">{career.season.assists}</span>
+          </p>
         </div>
         <span className={`chip shrink-0 ${preview.targetHit ? "chip-good" : "chip-bad"}`}>{preview.targetHit ? tr("targetMet") : tr("targetMiss")}</span>
       </div>
@@ -1934,13 +1943,31 @@ function SeasonScreen({
           {tr("eco.store")} · <span className="num text-trophy">{formatCoins(career.coins)}</span>
         </button>
       ) : null}
-      <h2 className="mt-5 text-base font-semibold">{tr("seasonResults")}</h2>
-      <p className="mt-1 text-xs leading-5 text-muted">{tr("keyBonusNote", { n: career.season.keyWins ?? 0 })}</p>
-      <div className="results-list mt-3">
-        {career.season.fixturesPlayed.map((log, index) => (
-          <ResultRow key={`${log.opponentName}-${index}`} item={log} />
-        ))}
-      </div>
+      <p className="mt-4 text-xs leading-5 text-muted">{tr("keyBonusNote", { n: career.season.keyWins ?? 0 })}</p>
+      {keyLogs.length ? (
+        <div className="results-list results-key mt-3">
+          {keyLogs.map((log, index) => (
+            <ResultRow key={`key-${log.opponentName}-${index}`} item={log} />
+          ))}
+        </div>
+      ) : null}
+      <button
+        type="button"
+        className="mt-3 flex min-h-12 w-full items-center justify-between gap-3 rounded-md border border-line bg-surface px-3.5 text-start text-base font-semibold"
+        aria-expanded={showResults}
+        aria-controls="season-results"
+        onClick={() => setShowResults((value) => !value)}
+      >
+        <span>{tr("seasonResultsN", { n: logs.length })}</span>
+        <ChevronDown className={`size-5 shrink-0 transition-transform ${showResults ? "rotate-180" : ""}`} aria-hidden="true" />
+      </button>
+      {showResults ? (
+        <div id="season-results" className="results-list mt-3">
+          {logs.map((log, index) => (
+            <ResultRow key={`${log.opponentName}-${index}`} item={log} />
+          ))}
+        </div>
+      ) : null}
 
       <h2 className="mt-5 text-base font-semibold">{tr("attrsMoved")}</h2>
       <div className="mt-3 grid grid-cols-[4.5rem_minmax(0,1fr)_3.2rem] items-center gap-x-3 gap-y-2.5 text-sm">
