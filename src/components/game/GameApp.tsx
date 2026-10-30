@@ -3010,8 +3010,47 @@ function GearOfferCard({ career, onChange }: { career: Career; onChange: (c: Car
   );
 }
 
-/** Character art for My Player; swap the file to change the figure. */
-const PLAYER_FIGURE = "/character/player.webp";
+/** Skin tones in the order of the character art (player-skin1..6.webp). */
+const SKIN_TONES = ["#f6d7bf", "#e8b892", "#c98f66", "#a8724f", "#7d4e33", "#4e2f1f"];
+/** Base body art, picked by the chosen skin tone (hex or 1-6); default art otherwise. */
+function playerBody(player: Career["player"]): string {
+  const skin = (player as { skin?: unknown }).skin;
+  let n = 0;
+  if (typeof skin === "string") n = SKIN_TONES.indexOf(skin.toLowerCase()) + 1;
+  else if (typeof skin === "number" && Number.isInteger(skin) && skin >= 1 && skin <= SKIN_TONES.length) n = skin;
+  return n > 0 ? `/character/player-skin${n}.webp` : "/character/player.webp";
+}
+
+/** One stacked layer on the character canvas; a missing file just hides itself. */
+function CharacterLayer({ src, layer }: { src: string; layer: string }) {
+  const [missing, setMissing] = useState(false);
+  if (missing) return null;
+  return <img src={src} alt="" data-layer={layer} className="character-layer" decoding="async" onError={() => setMissing(true)} />;
+}
+
+/**
+ * My Player character: stacked, absolutely positioned layers on one canvas.
+ * Order: body, kit (future), gear per equipped slot, hair (future).
+ * Gear art: /character/gear/<item>-<tier>.webp (item = slot id, or gk-dive / gk-claim for keepers).
+ */
+function PlayerCharacter({ career, children }: { career: Career; children?: ReactNode }) {
+  const gear = GEAR_SLOTS.map((slot) => ({ item: slotFor(slot, career.player.position).item, tier: slotTier(career, slot.id) }));
+  const allGold = gear.every((g) => g.tier === "gold");
+  const hair: string | null = null; // future: /character/hair/<style>.webp
+  const kit: string | null = null; // future: kit layer tinted from playerKit(career)
+  return (
+    <div className="player-figure" data-all-gold={allGold || undefined}>
+      {allGold ? <div className="character-aura" aria-hidden="true" /> : null}
+      <div className="character-canvas">
+        <CharacterLayer key={playerBody(career.player)} src={playerBody(career.player)} layer="body" />
+        {kit ? <CharacterLayer src={kit} layer="kit" /> : null}
+        {gear.map((g) => (g.tier ? <CharacterLayer key={`${g.item}-${g.tier}`} src={`/character/gear/${g.item}-${g.tier}.webp`} layer={`gear-${g.item}`} /> : null))}
+        {hair ? <CharacterLayer src={hair} layer="hair" /> : null}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career; onChange: (c: Career) => void; onBack: () => void; onStore: () => void }) {
   const { tr } = useTx();
@@ -3073,12 +3112,11 @@ function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career;
       <div className="myplayer-grid">
         <div className="grid content-start gap-2">{[0, 1, 2].map(slotCard)}</div>
         <div className="flex flex-col items-center text-center">
-          <div className="player-figure">
-            <img src={PLAYER_FIGURE} alt="" width={230} height={665} decoding="async" />
+          <PlayerCharacter career={career}>
             <div className="ovr-badge player-ovr">
               <span className="num">{overall(career.player.position, effectiveAttrs(career))}</span>
             </div>
-          </div>
+          </PlayerCharacter>
           <p className="mt-1 text-sm font-bold leading-tight">{career.player.name}</p>
           <p className="text-xs text-muted">
             {tr(`pos.${career.player.position}`)} · {tr("ageN", { n: career.player.age })}

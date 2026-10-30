@@ -960,8 +960,12 @@
 /* My Player: figure centred, 3 gear slots each side. */
 .myplayer-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1fr); gap: 0.5rem; align-items: start; }
 .player-figure { position: relative; width: 100%; max-width: 130px; margin-top: 0.5rem; border-radius: 1rem; background: radial-gradient(ellipse at 50% 85%, rgba(43, 255, 136, 0.18), transparent 65%); }
-.player-figure img { display: block; width: 100%; height: auto; max-height: 240px; object-fit: contain; }
-.player-ovr { position: absolute; top: 0; inset-inline-end: -6px; }
+.character-canvas { position: relative; width: 100%; aspect-ratio: 780 / 1387; max-height: 260px; margin-inline: auto; }
+.character-layer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.character-aura { position: absolute; inset: 4% -6% 0; border-radius: 50%; background: radial-gradient(ellipse at 50% 45%, rgba(245, 197, 66, 0.6), rgba(245, 197, 66, 0.2) 45%, transparent 70%); filter: blur(6px); animation: aura-pulse 3.2s ease-in-out infinite; pointer-events: none; }
+@keyframes aura-pulse { 0%, 100% { opacity: 0.65; transform: scale(0.97); } 50% { opacity: 1; transform: scale(1.03); } }
+@media (prefers-reduced-motion: reduce) { .character-aura { animation: none; opacity: 0.85; } }
+.player-ovr { position: absolute; z-index: 1; top: 0; inset-inline-end: -6px; }
 [data-gear-slot][data-gear-tier="bronze"] .gear-tier-label { color: var(--color-tier-bronze); }
 [data-gear-slot][data-gear-tier="silver"] .gear-tier-label { color: var(--color-tier-silver); }
 [data-gear-slot][data-gear-tier="gold"] .gear-tier-label { color: var(--color-tier-gold); }
