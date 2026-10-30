@@ -468,8 +468,15 @@ const NAV_TABS: { id: NavTab; Icon: typeof Trophy }[] = [
 /** Icon from /public/nav/{id}.svg (swappable art), falling back to a built-in icon if the file is missing. */
 function NavIcon({ id, Icon }: { id: NavTab; Icon: typeof Trophy }) {
   const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    // A CSS mask fails silently, so probe the file once and fall back to the built-in icon if it is missing.
+    const probe = new Image();
+    probe.onerror = () => setFailed(true);
+    probe.src = `/nav/${id}.svg`;
+  }, [id]);
   if (failed) return <Icon aria-hidden="true" />;
-  return <img src={`/nav/${id}.svg`} alt="" aria-hidden="true" width={22} height={22} onError={() => setFailed(true)} />;
+  // Masked span painted with currentColor, so the tab colour (active/inactive) applies to the art.
+  return <span className="nav-icon" aria-hidden="true" style={{ WebkitMaskImage: `url(/nav/${id}.svg)`, maskImage: `url(/nav/${id}.svg)` }} />;
 }
 
 /** Bottom tab bar. DOM order Home→Trophies; in RTL the grid mirrors, so Home sits on the right. */

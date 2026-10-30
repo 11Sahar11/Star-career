@@ -368,18 +368,21 @@
     justify-content: center;
     gap: 2px;
     border-radius: 12px;
-    color: var(--color-muted);
+    color: #8c9cc4;
     font-size: 11px;
     font-weight: 500;
   }
   .bottom-nav button[aria-current="page"] {
-    color: var(--color-accent);
+    color: #2bff88;
     background: color-mix(in oklab, var(--color-accent) 12%, transparent);
   }
-  .bottom-nav button[aria-current="page"] img {
-    filter: brightness(0) saturate(100%) invert(80%) sepia(60%) saturate(900%) hue-rotate(80deg);
+  .nav-icon {
+    display: block;
+    background-color: currentColor;
+    -webkit-mask: no-repeat center / contain;
+    mask: no-repeat center / contain;
   }
-  .bottom-nav img,
+  .bottom-nav .nav-icon,
   .bottom-nav svg {
     width: 22px;
     height: 22px;

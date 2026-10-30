@@ -1,1 +1,1 @@
-Placeholder bottom-nav icons (home, player, season, trophies). Replace the SVGs with the final art using the same file names; if a file is missing the app falls back to a built-in icon. The active tab is tinted with CSS.
+Bottom-nav icons (home, player, season, trophies). Use stroke="currentColor"; they render as CSS masks so the tab colour applies; if a file is missing the app falls back to a built-in icon. The active tab is tinted with CSS.
