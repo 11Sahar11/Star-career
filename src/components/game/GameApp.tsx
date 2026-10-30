@@ -18,6 +18,11 @@ import {
   Zap,
 } from "lucide-react";
 import { Crest } from "@/components/game/crest";
+
+function NameCrest({ name, className = "mx-auto mb-1 block h-10 w-10" }: { name: string; className?: string }) {
+  const club = CLUBS.find((c) => c.name === name);
+  return club ? <Crest clubId={club.id} name={club.name} className={className} /> : null;
+}
 import { playGoal, playWhistle, setAudioEnabled, unlockAudio } from "@/game/audio";
 import { CLUBS, COUNTRIES, LEAGUES, NATIONS, POSITIONS, entryLeague, getClub, getCountry, getLeague, nationById } from "@/game/data";
 import {
@@ -533,7 +538,7 @@ function LeagueTable({ career, compact }: { career: Career; compact?: boolean })
           return (
             <div key={row.clubId} className={`ltable-row ${me ? "is-me" : ""} ${gap ? "ltable-gap" : ""}`}>
               <span className="font-num text-muted">{index + 1}</span>
-              <span className="min-w-0 truncate">{getClub(row.clubId).name}</span>
+              <span className="flex min-w-0 items-center gap-1.5"><Crest clubId={row.clubId} name={getClub(row.clubId).name} monogram={false} className="h-5 w-5 shrink-0" /><span className="truncate">{getClub(row.clubId).name}</span></span>
               <span className="num text-center text-muted">{diff > 0 ? `+${diff}` : diff}</span>
               <span className="font-num text-center font-bold">{row.pts}</span>
             </div>
@@ -1082,6 +1087,7 @@ function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c:
           <div className={`ovr-badge band-${band(ovr)}`}>
             <span className="num">{ovr}</span>
           </div>
+          <Crest clubId={club.id} name={club.name} className="h-11 w-11 shrink-0" />
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-lg font-bold leading-tight">{career.player.name}</h2>
             <p className="truncate text-sm text-muted">
@@ -1337,6 +1343,7 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
       <div className="scorebox px-4 pt-4 pb-3">
         <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-center" dir="ltr">
           <span className={`team-name ${left === ours ? "text-accent-2" : ""}`} dir="auto">
+            <NameCrest name={left} />
             {left}
           </span>
           <span className="score-big">
@@ -1345,6 +1352,7 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
             {rightGoals}
           </span>
           <span className={`team-name ${right === ours ? "text-accent-2" : ""}`} dir="auto">
+            <NameCrest name={right} />
             {right}
           </span>
         </div>
@@ -1472,6 +1480,7 @@ function MatchScreen({ career, onReport, onMenu }: { career: Career; onReport: (
       <div className="scorebox px-4 pt-4 pb-3">
         <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-center" dir="ltr">
           <span className={`team-name ${left === ours ? "text-accent-2" : ""}`} dir="auto">
+            <NameCrest name={left} />
             {left}
           </span>
           <span className="score-big">
@@ -1480,6 +1489,7 @@ function MatchScreen({ career, onReport, onMenu }: { career: Career; onReport: (
             {rightGoals}
           </span>
           <span className={`team-name ${right === ours ? "text-accent-2" : ""}`} dir="auto">
+            <NameCrest name={right} />
             {right}
           </span>
         </div>
@@ -1893,11 +1903,14 @@ function OffersScreen({
             <article key={offer.clubId} className="offer-plain">
               <div className="offer-in">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="flex min-w-0 items-start gap-2.5">
+                    <Crest clubId={club.id} name={club.name} className="h-10 w-10 shrink-0" />
+                    <div className="min-w-0">
                     <h2 className="truncate text-base font-bold">{club.name}</h2>
                     <p className="text-sm text-muted">
                       {league.name} · {offerCountry.name}
                     </p>
+                  </div>
                   </div>
                   <span className={`chip shrink-0 ${offer.role === "Star" ? "chip-trophy" : offer.role === "Bench" ? "chip-bad" : ""}`}>
                     {tr(`role${offer.role}`)}
