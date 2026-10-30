@@ -357,8 +357,8 @@ function ScreenHeader({
         <span className="w-3" aria-hidden="true" />
       )}
       <div className="min-w-0 flex-1">
-        <h1 className="truncate text-[1.05rem] font-bold leading-tight">{title}</h1>
-        {sub ? <p className="truncate text-xs text-muted">{sub}</p> : null}
+        <h1 dir="auto" className="line-clamp-2 text-start text-[1.05rem] font-bold leading-tight">{title}</h1>
+        {sub ? <p dir="auto" className="truncate text-start text-xs text-muted">{sub}</p> : null}
       </div>
       {right ?? null}
     </header>
