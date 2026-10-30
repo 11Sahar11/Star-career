@@ -100,6 +100,8 @@ export type MatchLog = {
   missed: boolean;
   events: MatchEvent[];
   headline: string;
+  /** One of the season's two key matches. */
+  key?: boolean;
 };
 
 export type Award = { id: string; name: string; detail: string };

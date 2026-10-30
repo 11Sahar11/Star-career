@@ -1394,15 +1394,17 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
               {focusMoment.options.map((option) => (
                 <button key={option.id} type="button" className="list-row" onClick={() => choose(focus, option.id)}>
                   <span className="min-w-0 flex-1">
-                    <span className="block font-semibold">
-                      {tr(`mo.opt.${option.id}`)} {option.odds}%
-                    </span>
+                    <span className="block font-semibold">{tr(`mo.opt.${option.id}`)}</span>
                     <span className="block text-xs text-muted">
                       {tr(`attr.${option.attr}`)} {career.player.attrs[option.attr]}
                     </span>
                   </span>
                   <span className="flex shrink-0 items-baseline gap-1.5">
-                    {option.gain ? <span className="num text-sm font-bold text-good">+{option.gain}%</span> : null}
+                    {option.odds >= 92 ? (
+                      <span className="text-xs font-bold text-good">{tr("mo.max")}</span>
+                    ) : option.gain ? (
+                      <span className="num text-sm font-bold text-good">+{option.gain}%</span>
+                    ) : null}
                     <span className={`num text-lg font-bold band-${option.odds >= 65 ? "high" : option.odds >= 45 ? "good" : option.odds >= 30 ? "mid" : "low"}`}>{option.odds}%</span>
                   </span>
                 </button>
@@ -1612,7 +1614,10 @@ function ResultRow({ item }: { item: MatchLog }) {
         <span className={`wdl wdl-${outcome}`}>{tr(`wdl.${outcome}`)}</span>
         <span className="min-w-0 flex-1 text-start">
           <span className="block truncate font-medium">{text(item.opponentName)}</span>
-          <span className="block truncate text-xs text-muted">{text(item.roundLabel)}</span>
+          <span className="block truncate text-xs text-muted">
+            {item.key ? <span className="font-semibold text-accent">{tr("keyTag")} · </span> : null}
+            {text(item.roundLabel)}
+          </span>
         </span>
         <span className="num shrink-0 font-semibold">
           {item.us}–{item.them}
@@ -1757,7 +1762,7 @@ function SeasonScreen({
         <div className="grid justify-items-center">
           <span className="font-num text-5xl font-bold leading-none">{preview.ovrAfter}</span>
           <span className={`text-xs font-semibold ${ovrGain > 0 ? "text-good" : ovrGain < 0 ? "text-bad" : "text-muted"}`}>
-            {tr("ovrUp", { n: ovrGain > 0 ? `+${ovrGain}` : String(ovrGain) })}
+            {ovrGain === 0 ? tr("ovrSame") : tr("ovrUp", { n: ovrGain > 0 ? `+${ovrGain}` : String(ovrGain) })}
           </span>
         </div>
       </div>
@@ -1794,6 +1799,14 @@ function SeasonScreen({
           {tr(preview.europe.comp === "cl" ? "comp.cl" : "comp.el")} · {tr(`stage.${preview.europe.stage}`)}
         </p>
       ) : null}
+
+      <h2 className="mt-5 text-base font-semibold">{tr("seasonResults")}</h2>
+      <p className="mt-1 text-xs leading-5 text-muted">{tr("keyBonusNote", { n: career.season.keyWins ?? 0 })}</p>
+      <div className="results-list mt-3">
+        {career.season.fixturesPlayed.map((log, index) => (
+          <ResultRow key={`${log.opponentName}-${index}`} item={log} />
+        ))}
+      </div>
 
       <h2 className="mt-5 text-base font-semibold">{tr("attrsMoved")}</h2>
       <div className="mt-3 grid grid-cols-[4.5rem_minmax(0,1fr)_3.2rem] items-center gap-x-3 gap-y-2.5 text-sm">

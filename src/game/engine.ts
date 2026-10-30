@@ -664,6 +664,17 @@ function buildFixtures(career: Career, rng: () => number): { fixtures: Fixture[]
     );
   });
 
+  // Put the rival games where the key matches belong: last before the break and the final day.
+  const rival = keyRivalId(club.id, mates.map((item) => item.id).concat(club.id));
+  if (rival) {
+    const move = (from: number, to: number) => {
+      if (from < 0 || from === to) return;
+      [fixtures[from], fixtures[to]] = [fixtures[to], fixtures[from]];
+    };
+    move(fixtures.findIndex((item, at) => at < breakAt && item.opponentId === rival), breakAt - 1);
+    move(fixtures.findIndex((item, at) => at >= breakAt && item.opponentId === rival), fixtures.length - 1);
+  }
+
   const cupOpp = pick(rng, mates);
   fixtures.push(
     makeFixture(
@@ -839,9 +850,9 @@ function logFrom(report: MatchReport): MatchLog {
   };
 }
 
-function simulateAgainst(career: Career, fixture: Fixture, playing: boolean, rng: () => number): MatchReport {
+function simulateAgainst(career: Career, fixture: Fixture, playing: boolean, rng: () => number, attackShift = 0): MatchReport {
   const cupLift = fixture.competition === "cup" || fixture.competition === "europe" ? (career.season.keyWins ?? 0) * 1.5 : 0;
-  const attack = sideStrength(career, playing) + cupLift;
+  const attack = sideStrength(career, playing) + cupLift + attackShift;
   const [us, them] = sampleScore(attack, fixture.opponentStrength, fixture.home, rng);
   const built = buildEvents(career.player.position, career.player.attrs, us, them, fixture.opponentStrength, playing, rng);
   const rating = playing
@@ -1078,9 +1089,24 @@ export function runToStop(career: Career): Career {
 // is applied to the season.
 
 /** The two key matches of a season: the last league game before the break and the final league game. */
-export function keyFixtureIds(season: SeasonState): string[] {
+/** The season rival: from the stronger half of the division, the club closest in strength to ours. */
+export function keyRivalId(clubId: string, clubIds: string[]): string | null {
+  const others = clubIds.filter((id) => id !== clubId);
+  if (!others.length) return null;
+  const ours = clubStrength(clubId);
+  const ranked = [...others].sort((x, y) => clubStrength(y) - clubStrength(x));
+  const top = ranked.slice(0, Math.max(1, Math.ceil(ranked.length / 2)));
+  return [...top].sort((x, y) => Math.abs(clubStrength(x) - ours) - Math.abs(clubStrength(y) - ours) || x.localeCompare(y))[0];
+}
+
+/** The two key matches: the rival at home just before the break and away on the final day. */
+export function keyFixtureIds(season: SeasonState, clubId?: string): string[] {
   const league = season.fixtures.filter((item) => item.competition === "league");
   if (!league.length) return [];
+  const ids = season.table.map((row) => row.clubId);
+  const rival = clubId ? keyRivalId(clubId, ids.length ? ids : league.map((item) => item.opponentId)) : null;
+  const rivalGames = rival ? league.filter((item) => item.opponentId === rival) : [];
+  if (rivalGames.length >= 2) return [rivalGames[0].id, rivalGames[rivalGames.length - 1].id];
   const firstHalf = season.fixtures.slice(0, Math.max(1, season.breakAt)).filter((item) => item.competition === "league");
   const mid = firstHalf[firstHalf.length - 1] ?? league[Math.floor((league.length - 1) / 2)];
   const end = league[league.length - 1];
@@ -1088,11 +1114,20 @@ export function keyFixtureIds(season: SeasonState): string[] {
 }
 
 export function isBigFixture(career: Career, fixture: Fixture) {
-  return keyFixtureIds(career.season).includes(fixture.id);
+  return keyFixtureIds(career.season, career.clubId).includes(fixture.id);
 }
 
-function momentOdds(attr: number, opponent: number, bias: number) {
-  return clamp(Math.round((0.42 + (attr - opponent) / 55 + bias) * 100), 8, 92);
+/** Points of attribute per 100% of odds. */
+const MOMENT_SLOPE = 38;
+
+/** Opponent on the player-attribute scale: a club's strength is a team rating, an individual attribute runs ~12 above it (a starter in a 58-rated side has ~70s). */
+export function momentOpponent(strength: number) {
+  return strength + MOMENT_OFFSET;
+}
+const MOMENT_OFFSET = 10;
+
+export function momentOdds(attr: number, opponent: number, bias: number) {
+  return clamp(Math.round((0.5 + (attr - opponent) / MOMENT_SLOPE + bias) * 100), 8, 92);
 }
 
 type OptionSpec = [id: string, attr: AttrKey, bias: number, reward: MomentReward];
@@ -1171,12 +1206,15 @@ function buildMoments(career: Career, fixture: Fixture, roll: () => number): Mom
     .sort((a, b) => a - b)
     .map((minute, index) => {
       const situation = situations[index];
-      return { minute, kind: SITUATIONS[situation].kind, situation, options: momentOptions(career, situation, fixture.opponentStrength) };
+      return { minute, kind: SITUATIONS[situation].kind, situation, options: momentOptions(career, situation, momentOpponent(fixture.opponentStrength)) };
     });
 }
 
+const KEY_BASE_SHIFT = -14;
+
 function openBigMatch(career: Career, fixture: Fixture, roll: () => number, rng: ReturnType<typeof makeRng>): Career {
-  const base = simulateAgainst(career, fixture, true, roll);
+  // The moments carry the player's own chances, so the rest of the match is played a little tighter.
+  const base = simulateAgainst(career, fixture, true, roll, KEY_BASE_SHIFT);
   const moments = buildMoments(career, fixture, roll);
   const seed = Math.floor(roll() * 2147483647) || 1;
   const pending: PendingMatch = { base, moments, seed, rngState: rng.state() };
@@ -1202,6 +1240,7 @@ export function composeReport(pending: PendingMatch): MatchReport {
   const report: MatchReport = { ...pending.base, events: pending.base.events.map((event) => ({ ...event })) };
   let rating = report.rating;
   let beaten = 0;
+  let missed = 0;
   for (const moment of pending.moments) {
     if (!moment.picked) continue;
     const option = moment.options.find((item) => item.id === moment.picked);
@@ -1217,7 +1256,10 @@ export function composeReport(pending: PendingMatch): MatchReport {
       } else {
         report.shots += 1;
         rating -= 0.15;
+        missed += 1;
         report.events.push({ minute: at, tone: "neutral", text: `@mo.miss.${option.id}`, us: 0, them: 0 });
+        // Every second wasted chance, they break the other way and score.
+        if (missed % 2 === 0) report.events.push({ minute: Math.min(89, at + 2), tone: "bad", text: "@mo.beaten.chance", us: 0, them: 0 });
       }
     } else if (option.reward === "assist") {
       if (moment.success) {
@@ -1228,7 +1270,9 @@ export function composeReport(pending: PendingMatch): MatchReport {
         report.events.push({ minute: at, tone: "goal", text: `@mo.goal.${option.id}`, us: 0, them: 0 });
       } else {
         rating -= 0.1;
+        missed += 1;
         report.events.push({ minute: at, tone: "neutral", text: `@mo.miss.${option.id}`, us: 0, them: 0 });
+        if (missed % 2 === 0) report.events.push({ minute: Math.min(89, at + 2), tone: "bad", text: "@mo.beaten.chance", us: 0, them: 0 });
       }
     } else if (moment.success) {
       const goals = report.events
@@ -1288,6 +1332,8 @@ export function finishBigMatch(career: Career): Career {
   const roll = () => rng.next();
   const applied = applyReport({ ...career, pending: null }, report, roll, "report");
   // Key matches weigh double in the table and lift the cup run.
+  const log = applied.season.fixturesPlayed[applied.season.fixturesPlayed.length - 1];
+  if (log) applied.season.fixturesPlayed[applied.season.fixturesPlayed.length - 1] = { ...log, key: true };
   if (report.competition === "league") {
     const bonus = report.us > report.them ? 3 : report.us === report.them ? 1 : 0;
     applied.season = {
