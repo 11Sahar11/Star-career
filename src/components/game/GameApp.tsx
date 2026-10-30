@@ -1371,7 +1371,7 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
         <section className="card moment-card mt-3 overflow-hidden" aria-live="polite">
           <div className="px-4 pt-3.5 pb-3">
             <p className="text-xs font-semibold text-accent-2">{tr("mo.title")}</p>
-            <p className="mt-0.5 font-semibold leading-snug">{tr(`mo.${focusMoment.kind}`, { min: focusMoment.minute })}</p>
+            <p className="mt-0.5 font-semibold leading-snug">{tr(focusMoment.situation ? `mo.sit.${focusMoment.situation}` : `mo.${focusMoment.kind}`, { min: focusMoment.minute })}</p>
           </div>
           {focusMoment.picked ? (
             <div className="grid gap-3 border-t border-line px-4 py-3.5">
@@ -1394,12 +1394,17 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
               {focusMoment.options.map((option) => (
                 <button key={option.id} type="button" className="list-row" onClick={() => choose(focus, option.id)}>
                   <span className="min-w-0 flex-1">
-                    <span className="block font-semibold">{tr(`mo.opt.${option.id}`)}</span>
+                    <span className="block font-semibold">
+                      {tr(`mo.opt.${option.id}`)} {option.odds}%
+                    </span>
                     <span className="block text-xs text-muted">
                       {tr(`attr.${option.attr}`)} {career.player.attrs[option.attr]}
                     </span>
                   </span>
-                  <span className={`num text-lg font-bold band-${option.odds >= 65 ? "high" : option.odds >= 45 ? "good" : option.odds >= 30 ? "mid" : "low"}`}>{option.odds}%</span>
+                  <span className="flex shrink-0 items-baseline gap-1.5">
+                    {option.gain ? <span className="num text-sm font-bold text-good">+{option.gain}%</span> : null}
+                    <span className={`num text-lg font-bold band-${option.odds >= 65 ? "high" : option.odds >= 45 ? "good" : option.odds >= 30 ? "mid" : "low"}`}>{option.odds}%</span>
+                  </span>
                 </button>
               ))}
             </div>

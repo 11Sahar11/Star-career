@@ -43,6 +43,8 @@ import {
   type Offer,
   type PendingMatch,
   type PositionId,
+  type SeasonState,
+  type MomentReward,
   type Role,
   type RoundId,
   type TableRow,
@@ -838,7 +840,8 @@ function logFrom(report: MatchReport): MatchLog {
 }
 
 function simulateAgainst(career: Career, fixture: Fixture, playing: boolean, rng: () => number): MatchReport {
-  const attack = sideStrength(career, playing);
+  const cupLift = fixture.competition === "cup" || fixture.competition === "europe" ? (career.season.keyWins ?? 0) * 1.5 : 0;
+  const attack = sideStrength(career, playing) + cupLift;
   const [us, them] = sampleScore(attack, fixture.opponentStrength, fixture.home, rng);
   const built = buildEvents(career.player.position, career.player.attrs, us, them, fixture.opponentStrength, playing, rng);
   const rating = playing
@@ -1027,6 +1030,8 @@ export function playStep(career: Career): Career {
   const roll = () => rng.next();
   let playing = true;
   let missReason: MatchReport["missReason"];
+  // Key matches are always played: the manager starts you and you play through the knock.
+  if (isBigFixture(career, fixture)) return openBigMatch(career, fixture, roll, rng);
   if (career.season.outFor > 0) {
     playing = false;
     missReason = "injury";
@@ -1034,7 +1039,6 @@ export function playStep(career: Career): Career {
     playing = false;
     missReason = "bench";
   }
-  if (playing && isBigFixture(career, fixture)) return openBigMatch(career, fixture, roll, rng);
   const report = simulateAgainst(career, fixture, playing, roll);
   if (!playing) {
     report.missed = true;
@@ -1073,56 +1077,101 @@ export function runToStop(career: Career): Career {
 // result changes the score, the rating and the event list before the report
 // is applied to the season.
 
+/** The two key matches of a season: the last league game before the break and the final league game. */
+export function keyFixtureIds(season: SeasonState): string[] {
+  const league = season.fixtures.filter((item) => item.competition === "league");
+  if (!league.length) return [];
+  const firstHalf = season.fixtures.slice(0, Math.max(1, season.breakAt)).filter((item) => item.competition === "league");
+  const mid = firstHalf[firstHalf.length - 1] ?? league[Math.floor((league.length - 1) / 2)];
+  const end = league[league.length - 1];
+  return mid.id === end.id ? [end.id] : [mid.id, end.id];
+}
+
 export function isBigFixture(career: Career, fixture: Fixture) {
-  if (fixture.competition === "cup") return true;
-  if (fixture.competition !== "league") return false;
-  if (career.season.fixturesPlayed.length < 3) return false;
-  const top = sortTable(career.season.table)
-    .slice(0, 2)
-    .map((row) => row.clubId);
-  return top.includes(fixture.opponentId);
+  return keyFixtureIds(career.season).includes(fixture.id);
 }
 
 function momentOdds(attr: number, opponent: number, bias: number) {
   return clamp(Math.round((0.42 + (attr - opponent) / 55 + bias) * 100), 8, 92);
 }
 
-function momentOptions(career: Career, kind: MomentKind, opponent: number): MomentOption[] {
+type OptionSpec = [id: string, attr: AttrKey, bias: number, reward: MomentReward];
+
+const SITUATIONS: Record<string, { kind: MomentKind; options: OptionSpec[] }> = {
+  penalty: { kind: "chance", options: [["pen", "shooting", 0.2, "goal"], ["power", "physical", 0.08, "goal"]] },
+  freekick: { kind: "chance", options: [["curl", "shooting", -0.08, "goal"], ["layoff", "passing", 0.06, "assist"]] },
+  oneonone: { kind: "chance", options: [["dribble", "dribbling", 0, "goal"], ["shoot", "shooting", -0.06, "goal"]] },
+  runbehind: { kind: "chance", options: [["sprint", "pace", 0, "goal"], ["pass", "passing", 0.04, "assist"]] },
+  aerial: { kind: "chance", options: [["header", "physical", -0.02, "goal"], ["knock", "passing", 0.06, "assist"]] },
+  keypass: { kind: "chance", options: [["through", "passing", 0.02, "assist"], ["carry", "dribbling", -0.1, "goal"]] },
+  defend: { kind: "defend", options: [["tackle", "tackle", 0, "stop"], ["block", "physical", 0.05, "stop"], ["track", "pace", -0.03, "stop"]] },
+  gkdive: { kind: "keeper", options: [["dive", "physical", 0, "stop"], ["stand", "tackle", -0.06, "stop"]] },
+  gkstand: { kind: "keeper", options: [["stand", "tackle", 0.04, "stop"], ["dive", "physical", -0.04, "stop"]] },
+  gkcomeoff: { kind: "keeper", options: [["rush", "pace", -0.04, "stop"], ["sweep", "passing", -0.02, "stop"]] },
+};
+
+const ATTACK_POOL = ["penalty", "freekick", "oneonone", "runbehind", "aerial", "keypass"];
+const KEEPER_POOL = ["gkdive", "gkstand", "gkcomeoff"];
+
+/** Odds for each choice; `gain` is how much training since the last key match added. */
+function momentOptions(career: Career, situation: string, opponent: number): MomentOption[] {
   const a = career.player.attrs;
-  if (kind === "chance") {
-    return [
-      { id: "shoot", attr: "shooting", odds: momentOdds(a.shooting, opponent, 0), reward: "goal" },
-      { id: "dribble", attr: "dribbling", odds: momentOdds(a.dribbling, opponent, -0.12), reward: "goal" },
-      { id: "pass", attr: "passing", odds: momentOdds(a.passing, opponent, 0.12), reward: "assist" },
-    ];
+  const gains = career.keyGain ?? {};
+  return SITUATIONS[situation].options.map(([id, attr, bias, reward]) => {
+    const odds = momentOdds(a[attr], opponent, bias);
+    const gain = odds - momentOdds(a[attr] - (gains[attr] ?? 0), opponent, bias);
+    return gain > 0 ? { id, attr, odds, reward, gain } : { id, attr, odds, reward };
+  });
+}
+
+function shuffled<T>(list: T[], roll: () => number) {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(roll() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
   }
-  if (kind === "defend") {
-    return [
-      { id: "tackle", attr: "tackle", odds: momentOdds(a.tackle, opponent, 0), reward: "stop" },
-      { id: "block", attr: "physical", odds: momentOdds(a.physical, opponent, 0.05), reward: "stop" },
-      { id: "track", attr: "pace", odds: momentOdds(a.pace, opponent, -0.03), reward: "stop" },
-    ];
+  return out;
+}
+
+function attrsCovered(situations: string[]) {
+  return new Set(situations.flatMap((id) => SITUATIONS[id].options.map((option) => option[1]))).size;
+}
+
+/** 6-8 moments drawn from the pool, covering at least 4 different attributes. */
+export function drawSituations(position: PositionId, roll: () => number): string[] {
+  const count = 6 + Math.floor(roll() * 3);
+  if (position === "GK") {
+    const out = shuffled(KEEPER_POOL, roll);
+    while (out.length < count) out.push(KEEPER_POOL[Math.floor(roll() * KEEPER_POOL.length)]);
+    return shuffled(out, roll);
   }
-  return [
-    { id: "dive", attr: "physical", odds: momentOdds(a.physical, opponent, 0), reward: "stop" },
-    { id: "stand", attr: "tackle", odds: momentOdds(a.tackle, opponent, 0.04), reward: "stop" },
-    { id: "rush", attr: "pace", odds: momentOdds(a.pace, opponent, -0.06), reward: "stop" },
-  ];
+  const defensive = position === "CB" || position === "FB" || position === "CDM";
+  const pool = defensive ? [...ATTACK_POOL, "defend", "defend"] : position === "CM" ? [...ATTACK_POOL, "defend"] : ATTACK_POOL;
+  // Start with four situations whose main attributes differ, then fill at random.
+  const out: string[] = [];
+  const mains = new Set<AttrKey>();
+  for (const id of shuffled(ATTACK_POOL, roll)) {
+    const main = SITUATIONS[id].options[0][1];
+    if (mains.has(main)) continue;
+    mains.add(main);
+    out.push(id);
+    if (out.length === 4) break;
+  }
+  if (defensive) out[0] = "defend";
+  while (out.length < count) out.push(pool[Math.floor(roll() * pool.length)]);
+  const final = shuffled(out, roll);
+  return attrsCovered(final) >= 4 ? final : [...final.slice(0, -1), "keypass"];
 }
 
 function buildMoments(career: Career, fixture: Fixture, roll: () => number): Moment[] {
-  const position = career.player.position;
-  const count = fixture.round === "cup-f" ? 3 : 2;
+  const situations = drawSituations(career.player.position, roll);
   const minutes = new Set<number>();
-  while (minutes.size < count) minutes.add(12 + Math.floor(roll() * 76));
+  while (minutes.size < situations.length) minutes.add(5 + Math.floor(roll() * 84));
   return [...minutes]
     .sort((a, b) => a - b)
     .map((minute, index) => {
-      let kind: MomentKind = "chance";
-      if (position === "GK") kind = "keeper";
-      else if (position === "CB" || position === "CDM" || position === "FB") kind = index === 0 || roll() < 0.5 ? "defend" : "chance";
-      else if (position === "CM" && index > 0 && roll() < 0.4) kind = "defend";
-      return { minute, kind, options: momentOptions(career, kind, fixture.opponentStrength) };
+      const situation = situations[index];
+      return { minute, kind: SITUATIONS[situation].kind, situation, options: momentOptions(career, situation, fixture.opponentStrength) };
     });
 }
 
@@ -1131,7 +1180,7 @@ function openBigMatch(career: Career, fixture: Fixture, roll: () => number, rng:
   const moments = buildMoments(career, fixture, roll);
   const seed = Math.floor(roll() * 2147483647) || 1;
   const pending: PendingMatch = { base, moments, seed, rngState: rng.state() };
-  return { ...career, pending, screen: "bigmatch", recentDeltas: null, lastTrain: null };
+  return { ...career, pending, screen: "bigmatch", recentDeltas: null, lastTrain: null, keyGain: null };
 }
 
 /** Plays one moment. Deterministic for a given career, moment and choice, so the daily race stays fair. */
@@ -1152,6 +1201,7 @@ const FINAL_WHISTLE = /^@ev\.ft/;
 export function composeReport(pending: PendingMatch): MatchReport {
   const report: MatchReport = { ...pending.base, events: pending.base.events.map((event) => ({ ...event })) };
   let rating = report.rating;
+  let beaten = 0;
   for (const moment of pending.moments) {
     if (!moment.picked) continue;
     const option = moment.options.find((item) => item.id === moment.picked);
@@ -1175,10 +1225,10 @@ export function composeReport(pending: PendingMatch): MatchReport {
         report.assists += 1;
         report.keyPasses += 1;
         rating += 0.45;
-        report.events.push({ minute: at, tone: "goal", text: "@mo.goal.pass", us: 0, them: 0 });
+        report.events.push({ minute: at, tone: "goal", text: `@mo.goal.${option.id}`, us: 0, them: 0 });
       } else {
         rating -= 0.1;
-        report.events.push({ minute: at, tone: "neutral", text: "@mo.miss.pass", us: 0, them: 0 });
+        report.events.push({ minute: at, tone: "neutral", text: `@mo.miss.${option.id}`, us: 0, them: 0 });
       }
     } else if (moment.success) {
       const goals = report.events
@@ -1195,9 +1245,13 @@ export function composeReport(pending: PendingMatch): MatchReport {
       else report.tackles += 1;
       report.events.push({ minute: at, tone: "good", text: `@mo.stop.${option.id}`, us: 0, them: 0 });
     } else {
-      report.them += 1;
+      // With 6-8 moments, only every other failed stop costs a goal.
+      beaten += 1;
       rating -= 0.35;
-      report.events.push({ minute: at, tone: "bad", text: `@mo.beaten.${moment.kind}`, us: 0, them: 0 });
+      if (beaten % 2 === 1) {
+        report.them += 1;
+        report.events.push({ minute: at, tone: "bad", text: `@mo.beaten.${moment.kind}`, us: 0, them: 0 });
+      } else report.events.push({ minute: at, tone: "neutral", text: `@mo.close.${moment.kind}`, us: 0, them: 0 });
     }
   }
   const whistle = report.events.find((event) => FINAL_WHISTLE.test(event.text));
@@ -1233,6 +1287,15 @@ export function finishBigMatch(career: Career): Career {
   const rng = makeRng(pending.rngState);
   const roll = () => rng.next();
   const applied = applyReport({ ...career, pending: null }, report, roll, "report");
+  // Key matches weigh double in the table and lift the cup run.
+  if (report.competition === "league") {
+    const bonus = report.us > report.them ? 3 : report.us === report.them ? 1 : 0;
+    applied.season = {
+      ...applied.season,
+      table: applied.season.table.map((row) => (row.clubId === applied.clubId ? { ...row, pts: row.pts + bonus } : row)),
+      keyWins: (applied.season.keyWins ?? 0) + (report.us > report.them ? 1 : 0),
+    };
+  }
   applied.story = rollStory(applied, roll);
   applied.rng = rng.state();
   applied.lastTrain = null;
@@ -1323,6 +1386,7 @@ function applyTrain(career: Career, key: AttrKey, which: "camp" | "break"): Care
     },
     recentDeltas: deltas,
     lastTrain: { key, delta: real, outFor: spell },
+    keyGain: real > 0 ? { ...career.keyGain, [key]: (career.keyGain?.[key] ?? 0) + real } : career.keyGain,
     screen: "run",
     news: pushNews(career.news, note),
   };
@@ -2014,6 +2078,7 @@ export function rewardedBoost(career: Career, key: AttrKey): Career {
   return {
     ...career,
     player: { ...career.player, attrs },
+    keyGain: { ...career.keyGain, [key]: (career.keyGain?.[key] ?? 0) + 1 },
     news: pushNews(career.news, `${ATTR_LABEL[key]} +1 from a rewarded break.`),
   };
 }

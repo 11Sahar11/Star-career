@@ -183,6 +183,8 @@ export type SeasonState = {
   breakAt: number;
   breakDone: boolean;
   leagueId: string;
+  /** Wins in this season's two key matches; they lift the cup run. Missing in old saves = 0. */
+  keyWins?: number;
 };
 
 export type SummerKind = "friendly" | "euros" | "world-cup" | "copa";
@@ -247,6 +249,8 @@ export type Career = {
   activeReport: MatchReport | null;
   recentDeltas: Attrs | null;
   lastTrain?: { key: AttrKey; delta: number; outFor: number } | null;
+  /** Attribute points gained from training since the last key match; shown as +X% on its choices. */
+  keyGain?: Partial<Record<AttrKey, number>> | null;
   daily: DailyState | null;
   race: string | null;
   retired: boolean;
@@ -265,11 +269,15 @@ export type MomentOption = {
   attr: AttrKey;
   odds: number;
   reward: MomentReward;
+  /** Odds gained from training since the last key match. */
+  gain?: number;
 };
 
 export type Moment = {
   minute: number;
   kind: MomentKind;
+  /** Situation from the key-match pool (penalty, freekick, ...). Older saves have none. */
+  situation?: string;
   options: MomentOption[];
   picked?: string;
   success?: boolean;
