@@ -33,6 +33,8 @@ type AdWindow = Window & {
   adConfig?: (config: Record<string, unknown>) => void;
 };
 
+const ADMOB_INTERSTITIAL = (import.meta.env.VITE_ADMOB_INTERSTITIAL_SLOT as string | undefined)?.trim() || "";
+const ADMOB_REWARDED = (import.meta.env.VITE_ADMOB_REWARDED_SLOT as string | undefined)?.trim() || "";
 const CLIENT = (import.meta.env.VITE_ADSENSE_CLIENT as string | undefined)?.trim() || "";
 const TEST = (import.meta.env.VITE_ADSENSE_TEST as string | undefined) === "on";
 const GAP_MS = 3 * 60 * 1000;
@@ -83,6 +85,8 @@ export function initAds() {
   script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(CLIENT)}`;
   script.setAttribute("data-ad-frequency-hint", "180s");
   if (TEST) script.setAttribute("data-adbreak-test", "on");
+  if (ADMOB_INTERSTITIAL) script.setAttribute("data-admob-interstitial-slot", ADMOB_INTERSTITIAL);
+  if (ADMOB_REWARDED) script.setAttribute("data-admob-rewarded-slot", ADMOB_REWARDED);
   document.head.appendChild(script);
   w.adConfig?.({ preloadAdBreaks: "on", sound: "on" });
 }
