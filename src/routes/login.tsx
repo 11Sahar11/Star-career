@@ -72,7 +72,7 @@ function LoginPage() {
 
   return (
     <main className="app-shell mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-5">
-      <Link to="/" className="mb-4 flex min-h-11 items-center text-sm text-muted">
+      <Link to="/" className="mb-4 flex min-h-12 items-center text-sm text-muted">
         {tr("back")}
       </Link>
 
@@ -112,12 +112,12 @@ function LoginPage() {
             <div className="grid gap-2 border-t border-line pt-3">
               <p className="text-sm">{tr("acct.deleteAsk")}</p>
               <div className="grid grid-cols-2 gap-2">
-                <button type="button" className="btn-ghost h-11" onClick={() => setConfirmDelete(false)}>
+                <button type="button" className="btn-ghost h-12" onClick={() => setConfirmDelete(false)}>
                   {tr("cancel")}
                 </button>
                 <button
                   type="button"
-                  className="btn-danger h-11"
+                  className="btn-danger h-12"
                   onClick={async () => {
                     try {
                       const result = await deleteMyAccount();
@@ -136,7 +136,7 @@ function LoginPage() {
               </div>
             </div>
           ) : (
-            <button type="button" className="min-h-11 text-start text-sm text-bad" onClick={() => setConfirmDelete(true)}>
+            <button type="button" className="min-h-12 text-start text-sm text-bad" onClick={() => setConfirmDelete(true)}>
               {tr("acct.delete")}
             </button>
           )}
@@ -220,7 +220,7 @@ function LoginPage() {
 
           <button
             type="button"
-            className="mt-4 min-h-11 text-sm text-accent"
+            className="mt-4 min-h-12 text-sm text-accent"
             onClick={() => {
               setMode(mode === "signup" ? "signin" : "signup");
               setError(null);

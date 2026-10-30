@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { loadLang, t, type Lang } from "@/game/i18n";
+import { PRIVACY_EMAIL } from "@/game/contact";
 
 export const Route = createFileRoute("/privacy")({
   component: PrivacyPage,
@@ -21,8 +22,10 @@ function PrivacyPage() {
         <p>{t("privacyLead", undefined, lang)}</p>
         <p>{t("privacyData", undefined, lang)}</p>
         <p>{t("privacyAds", undefined, lang)}</p>
+        <p>{t("privacyAdsData", undefined, lang)}</p>
+        <p>{t("privacyContact", { email: PRIVACY_EMAIL }, lang)}</p>
       </div>
-      <Link to="/" className="mt-6 min-h-11 text-sm text-accent">
+      <Link to="/" className="mt-6 inline-flex min-h-12 items-center self-start text-sm text-accent">
         {t("back", undefined, lang)}
       </Link>
     </main>

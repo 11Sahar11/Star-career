@@ -127,8 +127,8 @@
   .topbar-back,
   .icon-btn {
     display: inline-flex;
-    width: 2.75rem;
-    height: 2.75rem;
+    width: 3rem;
+    height: 3rem;
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
@@ -161,8 +161,8 @@
   }
 
   .lang-switch button {
-    min-width: 2.25rem;
-    height: 2.5rem;
+    min-width: 3rem;
+    height: 3rem;
     padding: 0 0.35rem;
     border-radius: 4px;
     color: var(--color-muted);
@@ -504,8 +504,8 @@
     border: 1px solid var(--color-line);
   }
   .seg button {
-    min-width: 2.75rem;
-    height: 2.75rem;
+    min-width: 3rem;
+    height: 3rem;
     border-radius: 4px;
     font-size: 0.875rem;
     font-weight: 600;
@@ -672,4 +672,11 @@
       animation: none;
     }
   }
+}
+
+/* Safe areas for the Play (TWA) app and notched phones */
+.app-shell {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
 }

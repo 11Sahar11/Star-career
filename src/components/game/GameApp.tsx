@@ -1,3 +1,4 @@
+import { PRIVACY_EMAIL } from "@/game/contact";
 import { Fragment, useContext, useEffect, useMemo, useState, createContext, type ReactNode } from "react";
 import {
   ArrowLeftRight,
@@ -513,7 +514,7 @@ function LeagueTable({ career, compact }: { career: Career; compact?: boolean })
       <div className="mb-2 flex items-baseline justify-between">
         <h2 className="text-sm font-semibold">{tr("table")}</h2>
         {compact && rows.length > 7 ? (
-          <button type="button" className="min-h-9 text-sm font-bold text-accent" onClick={() => setFull((value) => !value)}>
+          <button type="button" className="min-h-12 text-sm font-bold text-accent" onClick={() => setFull((value) => !value)}>
             {full ? tr("shortTable") : tr("fullTable")}
           </button>
         ) : null}
@@ -558,7 +559,7 @@ function SeasonBreak({ career, onBoost }: { career: Career; onBoost: (key: AttrK
             <button
               key={key}
               type="button"
-              className="btn-ghost h-11 text-sm"
+              className="btn-ghost h-12 text-sm"
               onClick={() =>
                 showRewarded("attribute-boost", () => {
                   markBoost(id);
@@ -589,6 +590,8 @@ function Privacy({ onBack }: { onBack: () => void }) {
         <p>{tr("privacyLead")}</p>
         <p>{tr("privacyData")}</p>
         <p>{tr("privacyAds")}</p>
+        <p>{tr("privacyAdsData")}</p>
+        <p>{tr("privacyContact", { email: PRIVACY_EMAIL })}</p>
       </div>
     </Shell>
   );
@@ -796,7 +799,7 @@ function Home({
 
       <div className="mt-6 grid gap-1 border-t border-line pt-3 text-sm">
         {authEnabled ? (
-          <a href="/login" className="flex min-h-11 items-center text-muted underline-offset-4 hover:underline">
+          <a href="/login" className="flex min-h-12 items-center text-muted underline-offset-4 hover:underline">
             {access?.signedIn ? tr("acct.signedInShort", { email: access.email ?? "" }) : tr("acct.cta")}
           </a>
         ) : null}
@@ -805,21 +808,21 @@ function Home({
             <div className="card px-4 py-3">
               <p>{tr("resetAsk", { name: career.player.name })}</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <button type="button" className="btn-ghost h-11" onClick={() => setConfirm(false)}>
+                <button type="button" className="btn-ghost h-12" onClick={() => setConfirm(false)}>
                   {tr("cancel")}
                 </button>
-                <button type="button" className="btn-danger h-11" onClick={onNew}>
+                <button type="button" className="btn-danger h-12" onClick={onNew}>
                   {tr("newCareer")}
                 </button>
               </div>
             </div>
           ) : (
-            <button type="button" className="flex min-h-11 items-center text-start text-muted" onClick={() => setConfirm(true)}>
+            <button type="button" className="flex min-h-12 items-center text-start text-muted" onClick={() => setConfirm(true)}>
               {tr("reset")}
             </button>
           )
         ) : null}
-        <button type="button" className="flex min-h-11 items-center text-start text-muted" onClick={onPrivacy}>
+        <button type="button" className="flex min-h-12 items-center text-start text-muted" onClick={onPrivacy}>
           {tr("privacy")}
         </button>
       </div>
@@ -902,7 +905,7 @@ function Create({
 
       <div className="mt-5 flex items-center justify-between">
         <h2 className="text-base font-semibold">{tr("position")}</h2>
-        <button type="button" className="flex min-h-11 items-center gap-1 text-sm text-accent" onClick={() => setSalt((value) => value + 1)}>
+        <button type="button" className="flex min-h-12 items-center gap-1 text-sm text-accent" onClick={() => setSalt((value) => value + 1)}>
           <RotateCcw className="size-4" />
           {tr("reroll")}
         </button>
@@ -1061,7 +1064,7 @@ function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c:
         right={
           <button
             type="button"
-            className="btn-primary flex h-10 shrink-0 items-center gap-1.5 px-3 text-sm"
+            className="btn-primary flex h-12 shrink-0 items-center gap-1.5 px-3 text-sm"
             onClick={() => {
               unlockAudio();
               playWhistle();
@@ -1928,16 +1931,16 @@ function OffersScreen({
           <div className="card px-4 py-3">
             <p className="text-sm">{tr("retireAt", { n: career.player.age })}</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <button type="button" className="btn-ghost h-11" onClick={() => setAsk(false)}>
+              <button type="button" className="btn-ghost h-12" onClick={() => setAsk(false)}>
                 {tr("oneMore")}
               </button>
-              <button type="button" className="btn-primary h-11" onClick={onRetire}>
+              <button type="button" className="btn-primary h-12" onClick={onRetire}>
                 {tr("retireBtn")}
               </button>
             </div>
           </div>
         ) : (
-          <button type="button" className="min-h-11 text-sm text-muted underline" onClick={() => setAsk(true)}>
+          <button type="button" className="min-h-12 text-sm text-muted underline" onClick={() => setAsk(true)}>
             {tr("retire")}
           </button>
         )}
@@ -2248,7 +2251,7 @@ function LegacyScreen({ onBack }: { onBack: () => void }) {
               ) : (
                 <button
                   type="button"
-                  className={`${state === "ready" ? "btn-primary" : "btn-ghost"} h-11 shrink-0 px-4 text-sm`}
+                  className={`${state === "ready" ? "btn-primary" : "btn-ghost"} h-12 shrink-0 px-4 text-sm`}
                   disabled={state !== "ready"}
                   onClick={() => setLegacy(buyPerk(perk.id as PerkId))}
                 >
