@@ -21,6 +21,7 @@ import {
   Volume2,
   VolumeX,
   Zap,
+  Paintbrush,
 } from "lucide-react";
 import { Crest } from "@/components/game/crest";
 
@@ -3012,13 +3013,39 @@ function GearOfferCard({ career, onChange }: { career: Career; onChange: (c: Car
 
 /** Skin tones in the order of the character art (player-skin1..6.webp). */
 const SKIN_TONES = ["#f6d7bf", "#e8b892", "#c98f66", "#a8724f", "#7d4e33", "#4e2f1f"];
-/** Base body art, picked by the chosen skin tone (hex or 1-6); default art otherwise. */
-function playerBody(player: Career["player"]): string {
-  const skin = (player as { skin?: unknown }).skin;
-  let n = 0;
-  if (typeof skin === "string") n = SKIN_TONES.indexOf(skin.toLowerCase()) + 1;
-  else if (typeof skin === "number" && Number.isInteger(skin) && skin >= 1 && skin <= SKIN_TONES.length) n = skin;
-  return n > 0 ? `/character/player-skin${n}.webp` : "/character/player.webp";
+/** Base body art for a skin tone (1-6); default art otherwise. */
+function playerBody(skin: number | undefined): string {
+  return skin && skin >= 1 && skin <= SKIN_TONES.length ? `/character/player-skin${skin}.webp` : "/character/player.webp";
+}
+
+/** Free look picker opened from the character: skin tones now, hair row once hair art exists. */
+function LookSheet({ career, onChange, onClose }: { career: Career; onChange: (c: Career) => void; onClose: () => void }) {
+  const { tr } = useTx();
+  const [skin, setSkin] = useState<number | undefined>(career.player.skin);
+  const preview = { ...career, player: { ...career.player, skin } };
+  const HAIR_READY = false; // show the hair row once hair art ships
+  return (
+    <div className="look-backdrop" role="presentation" onClick={onClose}>
+      <div className="look-sheet" role="dialog" aria-modal="true" aria-label={tr("look.title")} onClick={(e) => e.stopPropagation()}>
+        <div className="look-handle" aria-hidden="true" />
+        <h2 className="text-lg font-bold">{tr("look.title")}</h2>
+        <div className="mx-auto my-2 w-28">
+          <PlayerCharacter career={preview} />
+        </div>
+        <p className="mb-2 text-sm font-semibold">{tr("look.skin")}</p>
+        <div className="flex justify-between gap-2" role="radiogroup" aria-label={tr("look.skin")}>
+          {SKIN_TONES.map((hex, i) => (
+            <button key={hex} type="button" role="radio" aria-checked={skin === i + 1} aria-label={tr("look.tone", { n: i + 1 })} data-skin={i + 1} className="skin-swatch" style={{ background: hex }} onClick={() => setSkin(i + 1)} />
+          ))}
+        </div>
+        {HAIR_READY ? <div data-look-hair /> : null}
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button type="button" className="btn-ghost h-12" onClick={onClose}>{tr("look.cancel")}</button>
+          <button type="button" className="btn-primary h-12" data-look-save onClick={() => { onChange(preview); onClose(); }}>{tr("look.save")}</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** One stacked layer on the character canvas; a missing file just hides itself. */
@@ -3038,11 +3065,12 @@ function PlayerCharacter({ career, children }: { career: Career; children?: Reac
   const allGold = gear.every((g) => g.tier === "gold");
   const hair: string | null = null; // future: /character/hair/<style>.webp
   const kit: string | null = null; // future: kit layer tinted from playerKit(career)
+  const body = playerBody(career.player.skin);
   return (
     <div className="player-figure" data-all-gold={allGold || undefined}>
       {allGold ? <div className="character-aura" aria-hidden="true" /> : null}
       <div className="character-canvas">
-        <CharacterLayer key={playerBody(career.player)} src={playerBody(career.player)} layer="body" />
+        <CharacterLayer key={body} src={body} layer="body" />
         {kit ? <CharacterLayer src={kit} layer="kit" /> : null}
         {gear.map((g) => (g.tier ? <CharacterLayer key={`${g.item}-${g.tier}`} src={`/character/gear/${g.item}-${g.tier}.webp`} layer={`gear-${g.item}`} /> : null))}
         {hair ? <CharacterLayer src={hair} layer="hair" /> : null}
@@ -3059,6 +3087,7 @@ function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career;
   const top = gearTopLeague(career);
   const bonus = gearBonus(career);
   const [picking, setPicking] = useState(false);
+  const [look, setLook] = useState(false);
   /** Blocks a fast second tap from buying the next tier off the same render. */
   const buying = useRef(false);
   const reason: Record<string, string> = { coins: tr("eco.short"), owned: tr("eco.owned"), locked: tr("gear.goldLocked"), daily: tr("eco.short") };
@@ -3112,11 +3141,14 @@ function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career;
       <div className="myplayer-grid">
         <div className="grid content-start gap-2">{[0, 1, 2].map(slotCard)}</div>
         <div className="flex flex-col items-center text-center">
+          <button type="button" className="look-open" data-look-open aria-label={tr("look.edit")} onClick={() => setLook(true)}>
           <PlayerCharacter career={career}>
             <div className="ovr-badge player-ovr">
               <span className="num">{overall(career.player.position, effectiveAttrs(career))}</span>
             </div>
+            <span className="look-badge" aria-hidden="true"><Paintbrush className="size-3.5" /></span>
           </PlayerCharacter>
+          </button>
           <p className="mt-1 text-sm font-bold leading-tight">{career.player.name}</p>
           <p className="text-xs text-muted">
             {tr(`pos.${career.player.position}`)} · {tr("ageN", { n: career.player.age })}
@@ -3140,6 +3172,7 @@ function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career;
         )
       ) : null}
       {!top ? <p className="mt-3 text-xs text-muted">{tr("gear.goldLocked")}</p> : null}
+      {look ? <LookSheet career={career} onChange={onChange} onClose={() => setLook(false)} /> : null}
     </Shell>
   );
 }

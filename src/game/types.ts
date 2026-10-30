@@ -167,6 +167,8 @@ export type Player = {
   fitness: number;
   form: number;
   morale: number;
+  /** Chosen skin tone, 1-6 (character art order). Missing = default art. */
+  skin?: number;
 };
 
 export type SeasonState = {

@@ -25,6 +25,19 @@ function isCareer(value: unknown): value is Career {
  * move into the save so a refresh cannot reuse a reward. Unknown shapes return null.
  */
 export function migrateCareer(raw: unknown): Career | null {
+  const career = migrateShape(raw);
+  return career ? withSkin(career) : null;
+}
+
+/** Keeps player.skin only when it is a valid tone (1-6); anything else falls back to the default art. */
+function withSkin(career: Career): Career {
+  const skin = career.player.skin;
+  if (skin === undefined || (Number.isInteger(skin) && skin >= 1 && skin <= 6)) return career;
+  const { skin: _drop, ...player } = career.player;
+  return { ...career, player };
+}
+
+function migrateShape(raw: unknown): Career | null {
   if (!raw || typeof raw !== "object") return null;
   const data = raw as Career & { version: number };
   if (!data.player || !data.season || typeof data.clubId !== "string") return null;
