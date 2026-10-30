@@ -116,6 +116,12 @@ const ATTR_ICON = {
 
 export function GameApp() {
   const [booted, setBooted] = useState(false);
+  /** The loading screen stays at least LOADING_MIN_MS; it never waits on anything else (and never shows ads). */
+  const [minShown, setMinShown] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setMinShown(true), LOADING_MIN_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
   const [career, setCareer] = useState<Career | null>(null);
   const [daily, setDaily] = useState<DailyAttempt | null>(null);
   const [playing, setPlaying] = useState<"main" | "daily">("main");
@@ -394,6 +400,7 @@ export function GameApp() {
       <AdminContext.Provider value={admin}>
         {screen}
         {toasts.length ? <AchievementToast id={toasts[0]} /> : null}
+        {!booted || !minShown ? <LoadingScreen /> : null}
       </AdminContext.Provider>
     </LangContext.Provider>
   );
@@ -428,6 +435,34 @@ function ScreenHeader({
       </div>
       {right ?? null}
     </header>
+  );
+}
+
+const LOADING_MIN_MS = 600;
+const LOADING_TIPS = 5;
+
+/** Boot screen over the app while it hydrates. Ads may load in the background; none is ever shown here. */
+function LoadingScreen() {
+  const { tr } = useTx();
+  const [tip, setTip] = useState(0);
+  useEffect(() => {
+    setTip(Math.floor(Math.random() * LOADING_TIPS));
+  }, []);
+  return (
+    <div className="loading-screen" role="status" aria-live="polite" aria-label={tr("loading")} data-no-ads>
+      <img className="loading-bg" src="/loading-bg.webp" alt="" width={576} height={1024} decoding="async" fetchPriority="high" />
+      <div className="loading-top">
+        <h1 className="loading-logo">STAR</h1>
+        <p className="loading-sub">{tr("loadingSub")}</p>
+      </div>
+      <div className="loading-bottom">
+        <p className="loading-tip">{tr(`loadTip.${tip + 1}`)}</p>
+        <div className="loading-bar" aria-hidden="true">
+          <span className="loading-fill" />
+          <span className="loading-star">★</span>
+        </div>
+      </div>
+    </div>
   );
 }
 

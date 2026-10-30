@@ -16,6 +16,7 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "preload", as: "image", href: "/loading-bg.webp", type: "image/webp", fetchPriority: "high" },
       { rel: "stylesheet", href: appCss },
       {
         rel: "stylesheet",
