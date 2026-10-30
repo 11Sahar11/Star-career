@@ -421,13 +421,22 @@ export function GameApp() {
   const inMatch = view === "game" && !!run && (run.screen === "match" || run.screen === "bigmatch");
   const showNav = booted && minShown && !inMatch && ["home", "game", "collection", "summary", "achievements"].includes(view);
   const navActive: NavTab | null =
-    view === "home" ? "home" : view === "collection" ? "trophies" : view === "game" ? (storeOpen === "player" ? "player" : "season") : null;
+    view === "home"
+      ? "home"
+      : view === "collection" || view === "achievements"
+        ? "trophies"
+        : view === "game"
+          ? storeOpen && playing === "main"
+            ? "player"
+            : "season"
+          : null;
 
   return (
     <LangContext.Provider value={lang}>
       <ApplyContext.Provider value={apply}>
       <AdminContext.Provider value={admin}>
-        <div className={showNav ? "has-bottom-nav" : undefined}>{screen}</div>
+        <div className={showNav ? "has-bottom-nav" : undefined}>
+        {screen}
         {showNav ? (
           <BottomNav
             active={navActive}
@@ -439,6 +448,7 @@ export function GameApp() {
               }
               if (tab === "trophies") {
                 setStoreOpen(false);
+                setPlaying("main");
                 return setView("collection");
               }
               if (!career) return;
@@ -450,6 +460,7 @@ export function GameApp() {
           />
         ) : null}
         {toasts.length ? <AchievementToast id={toasts[0]} /> : null}
+        </div>
         {!booted || !minShown ? <LoadingScreen ready={booted} /> : null}
       </AdminContext.Provider>
     </ApplyContext.Provider>
@@ -2094,7 +2105,7 @@ function SeasonScreen({
               </div>
               <span className="font-num text-end" dir="ltr">
                 {preview.after[key]}{" "}
-                <span className={delta > 0 ? "text-good" : delta < 0 ? "text-bad" : "text-dim"}>{delta > 0 ? `+${delta}` : delta}</span>
+                <span className={delta > 0 ? "text-good" : delta < 0 ? "text-bad" : "text-muted"}>{delta > 0 ? `+${delta}` : delta}</span>
               </span>
             </Fragment>
           );
