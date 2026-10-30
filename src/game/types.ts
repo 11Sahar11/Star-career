@@ -1,4 +1,4 @@
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 
 export const ATTR_KEYS = ["pace", "tackle", "passing", "dribbling", "shooting", "physical"] as const;
 export type AttrKey = (typeof ATTR_KEYS)[number];
@@ -261,6 +261,43 @@ export type Career = {
   story?: PendingStory | null;
   storiesSeen?: string[];
   news: string[];
+  /** Economy (save v9). Coins are per career; retirement resets them. */
+  coins: number;
+  /** Coins from the last match, for the double-coins clip. */
+  coinsEarnedLast?: number;
+  coinsFixtureId?: string | null;
+  /** Season-long gear; counts in simulation and odds, never written into player.attrs. */
+  gear: GearItem[];
+  agentHired: boolean;
+  trialCall: boolean;
+  /** Percentage points added to every choice in the next key match (0 or 6). */
+  keyCampBonus: number;
+  premiumCamp: boolean;
+  cosmetics: string[];
+  adState: AdState;
+  /** Big-club trial in this transfer window: visible signing chance; one ad boost doubles it (max 90%). */
+  bigTrial?: BigTrial | null;
+};
+
+export type BigTrial = { year: number; clubId: string; chance: number; boosted: boolean; result: "open" | "won" | "lost" };
+
+export type GearItem = { key: AttrKey; amount: 1 | 2 };
+
+export type AdState = {
+  seasonYear: number;
+  doubleCoinsThisSeason: number;
+  doubledFixtureIds: string[];
+  retryMomentThisSeason: number;
+  retriedFixtureIds: string[];
+  boostTaken: boolean;
+  healTaken: boolean;
+  freeCampDate: string | null;
+  discountDate: string | null;
+  /** The item id the store discount applies to, until used. */
+  discountItem: string | null;
+  interstitialsThisSeason: number;
+  halftimeShownFixtureIds: string[];
+  restHalf: string | null;
 };
 
 export type MomentKind = "chance" | "defend" | "keeper";

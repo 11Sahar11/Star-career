@@ -50,3 +50,17 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     await sql`delete from "user" where id = ${user.id}`;
     return { deleted: true };
   });
+
+/** Just the admin bit, decided on the server against the verified session. Signed out or unlisted = false. */
+export const getIsAdmin = createServerFn({ method: "POST" })
+  .middleware([sessionMiddleware])
+  .handler(async ({ context }): Promise<{ isAdmin: boolean }> => {
+    const { getSessionUser } = await import("./auth/verify.server");
+    const user = await getSessionUser(context.bearerToken);
+    if (!user) return { isAdmin: false };
+    const { getSql } = await import("./db");
+    const { isOwnerEmail } = await import("./owner.server");
+    const sql = await getSql();
+    const rows = await sql<{ emailVerified: boolean }>`select "emailVerified" from "user" where id = ${user.id}`;
+    return { isAdmin: rows[0]?.emailVerified === true && isOwnerEmail(user.email) };
+  });

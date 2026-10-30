@@ -5,17 +5,14 @@
  * verifies it). A password sign-up is never verified here, so nobody can claim
  * an owner address just by registering it first.
  *
- * Extra admins can be added without a code change via ADMIN_EMAILS
- * (comma-separated) in the deploy environment.
+ * The list comes only from ADMIN_EMAILS (comma-separated) in the deploy
+ * environment; nothing is hardcoded. Unset = nobody is admin.
  */
-const OWNER_EMAILS = ["sahar.levy123@gmail.com"];
-
 export function isOwnerEmail(email: string | null | undefined): boolean {
   if (!email) return false;
-  const extra = (process.env.ADMIN_EMAILS ?? "")
+  const admins = (process.env.ADMIN_EMAILS ?? "")
     .split(",")
     .map((item) => item.trim().toLowerCase())
     .filter(Boolean);
-  const wanted = email.trim().toLowerCase();
-  return OWNER_EMAILS.includes(wanted) || extra.includes(wanted);
+  return admins.includes(email.trim().toLowerCase());
 }

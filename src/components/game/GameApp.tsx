@@ -60,19 +60,39 @@ import {
   todayKey,
   trainOdds,
 } from "@/game/engine";
-import { boostId, boostTaken, healTaken, loadCareer, markHeal, loadDailyAttempt, loadSound, markBoost, saveCareer, saveDailyAttempt, saveSound, touchStreak, type DailyAttempt } from "@/game/save";
+import { loadCareer, loadDailyAttempt, loadSound, saveCareer, saveDailyAttempt, saveSound, touchStreak, type DailyAttempt } from "@/game/save";
 import { loadLang, setLang, show, t, type Lang } from "@/game/i18n";
 import { authEnabled } from "@/lib/auth/client";
 import { STORIES, answerStory, storyAttr } from "@/game/stories";
 import { ACHIEVEMENTS, checkAchievements, loadUnlocked } from "@/game/achievements";
-import { initAds, showInterstitial, showRewarded } from "@/game/ads";
-import { getViewerAccess, type ViewerAccess } from "@/lib/access";
+import { initAds, setAdsSuppressed, showInterstitial, showRewarded } from "@/game/ads";
+import {
+  CATALOG,
+  ECONOMY,
+  HALFTIME_INTERSTITIAL,
+  canBuy,
+  canShowSeasonInterstitial,
+  countInterstitial,
+  formatCoins,
+  grantDiscount,
+  grantDoubleCoins,
+  grantFreeCamp,
+  itemPrice,
+  rewardAvailable,
+  buy,
+  type StoreItemId,
+} from "@/game/economy";
+import { chestToday, countryOpen, loadDevice, markChest, settleRetirement, unlockCountry } from "@/game/legacy";
+import { attemptBigTrial, boostBigTrial, keyFixtureIds, retryMoment } from "@/game/engine";
+import { getIsAdmin, getViewerAccess, type ViewerAccess } from "@/lib/access";
 import { PERKS, adminGrant, adminUnlockAll, applyPerks, buyPerk, canDouble, doubleLegacy, loadLegacy, payLegacy, perkState, type Legacy, type PerkId } from "@/game/legacy";
 import { ATTR_KEYS, type AttrKey, type Career, type Difficulty, type MatchLog, type MatchReport, type Role } from "@/game/types";
 
 type View = "boot" | "home" | "create" | "game" | "collection" | "summary" | "daily" | "privacy" | "legacy" | "admin" | "achievements";
 
 const LangContext = createContext<Lang>("en");
+/** Admin (decided on the server): everything open, no interstitials, rewards without a clip. */
+const AdminContext = createContext(false);
 
 function useTx() {
   const lang = useContext(LangContext);
@@ -103,6 +123,8 @@ export function GameApp() {
   const [lang, setLangState] = useState<Lang>("en");
   const [access, setAccess] = useState<ViewerAccess | null>(null);
   const [toasts, setToasts] = useState<string[]>([]);
+  const [admin, setAdmin] = useState(false);
+  const [storeOpen, setStoreOpen] = useState(false);
 
   useEffect(() => {
     if (!toasts.length) return;
@@ -112,6 +134,12 @@ export function GameApp() {
 
   useEffect(() => {
     if (!authEnabled) return;
+    getIsAdmin()
+      .then((res) => {
+        setAdmin(res.isAdmin);
+        setAdsSuppressed(res.isAdmin);
+      })
+      .catch(() => setAdmin(false));
     getViewerAccess()
       .then(setAccess)
       .catch(() => setAccess(null));
@@ -239,11 +267,13 @@ export function GameApp() {
   } else if (view === "create") {
     screen = (
       <Create
+        admin={admin}
         onBack={() => setView("home")}
         onStart={(name, position, countryId, nationId, salt, difficulty) => {
           setPlaying("main");
           unlockAudio();
-          setCareer(applyPerks(createCareer(name, position, countryId, salt, difficulty, nationId), loadLegacy().perks));
+          const fresh = applyPerks(createCareer(name, position, countryId, salt, difficulty, nationId), loadLegacy().perks);
+          setCareer(fresh); // coins are per career and start from zero
           setView("game");
         }}
       />
@@ -269,7 +299,9 @@ export function GameApp() {
       />
     );
   } else if (view === "admin") screen = <Splash />; else if (!run) screen = <Splash />;
-  else if (run.screen === "camp" || run.screen === "break") {
+  else if (storeOpen && playing === "main" && run.screen !== "bigmatch" && run.screen !== "match") {
+    screen = <StoreScreen career={run} onChange={update} onBack={() => setStoreOpen(false)} />;
+  } else if (run.screen === "camp" || run.screen === "break") {
     screen = <TrainingScreen career={run} onChange={update} onMenu={menu} />;
   } else if (run.screen === "bigmatch" && run.pending) {
     screen = <BigMatchScreen career={run} onChange={update} onMenu={menu} />;
@@ -282,6 +314,7 @@ export function GameApp() {
         report={run.activeReport}
         onNext={() => update(afterReport(run))}
         onMenu={menu}
+        extra={playing === "main" ? <DoubleCoins career={run} onChange={update} /> : null}
       />
     );
   } else if (run.screen === "season") {
@@ -290,7 +323,19 @@ export function GameApp() {
       <SeasonScreen
         career={run}
         claimRace={wonRace}
-        onSummer={() => (wonRace ? finishDaily(run) : playing === "daily" ? update(startSummer(run)) : showInterstitial("season-end", () => update(startSummer(run))))}
+        onStore={playing === "main" ? () => setStoreOpen(true) : undefined}
+        onSummer={() => {
+          if (wonRace) return finishDaily(run);
+          if (playing === "daily" || admin || !canShowSeasonInterstitial(run)) return update(startSummer(run));
+          let counted = run;
+          showInterstitial(
+            "season-end",
+            () => update(startSummer(counted)),
+            () => {
+              counted = countInterstitial(run);
+            },
+          );
+        }}
         onMenu={menu}
       />
     );
@@ -302,7 +347,8 @@ export function GameApp() {
         career={run}
         onAccept={(clubId) => update(acceptOffer(run, clubId))}
         onRetire={() => update(retireCareer(run))}
-        onBoost={(key) => update(rewardedBoost(run, key))}
+        onBoost={(key) => update(rewardedBoost({ ...run, adState: { ...run.adState, boostTaken: true } }, key))}
+        onChange={update}
         onMenu={menu}
       />
     );
@@ -323,12 +369,14 @@ export function GameApp() {
         }}
       />
     );
-  } else screen = <RunScreen career={run} onChange={update} onMenu={menu} />;
+  } else screen = <RunScreen career={run} onChange={update} onMenu={menu} onStore={playing === "main" ? () => setStoreOpen(true) : undefined} />;
 
   return (
     <LangContext.Provider value={lang}>
-      {screen}
-      {toasts.length ? <AchievementToast id={toasts[0]} /> : null}
+      <AdminContext.Provider value={admin}>
+        {screen}
+        {toasts.length ? <AchievementToast id={toasts[0]} /> : null}
+      </AdminContext.Provider>
     </LangContext.Provider>
   );
 }
@@ -551,9 +599,8 @@ function LeagueTable({ career, compact }: { career: Career; compact?: boolean })
 
 function SeasonBreak({ career, onBoost }: { career: Career; onBoost: (key: AttrKey) => void }) {
   const { tr } = useTx();
-  const id = boostId(career.player.name, career.year);
-  const [used, setUsed] = useState(() => boostTaken(id));
   const [pick, setPick] = useState(false);
+  const used = career.adState.boostTaken;
   return (
     <div className="mt-4 grid gap-2">
       {used ? (
@@ -561,20 +608,7 @@ function SeasonBreak({ career, onBoost }: { career: Career; onBoost: (key: AttrK
       ) : pick ? (
         <div className="grid grid-cols-2 gap-2" data-ad-slot="rewarded">
           {ATTR_KEYS.map((key) => (
-            <button
-              key={key}
-              type="button"
-              className="btn-ghost h-12 text-sm"
-              onClick={() =>
-                showRewarded("attribute-boost", () => {
-                  markBoost(id);
-                  setUsed(true);
-                  onBoost(key);
-                })
-              }
-            >
-              {tr(`attr.${key}`)}
-            </button>
+            <RewardButton key={key} name="attribute-boost" className="btn-ghost h-12 text-sm" label={tr(`attr.${key}`)} onReward={() => onBoost(key)} />
           ))}
         </div>
       ) : (
@@ -836,9 +870,11 @@ function Home({
 }
 
 function Create({
+  admin,
   onBack,
   onStart,
 }: {
+  admin: boolean;
   onBack: () => void;
   onStart: (name: string, position: Career["player"]["position"], countryId: string, nationId: string, salt: number, difficulty: Difficulty) => void;
 }) {
@@ -852,6 +888,7 @@ function Create({
   const country = COUNTRIES.find((item) => item.id === countryId);
   const ready = name.trim().length >= 2 && position && countryId && nationId;
   const { tr } = useTx();
+  const [device] = useState(() => loadDevice());
 
   return (
     <Shell>
@@ -874,18 +911,22 @@ function Create({
       <div className="mt-3 grid grid-cols-2 gap-2">
         {COUNTRIES.map((item) => {
           const selected = countryId === item.id;
+          const open = countryOpen(device, item.id, admin);
           return (
             <button
               key={item.id}
               type="button"
+              disabled={!open}
+              aria-disabled={!open}
               onClick={() => {
+                if (!open) return;
                 setCountryId(item.id);
                 setNationId((current) => current ?? item.id);
               }}
-              className={`rounded-md border px-3 py-3 text-start ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
+              className={`min-h-12 rounded-md border px-3 py-3 text-start ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"} ${open ? "" : "opacity-60"}`}
             >
               <span className="block font-semibold">{tr(`country.${item.id}`)}</span>
-              <span className="mt-1 block text-xs text-muted">{entryLeague(item.id).name}</span>
+              <span className="mt-1 block text-xs text-muted">{open ? entryLeague(item.id).name : tr("eco.lockedCountry", { n: formatCoins(ECONOMY.prices["unlock-country"]) })}</span>
             </button>
           );
         })}
@@ -1016,28 +1057,21 @@ function AttrBar({ attr, value, delta }: { attr: AttrKey; value: number; hot?: b
 
 function HealClip({ career, onChange }: { career: Career; onChange: (c: Career) => void }) {
   const { tr } = useTx();
-  const id = `${boostId(career.player.name, career.year)}|heal`;
-  const [used, setUsed] = useState(() => healTaken(id));
-  if (used) return null;
+  if (!rewardAvailable(career, "injury-return", todayKey())) return null;
+  // Is a key match among the games the injury would cost?
+  const keys = keyFixtureIds(career.season, career.clubId);
+  const missesKey = career.season.fixtures.slice(career.season.cursor, career.season.cursor + career.season.outFor).some((item) => keys.includes(item.id));
   return (
-    <button
-      type="button"
+    <RewardButton
+      name="injury-return"
       className="btn-ghost mt-3 h-12 w-full px-3 text-sm"
-      data-ad-slot="rewarded"
-      onClick={() =>
-        showRewarded("injury-return", () => {
-          markHeal(id);
-          setUsed(true);
-          onChange({ ...career, season: { ...career.season, outFor: 0 } });
-        })
-      }
-    >
-      {tr("healClip", { n: career.season.outFor })}
-    </button>
+      label={missesKey ? tr("eco.healKey") : tr("healClip", { n: career.season.outFor })}
+      onReward={() => onChange({ ...career, season: { ...career.season, outFor: 0 }, adState: { ...career.adState, healTaken: true } })}
+    />
   );
 }
 
-function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c: Career) => void; onMenu: () => void }) {
+function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onChange: (c: Career) => void; onMenu: () => void; onStore?: () => void }) {
   const [paused, setPaused] = useState(() => Boolean(career.lastTrain));
   const [speed, setSpeed] = useState<1 | 2 | 4>(1);
   const club = getClub(career.clubId);
@@ -1082,6 +1116,7 @@ function RunScreen({ career, onChange, onMenu }: { career: Career; onChange: (c:
           </button>
         }
       />
+      {onStore && !career.race ? <EconomyBar career={career} onChange={onChange} onStore={onStore} /> : null}
 
       <section className="scorebox px-4 py-3.5">
         <div className="flex items-center gap-3">
@@ -1210,6 +1245,7 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
       <p className="text-sm leading-6 text-muted">
         {camp ? tr("campAsk") : tr("breakAsk", { avg: avg ? tr("avgBit", { n: avg.toFixed(1) }) : "" })}
       </p>
+      {career.premiumCamp ? <p className="mt-2 text-sm font-semibold text-accent">{tr("eco.premiumPick")}</p> : null}
       <div className="mt-4 grid gap-2">
         {ATTR_KEYS.map((key) => {
           const odds = trainOdds(career, key);
@@ -1293,6 +1329,7 @@ function StoryCard({ career, onChange }: { career: Career; onChange: (c: Career)
 
 function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange: (c: Career) => void; onMenu: () => void }) {
   const { tr, text } = useTx();
+  const admin = useContext(AdminContext);
   const pending = career.pending!;
   const [reveal, setReveal] = useState<number | null>(null);
   const report = composeReport(pending);
@@ -1322,6 +1359,13 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
     const option = moment?.options.find((item) => item.id === optionId);
     if (moment?.success && option && option.reward !== "stop") playGoal();
     setReveal(index);
+    const following = pending.moments[index + 1];
+    // Halftime slot: off behind HALFTIME_INTERSTITIAL until the owner approves it.
+    if (HALFTIME_INTERSTITIAL && !admin && !career.race && following && pending.moments[index].minute <= 45 && following.minute > 45 && !career.adState.halftimeShownFixtureIds.includes(pending.base.fixtureId) && canShowSeasonInterstitial(career)) {
+      const marked = { ...countInterstitial(next), adState: { ...countInterstitial(next).adState, halftimeShownFixtureIds: [...next.adState.halftimeShownFixtureIds, pending.base.fixtureId] } };
+      showInterstitial("keymatch-half", () => onChange(marked));
+      return;
+    }
     onChange(next);
   }
 
@@ -1381,6 +1425,9 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
                   report.events.find((event) => event.minute === focusMoment.minute && event.text.startsWith("@mo."))?.text ?? "",
                 )}
               </p>
+              {focusMoment.success === false && focus !== null && rewardAvailable(career, "retry-moment", todayKey(), pending.base.fixtureId) ? (
+                <RewardButton name="retry-moment" className="btn-ghost h-12 w-full text-sm" label={tr("eco.retry")} onReward={() => onChange(retryMoment(career, focus))} />
+              ) : null}
               <button
                 type="button"
                 className="btn-primary h-12 w-full"
@@ -1552,11 +1599,13 @@ function ReportScreen({
   report,
   onNext,
   onMenu,
+  extra,
 }: {
   career: Career;
   report: MatchReport;
   onNext: () => void;
   onMenu: () => void;
+  extra?: ReactNode;
 }) {
   const last = !nextFixture(career);
   const ups = ATTR_KEYS.filter((key) => report.deltas[key] > 0);
@@ -1588,6 +1637,7 @@ function ReportScreen({
         </p>
       ) : null}
       {report.injured ? <p className="mt-3 text-sm text-bad">{tr("creaked")}</p> : null}
+      {extra}
       <button type="button" className="btn-primary mt-5 h-13 w-full text-base" onClick={onNext}>
         {last ? tr("seasonReview") : tr("backRun")}
       </button>
@@ -1711,11 +1761,13 @@ function SummerScreen({
 
 function SeasonScreen({
   career,
+  onStore,
   onSummer,
   onMenu,
   claimRace,
 }: {
   career: Career;
+  onStore?: () => void;
   onSummer: () => void;
   onMenu: () => void;
   claimRace?: boolean;
@@ -1800,6 +1852,11 @@ function SeasonScreen({
         </p>
       ) : null}
 
+      {onStore && !career.race ? (
+        <button type="button" className="btn-ghost mt-4 h-12 w-full text-sm" onClick={onStore}>
+          {tr("eco.store")} · <span className="num text-trophy">{formatCoins(career.coins)}</span>
+        </button>
+      ) : null}
       <h2 className="mt-5 text-base font-semibold">{tr("seasonResults")}</h2>
       <p className="mt-1 text-xs leading-5 text-muted">{tr("keyBonusNote", { n: career.season.keyWins ?? 0 })}</p>
       <div className="results-list mt-3">
@@ -1889,12 +1946,14 @@ function OffersScreen({
   onRetire,
   onBoost,
   onMenu,
+  onChange,
 }: {
   career: Career;
   onAccept: (clubId: string) => void;
   onRetire: () => void;
   onBoost: (key: AttrKey) => void;
   onMenu: () => void;
+  onChange: (c: Career) => void;
 }) {
   const [ask, setAsk] = useState(false);
   const offers = career.pendingOffers ?? [];
@@ -1911,6 +1970,7 @@ function OffersScreen({
             : tr("whereCopy")}
       </p>
       {!career.race ? <SeasonBreak career={career} onBoost={onBoost} /> : null}
+      {!career.race ? <BigTrialCard career={career} onChange={onChange} /> : null}
       {!offers.some((offer) => offer.kind === "stay") ? <p className="mt-3 text-sm font-bold text-bad">{tr("noRenew")}</p> : null}
       <div className="mt-4 grid gap-3">
         {offers.map((offer) => {
@@ -2303,6 +2363,7 @@ function Retired({ career, legacyOn, onHome, onNew }: { career: Career; legacyOn
   const [gain, setGain] = useState<{ gained: number; total: number; double: boolean } | null>(null);
   useEffect(() => {
     if (!legacyOn) return;
+    if (!career.race) settleRetirement(career, COUNTRIES.map((item) => item.id).find((id) => !countryOpen(loadDevice(), id)) ?? null);
     const paid = payLegacy(career);
     setGain({ gained: paid.gained, total: paid.legacy.points, double: canDouble(career) });
   }, [career, legacyOn]);
@@ -2362,6 +2423,242 @@ function Retired({ career, legacyOn, onHome, onNew }: { career: Career; legacyOn
       <button type="button" className="btn-ghost mt-2 h-12 w-full" onClick={onHome}>
         {tr("menu")}
       </button>
+    </Shell>
+  );
+}
+
+
+// ---------- economy UI ----------
+
+/** Runs a rewarded clip with feedback: spinner while waiting, a message when none is available or it was closed early. */
+function RewardButton({ name, label, onReward, className }: { name: string; label: string; onReward: () => void; className: string }) {
+  const { tr } = useTx();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  return (
+    <div className="grid gap-1">
+      <button
+        type="button"
+        className={`${className} min-h-12`}
+        data-ad-slot="rewarded"
+        disabled={busy}
+        aria-busy={busy}
+        onClick={() => {
+          setBusy(true);
+          setNote(null);
+          showRewarded(
+            name,
+            () => {
+              setBusy(false);
+              onReward();
+            },
+            () => {
+              setBusy(false);
+              setNote(tr("adUnavailable"));
+            },
+            () => {
+              setBusy(false);
+              setNote(tr("adDismissed"));
+            },
+          );
+        }}
+      >
+        {busy ? <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent align-middle" aria-hidden="true" /> : null}
+        <span className={busy ? "ms-2" : ""}>{label}</span>
+      </button>
+      {note ? (
+        <p className="text-xs text-bad" role="status">
+          {note}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function CoinChip({ n }: { n: number }) {
+  const { tr } = useTx();
+  return (
+    <span className="chip chip-trophy num shrink-0" aria-label={tr("coinsN", { n: formatCoins(n) })}>
+      ● {formatCoins(n)}
+    </span>
+  );
+}
+
+function EconomyBar({ career, onChange, onStore }: { career: Career; onChange: (c: Career) => void; onStore: () => void }) {
+  const { tr } = useTx();
+  const today = todayKey();
+  const [chest, setChest] = useState(() => chestToday(today));
+  const legend = career.cosmetics.includes("cos-legend");
+  const open = (double: boolean) => {
+    if (!chest) return;
+    markChest(today);
+    setChest(null);
+    if (chest.kind === "coins") onChange({ ...career, coins: career.coins + chest.coins * (double ? 2 : 1) });
+    else onChange({ ...grantFreeCamp(career, career.adState.freeCampDate ?? ""), keyCampBonus: ECONOMY.keyCampBonus * (double ? 2 : 1) });
+  };
+  return (
+    <section className="card mb-3 grid gap-2 px-3 py-2.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <CoinChip n={career.coins} />
+        {legend ? <span className="chip chip-trophy">{tr("eco.legendTag")}</span> : null}
+        {career.keyCampBonus > 0 ? <span className="chip chip-good">{tr("eco.campActive", { n: career.keyCampBonus })}</span> : null}
+        <button type="button" className="btn-ghost ms-auto h-12 px-4 text-sm" onClick={onStore}>
+          {tr("eco.store")}
+        </button>
+      </div>
+      {chest ? (
+        <div className="grid gap-2 border-t border-line pt-2">
+          <p className="text-sm font-semibold">{chest.kind === "coins" ? tr("eco.chestCoins", { n: chest.coins }) : tr("eco.chestCamp")}</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" className="btn-primary h-12 text-sm" onClick={() => open(false)}>
+              {tr("eco.chestOpen")}
+            </button>
+            <RewardButton name="daily-chest" className="btn-ghost h-12 w-full text-sm" label={tr("eco.chestDouble")} onReward={() => open(true)} />
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function DoubleCoins({ career, onChange }: { career: Career; onChange: (c: Career) => void }) {
+  const { tr } = useTx();
+  const earned = career.coinsEarnedLast ?? 0;
+  if (career.race || !earned) return null;
+  const available = rewardAvailable(career, "double-coins", todayKey());
+  return (
+    <div className="mt-4 grid gap-2">
+      <p className="text-sm">
+        {tr("eco.earned", { n: formatCoins(earned) })} · <CoinChip n={career.coins} />
+      </p>
+      {available ? (
+        <RewardButton name="double-coins" className="btn-ghost h-12 w-full text-sm" label={tr("eco.double", { n: formatCoins(earned) })} onReward={() => onChange(grantDoubleCoins(career))} />
+      ) : career.coinsFixtureId && career.adState.doubledFixtureIds.includes(career.coinsFixtureId) ? (
+        <p className="text-xs text-good">{tr("eco.doubled")}</p>
+      ) : (
+        <p className="text-xs text-muted">{tr("eco.doubleCap", { n: ECONOMY.caps.doubleCoinsPerSeason })}</p>
+      )}
+    </div>
+  );
+}
+
+function BigTrialCard({ career, onChange }: { career: Career; onChange: (c: Career) => void }) {
+  const { tr } = useTx();
+  const trial = career.bigTrial;
+  if (!trial || trial.year !== career.year) return null;
+  const club = getClub(trial.clubId);
+  return (
+    <section className="card mt-4 grid gap-2 px-4 py-3.5">
+      <p className="text-xs font-semibold text-accent-2">{tr("eco.trialTitle")}</p>
+      <div className="flex items-center gap-2.5">
+        <Crest clubId={club.id} name={club.name} className="h-10 w-10 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-bold">{club.name}</p>
+          <p className="text-xs text-muted">{getLeague(club.leagueId).name}</p>
+        </div>
+        <span className="num text-lg font-bold">{trial.chance}%</span>
+      </div>
+      {trial.result === "open" ? (
+        <div className="grid gap-2">
+          {!trial.boosted && trial.chance < ECONOMY.bigTrial.boostCap ? (
+            <RewardButton name="trial-boost" className="btn-ghost h-12 w-full text-sm" label={tr("eco.trialBoost", { n: Math.min(ECONOMY.bigTrial.boostCap, trial.chance * 2) })} onReward={() => onChange(boostBigTrial(career))} />
+          ) : null}
+          <button type="button" className="btn-primary h-12 w-full" onClick={() => onChange(attemptBigTrial(career))}>
+            {tr("eco.trialGo")}
+          </button>
+        </div>
+      ) : (
+        <p className={`text-sm font-semibold ${trial.result === "won" ? "text-good" : "text-bad"}`}>{trial.result === "won" ? tr("eco.trialWon") : tr("eco.trialLost")}</p>
+      )}
+    </section>
+  );
+}
+
+function StoreScreen({ career, onChange, onBack }: { career: Career; onChange: (c: Career) => void; onBack: () => void }) {
+  const { tr } = useTx();
+  const admin = useContext(AdminContext);
+  const today = todayKey();
+  const [device, setDevice] = useState(() => loadDevice());
+  const [attrFor, setAttrFor] = useState<StoreItemId | null>(null);
+  const [discountPick, setDiscountPick] = useState(false);
+  const nextLocked = COUNTRIES.find((item) => !countryOpen(device, item.id, admin));
+  const reasonText: Record<string, string> = { coins: tr("eco.short"), owned: tr("eco.owned"), full: tr("eco.full"), notNeeded: tr("eco.notNeeded"), daily: tr("eco.short") };
+  const purchase = (id: StoreItemId, attr?: AttrKey) => {
+    const next = buy(career, id, today, { attr, admin });
+    if (next === career) return;
+    if (id === "unlock-country" && nextLocked) setDevice(unlockCountry(nextLocked.id));
+    onChange(next);
+    setAttrFor(null);
+  };
+  return (
+    <Shell>
+      <ScreenHeader title={tr("eco.store")} sub={admin ? tr("eco.adminFree") : tr("eco.storeSub")} onBack={onBack} right={<CoinChip n={career.coins} />} />
+      {rewardAvailable(career, "free-camp", today) ? (
+        <RewardButton name="free-camp" className="btn-ghost h-12 w-full text-sm" label={tr("eco.freeCamp", { n: ECONOMY.keyCampBonus })} onReward={() => onChange(grantFreeCamp(career, today))} />
+      ) : null}
+      {rewardAvailable(career, "store-discount", today) ? (
+        discountPick ? (
+          <p className="mt-2 text-sm text-accent">{tr("eco.discountPick", { n: Math.round(ECONOMY.discount * 100) })}</p>
+        ) : (
+          <div className="mt-2">
+            <RewardButton name="store-discount" className="btn-ghost h-12 w-full text-sm" label={tr("eco.discount", { n: Math.round(ECONOMY.discount * 100) })} onReward={() => setDiscountPick(true)} />
+          </div>
+        )
+      ) : null}
+      <div className="mt-4 grid gap-2">
+        {CATALOG.map((item) => {
+          if (item.id === "unlock-country" && !nextLocked) return null;
+          const price = itemPrice(career, item.id, today, admin);
+          const check = item.id === "unlock-country" ? (career.coins >= price ? "ok" : "coins") : canBuy(career, item.id, today, admin);
+          const label = item.id === "unlock-country" && nextLocked ? tr("eco.item.unlock-country", { country: tr(`country.${nextLocked.id}`) }) : tr(`eco.item.${item.id}`);
+          return (
+            <div key={item.id} className="rounded-md border border-line bg-surface px-3 py-2.5">
+              <div className="flex items-center gap-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold">{label}</span>
+                  <span className="block text-xs text-muted">{tr(`eco.desc.${item.id}`)}</span>
+                </span>
+                {discountPick ? (
+                  <button
+                    type="button"
+                    className="btn-ghost h-12 shrink-0 px-3 text-sm"
+                    onClick={() => {
+                      onChange(grantDiscount(career, today, item.id));
+                      setDiscountPick(false);
+                    }}
+                  >
+                    -{Math.round(ECONOMY.discount * 100)}%
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-primary h-12 min-w-20 shrink-0 px-3 text-sm"
+                    disabled={check !== "ok"}
+                    onClick={() => (item.needsAttr ? setAttrFor(attrFor === item.id ? null : item.id) : purchase(item.id))}
+                  >
+                    <span className="num">{price === item.price ? formatCoins(price) : `${formatCoins(price)} ✓`}</span>
+                  </button>
+                )}
+              </div>
+              {check !== "ok" && !discountPick ? <p className="mt-1 text-xs text-muted">{reasonText[check] ?? ""}</p> : null}
+              {attrFor === item.id ? (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {ATTR_KEYS.map((key) => (
+                    <button key={key} type="button" className="btn-ghost h-12 text-sm" onClick={() => purchase(item.id, key)}>
+                      {tr(`attr.${key}`)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      {career.gear.length ? (
+        <p className="mt-3 text-xs text-muted">
+          {tr("eco.gearOn")} {career.gear.map((item) => `${tr(`attr.${item.key}`)} +${item.amount}`).join(" · ")}
+        </p>
+      ) : null}
     </Shell>
   );
 }

@@ -7,10 +7,13 @@
  * VITE_ADSENSE_TEST=on loads Google's test ads.
  *
  * House rules (also stated on the privacy page):
- * - never during a match;
- * - no interstitial in a player's first session;
- * - at most one interstitial every three minutes;
- * - rewarded clips are always the player's choice.
+ * - interstitials only between seasons (a key-match halftime slot exists but is
+ *   off behind HALFTIME_INTERSTITIAL in economy.ts until the owner approves it);
+ * - at most 2 interstitials per season, counted in the save;
+ * - no interstitial in a player's first session or in the daily race;
+ * - at least three minutes between interstitials, and none within 120s of a rewarded clip;
+ * - rewarded clips are always the player's choice; no banners anywhere.
+ * - suppressed (admin, or remove-ads owners): no interstitial, rewards granted without a clip.
  */
 
 type AdBreakPlacement = {
@@ -35,7 +38,21 @@ const TEST = (import.meta.env.VITE_ADSENSE_TEST as string | undefined) === "on";
 const GAP_MS = 3 * 60 * 1000;
 const SESSIONS_KEY = "star-sessions";
 
+const REWARD_COOLDOWN_MS = 120 * 1000;
+const REWARD_TIMEOUT_MS = 8000;
+
 let ready = false;
+let lastRewardedAt = 0;
+let suppressed = false;
+
+/** Admin play and remove-ads owners: no ads are requested at all, so nothing counts in ad stats. */
+export function setAdsSuppressed(value: boolean) {
+  suppressed = value;
+}
+
+export function adsSuppressed() {
+  return suppressed;
+}
 let lastInterstitial = 0;
 let firstSession = true;
 
@@ -70,15 +87,16 @@ export function initAds() {
   w.adConfig?.({ preloadAdBreaks: "on", sound: "on" });
 }
 
-/** A full-screen ad at a natural break. Calls `done` whether or not an ad showed. */
-export function showInterstitial(name: string, done: () => void) {
+/** A full-screen ad at a natural break. Calls `done` whether or not an ad showed; `shown` only when one was requested. */
+export function showInterstitial(name: string, done: () => void, shown?: () => void) {
   const w = typeof window === "undefined" ? null : (window as AdWindow);
   const now = Date.now();
-  if (!w?.adBreak || !CLIENT || firstSession || now - lastInterstitial < GAP_MS) {
+  if (suppressed || !w?.adBreak || !CLIENT || firstSession || now - lastInterstitial < GAP_MS || now - lastRewardedAt < REWARD_COOLDOWN_MS) {
     done();
     return;
   }
   lastInterstitial = now;
+  shown?.();
   let finished = false;
   const finish = () => {
     if (finished) return;
@@ -92,16 +110,27 @@ export function showInterstitial(name: string, done: () => void) {
 
 /**
  * A rewarded clip the player chose. `onReward` runs only when the clip was
- * watched; with ads off it runs at once. `onUnavailable` runs when no clip
- * could be shown, so the button can say so.
+ * watched; with ads off or suppressed it runs at once. `onUnavailable` runs when
+ * no clip could be shown (also after 8s with no answer), `onDismissed` when the
+ * player closed it early. Neither consumes a cap: the caller only counts on reward.
  */
-export function showRewarded(name: string, onReward: () => void, onUnavailable?: () => void) {
+export function showRewarded(name: string, onReward: () => void, onUnavailable?: () => void, onDismissed?: () => void) {
   const w = typeof window === "undefined" ? null : (window as AdWindow);
-  if (!CLIENT || !w?.adBreak) {
+  if (suppressed || !CLIENT || !w?.adBreak) {
     onReward();
     return;
   }
+  let settled = false;
   let offered = false;
+  const settle = (fn?: () => void) => {
+    if (settled) return;
+    settled = true;
+    window.clearTimeout(timer);
+    fn?.();
+  };
+  const timer = window.setTimeout(() => {
+    if (!offered) settle(onUnavailable);
+  }, REWARD_TIMEOUT_MS);
   w.adBreak({
     type: "reward",
     name,
@@ -109,10 +138,14 @@ export function showRewarded(name: string, onReward: () => void, onUnavailable?:
       offered = true;
       showAdFn();
     },
-    adViewed: onReward,
-    adDismissed: () => undefined,
-    adBreakDone: () => {
-      if (!offered) onUnavailable?.();
+    adViewed: () => {
+      lastRewardedAt = Date.now();
+      settle(onReward);
     },
+    adDismissed: () => {
+      lastRewardedAt = Date.now();
+      settle(onDismissed);
+    },
+    adBreakDone: () => settle(offered ? onDismissed : onUnavailable),
   });
 }

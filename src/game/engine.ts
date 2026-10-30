@@ -1,3 +1,4 @@
+import { EARN, ECONOMY, earnForReport, freshAdState } from "./economy";
 import {
   ATTR_LABEL,
   BIAS,
@@ -44,6 +45,7 @@ import {
   type PendingMatch,
   type PositionId,
   type SeasonState,
+  type BigTrial,
   type MomentReward,
   type Role,
   type RoundId,
@@ -383,10 +385,19 @@ function sampleScore(attack: number, defense: number, home: boolean, rng: () => 
   return [poisson(lambdaUs, rng), poisson(lambdaThem, rng)] as const;
 }
 
+/** Attributes as they play: saved attrs plus season gear, never above the stat cap. */
+export function effectiveAttrs(career: Career): Attrs {
+  const attrs = { ...career.player.attrs };
+  for (const item of career.gear ?? []) {
+    attrs[item.key] = Math.max(attrs[item.key], Math.min(attrs[item.key] + item.amount, statCap(career.player.position, career.player.potential, item.key)));
+  }
+  return attrs;
+}
+
 export function sideStrength(career: Career, playing: boolean) {
   const base = clubStrength(career.clubId);
   if (!playing) return base - 1.5;
-  const ovr = overall(career.player.position, career.player.attrs);
+  const ovr = overall(career.player.position, effectiveAttrs(career));
   const lift = clamp((ovr - base) * 0.3, -6, 12);
   const fit = career.player.fitness < 55 ? -3 : 0;
   const form = (career.player.form - 62) / 28;
@@ -575,7 +586,7 @@ function roundLabel(round: RoundId, cupName: string, _europeName: string | null,
   return `@round.nat|${national}`;
 }
 
-function isTopLeague(leagueId: string) {
+export function isTopLeague(leagueId: string) {
   const league = getLeague(leagueId);
   const ladder = leaguesIn(league.countryId);
   return ladder[ladder.length - 1]?.id === league.id;
@@ -816,6 +827,14 @@ export function createCareer(name: string, position: PositionId, countryId: stri
     race: null,
     retired: false,
     news: [],
+    coins: 0,
+    gear: [],
+    agentHired: false,
+    trialCall: false,
+    keyCampBonus: 0,
+    premiumCamp: false,
+    cosmetics: [],
+    adState: freshAdState(2026),
   };
   const seasonRng = makeRng(draft.rng);
   draft.season = freshSeason(draft, () => seasonRng.next());
@@ -996,6 +1015,12 @@ export function applyReport(career: Career, report: MatchReport, rng: () => numb
     .join(" · ");
   const scoreBit = `${report.us}–${report.them} vs ${report.opponentName}`;
   next.news = pushNews(next.news, report.missed ? `${report.headline}` : `${scoreBit}. Rating ${report.rating.toFixed(1)}${deltaText ? ` · ${deltaText}` : ""}`);
+  if (!next.race) {
+    const earned = earnForReport(report, false);
+    next.coins = (next.coins ?? 0) + earned;
+    next.coinsEarnedLast = earned;
+    next.coinsFixtureId = report.fixtureId;
+  }
   next.activeReport = report;
   next.screen = screen;
   if (report.competition === "national" && !report.missed && report.rating >= 7) {
@@ -1150,10 +1175,11 @@ const KEEPER_POOL = ["gkdive", "gkstand", "gkcomeoff"];
 
 /** Odds for each choice; `gain` is how much training since the last key match added. */
 function momentOptions(career: Career, situation: string, opponent: number): MomentOption[] {
-  const a = career.player.attrs;
+  const a = effectiveAttrs(career);
   const gains = career.keyGain ?? {};
+  const camp = career.keyCampBonus ?? 0;
   return SITUATIONS[situation].options.map(([id, attr, bias, reward]) => {
-    const odds = momentOdds(a[attr], opponent, bias);
+    const odds = clamp(momentOdds(a[attr], opponent, bias) + camp, 8, 92);
     const gain = odds - momentOdds(a[attr] - (gains[attr] ?? 0), opponent, bias);
     return gain > 0 ? { id, attr, odds, reward, gain } : { id, attr, odds, reward };
   });
@@ -1218,7 +1244,7 @@ function openBigMatch(career: Career, fixture: Fixture, roll: () => number, rng:
   const moments = buildMoments(career, fixture, roll);
   const seed = Math.floor(roll() * 2147483647) || 1;
   const pending: PendingMatch = { base, moments, seed, rngState: rng.state() };
-  return { ...career, pending, screen: "bigmatch", recentDeltas: null, lastTrain: null, keyGain: null };
+  return { ...career, pending, screen: "bigmatch", recentDeltas: null, lastTrain: null, keyGain: null, keyCampBonus: 0 };
 }
 
 /** Plays one moment. Deterministic for a given career, moment and choice, so the daily race stays fair. */
@@ -1231,6 +1257,26 @@ export function resolveMoment(career: Career, index: number, optionId: string): 
   const roll = makeRng(hashString(`${pending.seed}|${index}|${optionId}`)).next();
   const moments = pending.moments.map((item, at) => (at === index ? { ...item, picked: optionId, success: roll * 100 < option.odds } : item));
   return { ...career, pending: { ...pending, moments } };
+}
+
+/** Rewarded retry of a failed key-match moment: a fresh roll with the same odds, advancing the match rng. */
+export function retryMoment(career: Career, index: number): Career {
+  const pending = career.pending;
+  const moment = pending?.moments[index];
+  if (!pending || !moment || moment.success !== false || !moment.picked) return career;
+  const fixtureId = pending.base.fixtureId;
+  const ad = career.adState;
+  if (ad.retriedFixtureIds.includes(fixtureId) || ad.retryMomentThisSeason >= ECONOMY.caps.retryPerSeason) return career;
+  const option = moment.options.find((item) => item.id === moment.picked);
+  if (!option) return career;
+  const rng = makeRng(pending.rngState);
+  const success = rng.next() * 100 < option.odds;
+  const moments = pending.moments.map((item, at) => (at === index ? { ...item, success } : item));
+  return {
+    ...career,
+    pending: { ...pending, moments, rngState: rng.state() },
+    adState: { ...ad, retryMomentThisSeason: ad.retryMomentThisSeason + 1, retriedFixtureIds: [...ad.retriedFixtureIds, fixtureId] },
+  };
 }
 
 const FINAL_WHISTLE = /^@ev\.ft/;
@@ -1332,6 +1378,11 @@ export function finishBigMatch(career: Career): Career {
   const roll = () => rng.next();
   const applied = applyReport({ ...career, pending: null }, report, roll, "report");
   // Key matches weigh double in the table and lift the cup run.
+  if (!applied.race) {
+    const earned = earnForReport(report, true, pending.moments);
+    applied.coins = applied.coins - (applied.coinsEarnedLast ?? 0) + earned;
+    applied.coinsEarnedLast = earned;
+  }
   const log = applied.season.fixturesPlayed[applied.season.fixturesPlayed.length - 1];
   if (log) applied.season.fixturesPlayed[applied.season.fixturesPlayed.length - 1] = { ...log, key: true };
   if (report.competition === "league") {
@@ -1435,6 +1486,8 @@ function applyTrain(career: Career, key: AttrKey, which: "camp" | "break"): Care
     keyGain: real > 0 ? { ...career.keyGain, [key]: (career.keyGain?.[key] ?? 0) + real } : career.keyGain,
     screen: "run",
     news: pushNews(career.news, note),
+    // Premium camp: a second pick before play resumes.
+    ...(career.premiumCamp ? { premiumCamp: false, screen: which === "camp" ? ("camp" as const) : ("break" as const) } : {}),
   };
 }
 
@@ -1771,12 +1824,27 @@ export function buildOffers(career: Career, ovr: number, tablePos: number): Offe
   for (const offer of offers) {
     if (!unique.some((item) => item.clubId === offer.clubId)) unique.push(offer);
   }
+  if (career.trialCall && age < 36) {
+    // Trial abroad: one offer from a league in another country at a similar level.
+    const abroad = LEAGUES.filter((item) => item.countryId !== league.countryId && Math.abs(item.tier - league.tier) <= 1).sort((x, y) => y.tier - x.tier)[0];
+    if (abroad) {
+      const dest = clubBySalt(career, abroad.id, `${salt}|trial`, "mid");
+      if (!unique.some((item) => item.clubId === dest.id)) unique.push({ ...offerFor(career, dest, ovr, age, "side", years), note: "@note.trial" });
+    }
+  }
+  if (career.agentHired && age < 36) {
+    const kind: Offer["kind"] = career.reputation >= 55 && up ? "up" : "side";
+    const pool = kind === "up" && up ? up.id : league.id;
+    const dest = clubBySalt(career, pool, `${salt}|agent`, kind === "up" ? "mid" : "top");
+    if (dest.id !== club.id && !unique.some((item) => item.clubId === dest.id)) unique.push({ ...offerFor(career, dest, ovr, age, kind, years), note: "@note.agent" });
+  }
   const hit = career.growthPreview?.targetHit;
   for (const offer of unique) {
+    if (career.agentHired) offer.wage = Math.round(offer.wage * 1.1);
     if (hit === true) offer.wage = Math.round(offer.wage * 1.12);
     if (hit === false) offer.wage = Math.round(offer.wage * 0.9);
   }
-  return unique.slice(0, 5);
+  return unique.slice(0, career.agentHired || career.trialCall ? 7 : 5);
 }
 
 export function commitSeason(career: Career): Career {
@@ -1828,6 +1896,23 @@ export function commitSeason(career: Career): Career {
     news: pushNews(career.news, preview.targetHit ? "The board is pleased with the season." : "The board wanted a higher finish."),
   };
   aged.pendingOffers = buildOffers(aged, ovr, preview.tablePos);
+  if (!aged.race) {
+    let earned = preview.targetHit ? EARN.targetHit : 0;
+    for (const award of preview.awards) {
+      if (award.id.startsWith("league-")) earned += EARN.trophy.league;
+      else if (award.id.startsWith("cup-")) earned += EARN.trophy.cup;
+      else if (award.id.startsWith("eu-")) earned += EARN.trophy.europe;
+      else if (award.id.startsWith("ballon-")) earned += EARN.ballon;
+      else earned += EARN.award;
+    }
+    aged.coins = (aged.coins ?? 0) + earned;
+  }
+  aged.bigTrial = aged.race ? null : makeBigTrial(aged, ovr);
+  // Season items end here; the agent and the trial call were used by buildOffers.
+  aged.gear = [];
+  aged.agentHired = false;
+  aged.trialCall = false;
+  aged.adState = freshAdState(aged.year + 1);
   const tooOld = aged.player.age > farewellAge(aged.player.position);
   const released = !tooOld && aged.pendingOffers.length === 0;
   if (tooOld || released) {
@@ -1845,6 +1930,37 @@ export function commitSeason(career: Career): Career {
 
 function euroSpotFor(career: Career, clubId: string) {
   return europeTicket(career, clubId);
+}
+
+function makeBigTrial(career: Career, ovr: number): BigTrial | null {
+  if (career.player.age >= 34) return null;
+  const home = getLeague(leagueOf(career, career.clubId));
+  const top = LEAGUES.filter((item) => item.countryId === home.countryId).sort((a, b) => b.tier - a.tier)[0] ?? home;
+  const clubs = divisionClubs(career, top.id).filter((club) => club.id !== career.clubId);
+  if (!clubs.length) return null;
+  const club = clubs[hashString(`${career.player.name}|${career.year}|bigtrial`) % Math.min(4, clubs.length)];
+  const { min, max } = ECONOMY.bigTrial;
+  const chance = clamp(Math.round(20 + (ovr - clubStrength(club.id)) * 2.5), min, max);
+  return { year: career.year, clubId: club.id, chance, boosted: false, result: "open" };
+}
+
+/** Rewarded: doubles the big-club signing chance, once per window, capped. */
+export function boostBigTrial(career: Career): Career {
+  const trial = career.bigTrial;
+  if (!trial || trial.boosted || trial.result !== "open") return career;
+  return { ...career, bigTrial: { ...trial, boosted: true, chance: Math.min(ECONOMY.bigTrial.boostCap, trial.chance * 2) } };
+}
+
+/** The trial itself: a deterministic roll; a win adds the big club's offer. */
+export function attemptBigTrial(career: Career): Career {
+  const trial = career.bigTrial;
+  if (!trial || trial.result !== "open" || !career.pendingOffers) return career;
+  const roll = makeRng(hashString(`${career.player.name}|${trial.year}|${trial.clubId}|try`) || 1).next() * 100;
+  if (roll >= trial.chance) return { ...career, bigTrial: { ...trial, result: "lost" } };
+  const club = getClub(trial.clubId);
+  const ovr = overall(career.player.position, career.player.attrs);
+  const offer = { ...offerFor(career, club, ovr, career.player.age, "up", moveEvery(career.difficulty)), note: "@note.bigTrial" };
+  return { ...career, bigTrial: { ...trial, result: "won" }, pendingOffers: [offer, ...career.pendingOffers.filter((item) => item.clubId !== club.id)] };
 }
 
 export function acceptOffer(career: Career, clubId: string): Career {
@@ -1967,9 +2083,11 @@ export function playSummer(career: Career): Career {
     if (rival) fixtures.push(intlFixture(`t3-${career.year}`, `@summer.final|${tag}`, `@country.${rival.id}`, 84, true, rival.id));
   }
   let trophies = career.trophies;
+  let coins = career.coins ?? 0;
   let news = pushNews(career.news, `${fx.roundLabel}: ${report.us}–${report.them} vs ${report.opponentName}. ${report.rating.toFixed(1)}.`);
   if (won && fx.id.startsWith("t3")) {
     trophies = [...trophies, { id: `${career.summer.kind}-${career.year}`, name: `@${tag}`, year: career.year, detail: `@country.${nation.id}` }];
+    coins += EARN.trophy.national;
     news = pushNews(news, `${tag} winners.`);
   }
   const cursor = career.summer.cursor + 1;
@@ -1977,6 +2095,7 @@ export function playSummer(career: Career): Career {
     ...career,
     rng: rng.state(),
     trophies,
+    coins,
     summer: {
       ...career.summer,
       fixtures,
@@ -2102,6 +2221,14 @@ export function createDailyCareer(name: string, date = todayKey()): Career {
     race: date,
     retired: false,
     news: [],
+    coins: 0,
+    gear: [],
+    agentHired: false,
+    trialCall: false,
+    keyCampBonus: 0,
+    premiumCamp: false,
+    cosmetics: [],
+    adState: freshAdState(2026),
   };
   draft.europeComp = europeTicket(draft, club.id);
   const seasonRng = makeRng(draft.rng);

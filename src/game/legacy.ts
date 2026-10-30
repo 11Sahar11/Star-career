@@ -1,4 +1,5 @@
-import { overall, statCap } from "./engine";
+import { isTopLeague, overall, statCap } from "./engine";
+import { ECONOMY, OPEN_COUNTRIES } from "./economy";
 import { ATTR_KEYS, type Career } from "./types";
 
 // Legacy carries value from one finished career into the next.
@@ -135,4 +136,98 @@ export function adminUnlockAll(): Legacy {
   const next = { ...legacy, perks: PERKS.map((perk) => perk.id) };
   saveLegacy(next);
   return next;
+}
+
+// ---------- device-level economy state (not per career) ----------
+
+
+export type DeviceEconomy = {
+  unlockedCountries: string[];
+  dailyLoginDate: string | null;
+  dailyRetryDate: string | null;
+  removeAds: { owned: boolean; checkedAt: number; purchaseToken?: string };
+  /** Coins carried from the last retired career into the next one. */
+  coinBonus: number;
+  careersFinished: number;
+  settled: string[];
+};
+
+const DEVICE_KEY = "star-economy-v1";
+
+export function loadDevice(): DeviceEconomy {
+  const empty: DeviceEconomy = { unlockedCountries: [], dailyLoginDate: null, dailyRetryDate: null, removeAds: { owned: false, checkedAt: 0 }, coinBonus: 0, careersFinished: 0, settled: [] };
+  try {
+    const raw = localStorage.getItem(DEVICE_KEY);
+    if (!raw) return empty;
+    const data = JSON.parse(raw) as Partial<DeviceEconomy>;
+    return {
+      unlockedCountries: Array.isArray(data.unlockedCountries) ? data.unlockedCountries.filter((id) => typeof id === "string") : [],
+      dailyLoginDate: typeof data.dailyLoginDate === "string" ? data.dailyLoginDate : null,
+      dailyRetryDate: typeof data.dailyRetryDate === "string" ? data.dailyRetryDate : null,
+      removeAds: data.removeAds && typeof data.removeAds.owned === "boolean" ? data.removeAds : empty.removeAds,
+      coinBonus: typeof data.coinBonus === "number" ? Math.max(0, Math.min(ECONOMY.legacyMax, data.coinBonus)) : 0,
+      careersFinished: typeof data.careersFinished === "number" ? data.careersFinished : 0,
+      settled: Array.isArray(data.settled) ? data.settled : [],
+    };
+  } catch {
+    return empty;
+  }
+}
+
+export function saveDevice(device: DeviceEconomy) {
+  try {
+    localStorage.setItem(DEVICE_KEY, JSON.stringify(device));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function countryOpen(device: DeviceEconomy, countryId: string, admin = false) {
+  return admin || OPEN_COUNTRIES.includes(countryId) || device.unlockedCountries.includes(countryId);
+}
+
+export function unlockCountry(countryId: string): DeviceEconomy {
+  const device = loadDevice();
+  if (device.unlockedCountries.includes(countryId)) return device;
+  const next = { ...device, unlockedCountries: [...device.unlockedCountries, countryId] };
+  saveDevice(next);
+  return next;
+}
+
+/** Retirement: 10% of the coins (max 300) start the next career; a top-league trophy or the 3rd career opens a country free. */
+export function settleRetirement(career: Career, nextLocked: string | null): DeviceEconomy {
+  const device = loadDevice();
+  const key = careerKey(career);
+  if (device.settled.includes(key)) return device;
+  const bonus = Math.min(ECONOMY.legacyMax, Math.floor((career.coins ?? 0) * ECONOMY.legacyShare));
+  const finished = device.careersFinished + 1;
+  const topTrophy = career.trophies.some((item) => item.id.startsWith("league-") && career.history.some((row) => row.year === item.year && isTopLeague(row.leagueId)));
+  const unlocked = [...device.unlockedCountries];
+  if (nextLocked && (topTrophy || finished >= 3) && !unlocked.includes(nextLocked)) unlocked.push(nextLocked);
+  const next = { ...device, coinBonus: bonus, careersFinished: finished, unlockedCountries: unlocked, settled: [...device.settled, key].slice(-50) };
+  saveDevice(next);
+  return next;
+}
+
+export type ChestReward = { kind: "coins"; coins: number } | { kind: "camp" };
+
+/** Today's chest, or null once opened. Every few days it holds a key camp instead of coins. */
+export function chestToday(today: string): ChestReward | null {
+  const device = loadDevice();
+  if (device.dailyLoginDate === today) return null;
+  let hash = 0;
+  for (const ch of today) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return hash % ECONOMY.chest.campEvery === 0 ? { kind: "camp" } : { kind: "coins", coins: ECONOMY.chest.coins };
+}
+
+/** Marks today's chest opened (device-wide, once a day). */
+export function markChest(today: string) {
+  saveDevice({ ...loadDevice(), dailyLoginDate: today });
+}
+
+export function takeCoinBonus(): number {
+  const device = loadDevice();
+  if (!device.coinBonus) return 0;
+  saveDevice({ ...device, coinBonus: 0 });
+  return device.coinBonus;
 }
