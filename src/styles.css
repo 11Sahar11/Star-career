@@ -67,20 +67,23 @@
   --color-tier-silver: #cfd5dc;
   --color-tier-gold: #f5c542;
 
+  /* stat ramp: grey weak, white average, lime good, green high, cyan elite; never coin gold */
   --color-band-low: #8f8f99;
-  --color-band-mid: #f5c542;
+  --color-band-mid: #e4e4e7;
   --color-band-good: #b9e46a;
   --color-band-high: #36d27b;
   --color-band-elite: #4fd6e8;
 }
 
 :root {
-  /* default field before a career exists: STAR orange */
+  /* default field before a career exists: STAR orange with a white stripe */
   --club: #ff5a1f;
-  --club-2: #0e0e10;
+  --club-2: #ffffff;
   --club-ink: #0e0e10;
   --club-text: #ff6a2b;
-  --cut: 26px;
+  /* The signature 8° cut: tan(8°) × the band's own width. Bands are query containers,
+     so cqw resolves against the band and the angle holds at every width. */
+  --cut: 14.054cqw;
 }
 
 @layer base {
@@ -249,42 +252,67 @@
 
   /* ---------- the signing: club-colour hero band ---------- */
 
-  /* Outer layer paints the secondary stripe along the cut; inner layer is the field. */
+  /* The band is the query container; the stripe and the field are both cut against its width.
+     The field is 6px shorter than the band, so the stripe shows as a 6px edge along the cut.
+     The cut falls toward the end side: the start side, where the name sits, keeps its depth. */
   .hero {
     position: relative;
+    container-type: inline-size;
     margin: -1rem -1rem 0;
-    background: var(--club-2);
-    clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--cut)), 0 100%);
     padding-bottom: 6px;
   }
-  [dir="rtl"] .hero {
-    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 calc(100% - var(--cut)));
+  .hero-stripe {
+    position: absolute;
+    inset: 0;
+    background: var(--club-2);
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--cut)), 0 100%);
   }
   .hero-field {
     position: relative;
     overflow: hidden;
+    display: flex;
+    min-height: 20rem;
     background: var(--club);
     color: var(--club-ink);
-    clip-path: inherit;
-    padding: 1.1rem 1rem calc(var(--cut) + 1rem);
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--cut)), 0 100%);
+    padding: 1rem 1rem calc(var(--cut) * 0.45 + 1.1rem);
   }
+  [dir="rtl"] .hero-stripe,
+  [dir="rtl"] .hero-field {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 calc(100% - var(--cut)));
+  }
+  .hero-intro {
+    min-height: 16rem;
+    padding-bottom: calc(var(--cut) + 1rem);
+  }
+  /* The shirt number stands behind the player on the end side, outlined in the club's ink,
+     offset toward the name so its shape reads past his shoulder. */
   .hero-number {
     position: absolute;
-    inset-block-start: -0.5rem;
-    inset-inline-end: -0.25rem;
+    inset-block-start: 0.4rem;
+    inset-inline-end: 21cqw;
     font-family: var(--font-display);
-    font-size: 15rem;
-    line-height: 0.85;
+    font-size: 17rem;
+    line-height: 0.82;
     color: transparent;
-    -webkit-text-stroke: 2px color-mix(in oklab, var(--club-ink) 22%, transparent);
+    -webkit-text-stroke: 2px color-mix(in oklab, var(--club-ink) 40%, transparent);
     pointer-events: none;
     user-select: none;
-    direction: ltr;
   }
-  .hero-kicker {
-    font-size: 0.8rem;
-    font-weight: 600;
-    opacity: 0.8;
+  .hero-number[data-digits="2"] {
+    inset-inline-end: 4cqw;
+  }
+  /* The intro band has no player: its "16" stands free on the end side. */
+  .hero-intro .hero-number {
+    inset-inline-end: 3cqw;
+  }
+  .hero-copy {
+    position: relative;
+    display: flex;
+    max-width: 60%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.55rem;
   }
   .hero-name {
     font-family: var(--font-display);
@@ -295,9 +323,21 @@
     letter-spacing: 0.005em;
     overflow-wrap: anywhere;
   }
+  /* Club, league, then the player line: secondary text is the ink, never grey. */
   .hero-meta {
+    display: grid;
+    gap: 0.1rem;
     font-size: 0.875rem;
-    font-weight: 600;
+    font-weight: 500;
+    line-height: 1.3;
+    text-wrap: balance;
+  }
+  .hero-club {
+    display: block;
+    font-weight: 800;
+  }
+  .hero-meta > :not(.hero-club) {
+    opacity: 0.86;
   }
   .hero-ovr {
     display: inline-flex;
@@ -317,42 +357,17 @@
     line-height: 0.95;
   }
   .hero-ovr span {
-    font-size: 0.65rem;
+    font-size: 0.6875rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     color: var(--color-muted);
   }
-  .hero-figure {
-    position: absolute;
-    inset-block-end: calc(var(--cut) * 0.5);
-    inset-inline-end: 0.25rem;
-    width: 42%;
-    max-width: 170px;
-    pointer-events: none;
-  }
-  .hero-figure .player-figure {
-    max-width: none;
-    margin: 0;
-    background: none;
-  }
-  .hero-figure .character-canvas {
-    max-height: 250px;
-  }
-  .hero-compact .hero-field {
-    padding-block: 0.85rem calc(var(--cut) + 0.6rem);
-  }
-  .hero-compact .hero-name {
-    font-size: clamp(2rem, 10vw, 2.6rem);
-  }
-  .hero-compact .hero-number {
-    font-size: 9.5rem;
-  }
-
-  /* a small club swatch: crest-coloured block with its stripe */
-  .club-band {
-    display: block;
-    height: 6px;
-    background: linear-gradient(90deg, var(--band-a, var(--club)) 0 70%, var(--band-b, var(--club-2)) 70% 100%);
+  /* Season strip under the hero: matchday, board target, league place, and the run of the season. */
+  .season-strip {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding-inline: 0.25rem;
   }
 
   /* ---------- surfaces ---------- */
@@ -420,6 +435,34 @@
     color: var(--color-muted);
   }
 
+  /* Home menu: a hairline ledger in condensed caps, icons bare, no tiles. */
+  .ledger {
+    background: transparent;
+    border-width: 1px 0;
+    border-radius: 0;
+  }
+  .ledger .list-row {
+    min-height: 3.75rem;
+    padding-inline: 0.25rem;
+  }
+  .ledger .list-row:hover {
+    background: var(--color-surface);
+  }
+  .ledger .list-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    background: none;
+    color: var(--color-dim);
+  }
+  .ledger-label {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.3rem;
+    line-height: 1.05;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+  }
+
   /* ---------- buttons ---------- */
 
   /* Primary: solid white, black ink, condensed caps. One per screen. */
@@ -484,6 +527,87 @@
     color: var(--color-muted);
     opacity: 1;
   }
+  /* A second clip on the same view, or a pick after the clip was chosen: gold line, not gold block.
+     One solid gold per view. */
+  .reward-quiet[data-ad-slot="rewarded"] {
+    border: 1px solid color-mix(in oklab, var(--color-gold) 70%, transparent);
+    background: transparent;
+    color: var(--color-gold);
+  }
+  .reward-quiet[data-ad-slot="rewarded"]:not(:disabled):hover {
+    background: color-mix(in oklab, var(--color-gold) 12%, transparent);
+  }
+  .reward-quiet[data-ad-slot="rewarded"]:not(:disabled):active {
+    background: color-mix(in oklab, var(--color-gold) 20%, transparent);
+  }
+
+  /* Buying with coins: an outline with the gold coin and the price in the display face. */
+  .btn-price {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border: 1px solid #3d3d44;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--color-fg);
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.2rem;
+    line-height: 1;
+    transition: background-color 120ms ease-out, border-color 120ms ease-out;
+  }
+  .btn-price:not(:disabled):hover {
+    border-color: color-mix(in oklab, var(--color-gold) 60%, transparent);
+    background: var(--color-surface-2);
+  }
+  .btn-price:not(:disabled):active {
+    background: var(--color-surface);
+  }
+  .btn-price:disabled {
+    opacity: 1;
+    color: var(--color-dim);
+  }
+  .btn-price:disabled .coin {
+    border-color: var(--color-line);
+    background: var(--color-dim);
+  }
+  .price-was {
+    font-size: 0.8em;
+    color: var(--color-muted);
+  }
+
+  .coin {
+    display: inline-block;
+    width: 0.72em;
+    height: 0.72em;
+    flex-shrink: 0;
+    border: 0.12em solid var(--color-gold-deep);
+    border-radius: 999px;
+    background: var(--color-gold);
+  }
+
+  /* Signing for a club is done in that club's colours (set by clubVars on the card). */
+  .btn-club {
+    border: 1px solid color-mix(in oklab, var(--offer-ink, #fff) 22%, var(--offer-club, #212125));
+    border-radius: 4px;
+    background: var(--offer-club, var(--color-surface-2));
+    color: var(--offer-ink, var(--color-fg));
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 1.3rem;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    transition: filter 120ms ease-out, transform 120ms ease-out;
+  }
+  .btn-club:not(:disabled):hover {
+    filter: brightness(1.08);
+  }
+  .btn-club:not(:disabled):active {
+    filter: brightness(0.92);
+    transform: scale(0.985);
+  }
 
   .btn-danger {
     border-radius: 4px;
@@ -494,6 +618,7 @@
 
   /* ---------- bottom tab bar (hidden in matches and while loading) ---------- */
 
+  /* Spans the same 32rem column as the screens it serves. */
   .bottom-nav {
     position: fixed;
     inset-inline: 0;
@@ -501,10 +626,18 @@
     z-index: 30;
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
+    width: 100%;
+    max-width: 32rem;
     min-height: 66px;
+    margin-inline: auto;
     padding: 0 6px env(safe-area-inset-bottom, 0px);
     background: var(--color-bg-2);
     border-top: 1px solid var(--color-line);
+  }
+  @media (min-width: 32.5rem) {
+    .bottom-nav {
+      border-inline: 1px solid var(--color-line);
+    }
   }
   .bottom-nav button {
     position: relative;
@@ -515,7 +648,7 @@
     justify-content: center;
     gap: 3px;
     min-width: 44px;
-    color: var(--color-dim);
+    color: #8b8b94; /* 5.6:1 on the bar; dim grey fails at 11px */
     font-size: 11px;
     line-height: 1.15;
     text-align: center;
@@ -549,9 +682,7 @@
     background: var(--color-gold);
     box-shadow: 0 0 0 2px var(--color-bg-2);
   }
-  .bottom-nav .nav-store {
-    color: var(--color-gold);
-  }
+  /* The store is gold only when it is the page; otherwise only its dot is. */
   .bottom-nav .nav-store[aria-current="page"] {
     color: var(--color-gold);
   }
@@ -602,8 +733,9 @@
     fill: var(--color-surface-2);
   }
 
+  /* Rating stars are white: gold means coins and rewards only. */
   .star-full {
-    fill: var(--color-gold);
+    fill: var(--color-fg);
   }
 
   .attr-grid {
@@ -846,8 +978,9 @@
     border: 1px solid var(--color-line);
   }
 
-  /* An offer is the other club's announcement: its colours head the card. */
+  /* An offer is the other club's announcement: its colours head the card, cut at the same 8°. */
   .offer-plain {
+    container-type: inline-size;
     overflow: hidden;
     border-radius: 4px;
     background: var(--color-surface);
@@ -857,11 +990,20 @@
     position: relative;
     background: var(--offer-club, var(--color-surface-2));
     color: var(--offer-ink, var(--color-fg));
-    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), 0 100%);
-    padding: 0.85rem 0.9rem 1.4rem;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--cut)), 0 100%);
+    padding: 0.85rem 0.9rem calc(var(--cut) * 0.55 + 0.85rem);
   }
   [dir="rtl"] .offer-head {
-    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 calc(100% - 12px));
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 calc(100% - var(--cut)));
+  }
+  .offer-chip {
+    flex-shrink: 0;
+    padding: 0.25rem 0.5rem;
+    border-radius: 2px;
+    background: #0e0e10;
+    color: #f4f4f5;
+    font-size: 0.75rem;
+    font-weight: 700;
   }
   .offer-head h2 {
     font-family: var(--font-display);
@@ -986,6 +1128,38 @@
   .moment-card {
     border-color: var(--club-text);
     border-width: 2px;
+  }
+  /* The decisive moment is announced on the club field. */
+  .moment-head {
+    padding: 0.85rem 1rem 0.9rem;
+    background: var(--club);
+    color: var(--club-ink);
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  /* Season verdict: a full-bleed band under the top bar, not a tag.
+     Met wears the club field over its stripe; missed is a plain dark band. */
+  .verdict {
+    margin: -1rem -1rem 0;
+    padding: 1rem 1rem 0.85rem;
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 2.4rem;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+  }
+  .verdict.is-met {
+    background: var(--club);
+    color: var(--club-ink);
+    border-bottom: 6px solid var(--club-2);
+  }
+  .verdict.is-missed {
+    background: var(--color-surface);
+    color: #ff8a93;
+    border-bottom: 1px solid var(--color-line);
   }
 
   .toast {
@@ -1135,9 +1309,10 @@
 [data-gear-slot][data-gear-tier="bronze"] { border-top-color: var(--color-tier-bronze); }
 [data-gear-slot][data-gear-tier="silver"] { border-top-color: var(--color-tier-silver); }
 [data-gear-slot][data-gear-tier="gold"] { border-top-color: var(--color-tier-gold); }
+/* A light plate so the owner's black gear art reads on the kit-black ground. */
 .gear-well {
   border-radius: 3px;
-  background: var(--color-surface-2);
+  background: #e4e4e7;
 }
 
 /* My Player: the character stands on the club field, 3 gear slots each side. */
@@ -1167,3 +1342,16 @@
 .skin-swatch[aria-checked="true"] { border-color: #fff; box-shadow: 0 0 0 3px rgb(255 255 255 / 0.25); }
 /* After .look-open so the club field wins over its transparent background. */
 .look-open.myplayer-stage { overflow: hidden; border-radius: 3px; background: var(--club); }
+
+/* The player in the signing hero: large, on the end side, cropped by the cut (the field clips him).
+   Unlayered and after .player-figure / .character-canvas, which would otherwise cap his size. */
+.hero-figure {
+  position: absolute;
+  inset-block-start: 0.6rem;
+  inset-inline-end: -13cqw;
+  width: 64cqw;
+  max-width: 300px;
+  pointer-events: none;
+}
+.hero-figure .player-figure { max-width: none; margin: 0; }
+.hero-figure .character-canvas { max-height: none; }
