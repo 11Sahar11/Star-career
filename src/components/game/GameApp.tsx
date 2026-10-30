@@ -824,8 +824,11 @@ function leagueCount(career: Career) {
   return { played, total };
 }
 
-/** Season strip under the hero: matchday on the start side, the board target and league place on the end side. */
-function SeasonProgress({ career }: { career: Career }) {
+/**
+ * Season strip under the hero: matchday on the start side, the board target and league place on the end side.
+ * The hub's top bar already names the season, so it passes withYear={false}.
+ */
+function SeasonProgress({ career, withYear = true }: { career: Career; withYear?: boolean }) {
   const { tr, text } = useTx();
   const { played, total } = leagueCount(career);
   const place = tablePosition(career);
@@ -834,7 +837,8 @@ function SeasonProgress({ career }: { career: Career }) {
     <div className="season-strip">
       <div className="flex items-baseline justify-between gap-3 text-xs">
         <span className="text-muted">
-          {seasonLabel(career.year)} · {tr("matchday", { n: played, m: total })}
+          {withYear ? `${seasonLabel(career.year)} · ` : ""}
+          {tr("matchday", { n: played, m: total })}
         </span>
         <span className={`text-end font-bold ${played ? (onTrack ? "text-good" : "text-bad") : "text-muted"}`}>
           {text(career.season.targetLabel)}
@@ -1411,8 +1415,9 @@ function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onCh
 
   return (
     <Shell>
+      {/* The hero carries club and league, so the bar names the season: short, one line beside the skip button. */}
       <ScreenHeader
-        title={league.name}
+        title={`${tr("season")} ${seasonLabel(career.year)}`}
         onBack={onMenu}
         right={
           <button
@@ -1434,7 +1439,7 @@ function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onCh
       <SigningHero career={career}>
         {career.race ? <span className="chip chip-trophy">{tr("raceTag")}</span> : null}
       </SigningHero>
-      <SeasonProgress career={career} />
+      <SeasonProgress career={career} withYear={false} />
       <section className="scorebox mt-3 px-4 py-3.5">
         <p className="goal-strip mt-0">{tr(`aim.${careerAim(career)}`)}</p>
         <p className="mt-1 text-xs text-muted">
@@ -2342,7 +2347,7 @@ function OffersScreen({
                     <div className="min-w-0">
                       <h2>{keepHyphens(club.name)}</h2>
                       <p className="text-sm font-semibold opacity-80">
-                        {league.name} · {offerCountry.name}
+                        <bdi>{league.name}</bdi> · <bdi>{offerCountry.name}</bdi>
                       </p>
                     </div>
                   </div>
@@ -2959,8 +2964,10 @@ function BigTrialCard({ career, onChange }: { career: Career; onChange: (c: Care
             <Crest clubId={club.id} name={club.name} className="h-11 w-11 shrink-0" />
             <div className="min-w-0">
               <h2>{keepHyphens(club.name)}</h2>
+              {/* Two lines, so the Latin league name never wraps around the Hebrew phrase. */}
+              <p className="text-sm font-semibold opacity-80">{tr("eco.trialTitle")}</p>
               <p className="text-sm font-semibold opacity-80">
-                {tr("eco.trialTitle")} · {getLeague(club.leagueId).name}
+                <bdi>{getLeague(club.leagueId).name}</bdi>
               </p>
             </div>
           </div>

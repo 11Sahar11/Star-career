@@ -290,7 +290,7 @@
   .hero-number {
     position: absolute;
     inset-block-start: 0.4rem;
-    inset-inline-end: 21cqw;
+    inset-inline-end: 21%;
     font-family: var(--font-display);
     font-size: 17rem;
     line-height: 0.82;
@@ -300,11 +300,11 @@
     user-select: none;
   }
   .hero-number[data-digits="2"] {
-    inset-inline-end: 4cqw;
+    inset-inline-end: 4%;
   }
   /* The intro band has no player: its "16" stands free on the end side. */
   .hero-intro .hero-number {
-    inset-inline-end: 3cqw;
+    inset-inline-end: 3%;
   }
   .hero-copy {
     position: relative;
@@ -1348,8 +1348,8 @@
 .hero-figure {
   position: absolute;
   inset-block-start: 0.6rem;
-  inset-inline-end: -13cqw;
-  width: 64cqw;
+  inset-inline-end: -13%;
+  width: 64%;
   max-width: 300px;
   pointer-events: none;
 }
