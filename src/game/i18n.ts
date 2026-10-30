@@ -32,6 +32,11 @@ export function setLang(lang: Lang) {
 }
 
 const en: Record<string, string> = {
+  "div.Premier": "{country} Premier Division",
+  "div.First": "{country} First Division",
+  "div.Second": "{country} Second Division",
+  "div.Third": "{country} Third Division",
+  "streakOne": "1-day streak",
   "nextMatch": "Next match",
   "playMatch": "Play match",
   "vs": "vs",
@@ -411,7 +416,7 @@ const en: Record<string, string> = {
   "seasonCoins": "Coins earned this season: {n}",
   "seasonCoinsAds": "(+{n} from doubling)",
   "seasonCoinsHint": "Doubling available every match",
-  "nav.label": "Main", "nav.home": "Home", "nav.player": "My Player", "nav.season": "Season", "nav.trophies": "Trophies", "nav.store": "Store", "nav.storeNew": "New in store", "look.title": "Your look", "look.skin": "Skin tone", "look.tone": "Tone {n}", "look.save": "Save", "look.cancel": "Cancel", "look.edit": "Change look (free)", "look.hair": "Hair", "look.hairColor": "Hair colour", "look.hair.buzz": "Buzz", "look.hair.short": "Short", "look.hair.curly": "Curly", "look.hair.afro": "Afro", "look.hair.long": "Long", "look.hair.mohawk": "Mohawk", "look.color.black": "Black", "look.color.dark_brown": "Dark brown", "look.color.brown": "Brown", "look.color.blond": "Blond", "look.color.red": "Red", "look.color.grey": "Grey",
+  "nav.label": "Main", "nav.home": "Home", "nav.player": "My Player", "nav.season": "Season", "nav.trophies": "Trophies", "nav.store": "Shop", "nav.storeNew": "New in store", "look.title": "Your look", "look.skin": "Skin tone", "look.tone": "Tone {n}", "look.save": "Save", "look.cancel": "Cancel", "look.edit": "Change look (free)", "look.hair": "Hair", "look.hairColor": "Hair colour", "look.hair.buzz": "Buzz", "look.hair.short": "Short", "look.hair.curly": "Curly", "look.hair.afro": "Afro", "look.hair.long": "Long", "look.hair.mohawk": "Mohawk", "look.color.black": "Black", "look.color.dark_brown": "Dark brown", "look.color.brown": "Brown", "look.color.blond": "Blond", "look.color.red": "Red", "look.color.grey": "Grey",
   "seasonSalary": "Salary bonus: {n} (included)",
   "keyTag": "Key",
   "keyBonusNote": "Key matches count double: a win adds +3 bonus points, a draw +1, and each key win boosts your cup run. Key wins this season: {n}.",
@@ -723,6 +728,11 @@ const en: Record<string, string> = {
 };
 
 const he: Record<string, string> = {
+  "div.Premier": "ליגת העל של {country}",
+  "div.First": "הליגה הראשונה של {country}",
+  "div.Second": "הליגה השנייה של {country}",
+  "div.Third": "הליגה השלישית של {country}",
+  "streakOne": "רצף של יום אחד",
   "nextMatch": "המשחק הבא",
   "playMatch": "שחק משחק",
   "vs": "נגד",
@@ -1414,6 +1424,11 @@ const he: Record<string, string> = {
 };
 
 const es: Record<string, string> = {
+  "div.Premier": "Primera división de {country}",
+  "div.First": "Segunda división de {country}",
+  "div.Second": "Tercera división de {country}",
+  "div.Third": "Cuarta división de {country}",
+  "streakOne": "Racha de 1 día",
   "nextMatch": "Próximo partido",
   "playMatch": "Jugar partido",
   "vs": "vs",
@@ -2105,6 +2120,11 @@ const es: Record<string, string> = {
 };
 
 const fr: Record<string, string> = {
+  "div.Premier": "Première division ({country})",
+  "div.First": "Deuxième division ({country})",
+  "div.Second": "Troisième division ({country})",
+  "div.Third": "Quatrième division ({country})",
+  "streakOne": "Série de 1 jour",
   "nextMatch": "Prochain match",
   "playMatch": "Jouer le match",
   "vs": "vs",

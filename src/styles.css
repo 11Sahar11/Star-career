@@ -362,7 +362,7 @@
     font-size: 3.5rem;
     line-height: 0.95;
     letter-spacing: 0.01em;
-    direction: ltr;
+    unicode-bidi: isolate;
   }
   .match-club {
     display: block;
@@ -781,6 +781,7 @@
     gap: 0.35rem;
     padding: 0 0.85rem;
     border-radius: 6px;
+    direction: ltr; /* "72 OVR" reads the same in both scripts */
     background: var(--color-ink);
     color: #ffffff;
     font-family: var(--font-display);
@@ -1088,8 +1089,9 @@
     position: relative;
     overflow: hidden;
     padding: 1rem 1.1rem;
-    background: var(--color-ink);
-    color: #ffffff;
+    background: var(--color-surface-2);
+    color: var(--color-fg);
+    border-bottom: 1px solid var(--color-line);
   }
   .offer-head::before {
     content: "";
@@ -1098,7 +1100,7 @@
     inset-inline-end: -3rem;
     width: 10rem;
     height: 10rem;
-    border: 2rem solid rgb(255 255 255 / 0.04);
+    border: 2rem solid rgb(17 20 24 / 0.035);
     border-radius: 999px;
     pointer-events: none;
   }
@@ -1110,7 +1112,7 @@
     text-transform: uppercase;
   }
   .offer-head .opacity-80 {
-    color: var(--color-on-ink-muted);
+    color: var(--color-muted);
     opacity: 1;
   }
   .offer-chip {
@@ -1118,8 +1120,8 @@
     flex-shrink: 0;
     padding: 0.3rem 0.6rem;
     border-radius: var(--radius-chip);
-    background: #ffffff;
-    color: var(--color-ink);
+    background: var(--color-ink);
+    color: #ffffff;
     font-size: 0.75rem;
     font-weight: 700;
   }
@@ -1227,10 +1229,12 @@
     border-width: 2px;
   }
   /* The decisive moment is announced in ink. */
+  /* The decisive moment: ink on white under the green frame (the score above is the screen's one dark block). */
   .moment-head {
     padding: 1rem 1.1rem;
-    background: var(--color-ink);
-    color: #ffffff;
+    background: var(--color-surface);
+    color: var(--color-fg);
+    border-bottom: 1px solid var(--color-line);
     font-size: 1.05rem;
     font-weight: 700;
     line-height: 1.4;
@@ -1402,8 +1406,9 @@
   padding: 1rem 1rem 1.5rem;
   background: var(--color-bg-2);
 }
-.myplayer-grid { display: grid; grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr) minmax(0, 5.5rem); gap: 0.5rem; align-items: start; }
-.gear-col { display: grid; gap: 0.75rem; align-content: start; }
+/* one grid with shared rows, so the tiles on both sides line up; the figure spans all three rows */
+.myplayer-grid { display: grid; grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr) minmax(0, 5.5rem); grid-template-rows: repeat(3, auto); gap: 0.75rem 0.5rem; align-items: start; }
+.gear-cell { min-width: 0; }
 .gear-tile { display: grid; justify-items: center; text-align: center; }
 .gear-box {
   display: grid;
@@ -1417,7 +1422,7 @@
 }
 .gear-tile[data-owned="true"] .gear-box { border-color: var(--color-accent); }
 .gear-box img { width: 78%; height: 78%; object-fit: contain; }
-.gear-name { margin-top: 0.4rem; font-size: 0.8rem; font-weight: 600; line-height: 1.2; }
+.gear-name { display: -webkit-box; margin-top: 0.4rem; overflow: hidden; font-size: 0.8rem; font-weight: 600; line-height: 1.2; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .gear-state { margin-top: 0.15rem; font-size: 0.8rem; font-weight: 700; line-height: 1.2; color: var(--color-accent); }
 .gear-price {
   display: inline-flex;
@@ -1450,7 +1455,7 @@
 .character-aura { position: absolute; inset: 4% -6% 0; border-radius: 50%; background: radial-gradient(ellipse at 50% 45%, rgba(242, 196, 67, 0.55), rgba(242, 196, 67, 0.15) 45%, transparent 70%); animation: aura-pulse 3.2s ease-in-out infinite; pointer-events: none; }
 @keyframes aura-pulse { 0%, 100% { opacity: 0.65; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .character-aura { animation: none; opacity: 0.85; } }
-.player-ovr { position: relative; z-index: 1; display: flex; width: fit-content; margin: -1.6rem auto 0; }
+.player-ovr { position: relative; z-index: 1; display: flex; width: fit-content; margin: -3rem auto 0; }
 [data-gear-slot][data-gear-tier="bronze"] .gear-tier-label { color: var(--color-tier-bronze); }
 [data-gear-slot][data-gear-tier="silver"] .gear-tier-label { color: var(--color-tier-silver); }
 [data-gear-slot][data-gear-tier="gold"] .gear-tier-label { color: var(--color-tier-gold); }

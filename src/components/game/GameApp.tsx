@@ -619,8 +619,8 @@ function ScreenHeader({
         <span className="w-3" aria-hidden="true" />
       )}
       <div className="min-w-0 flex-1">
-        <h1 dir="auto" className="line-clamp-2 text-start text-[1.05rem] font-bold leading-tight">{title}</h1>
-        {sub ? <p dir="auto" className="line-clamp-2 text-start text-xs text-muted">{sub}</p> : null}
+        <h1 className="line-clamp-2 text-start text-[1.05rem] font-bold leading-tight"><bdi>{title}</bdi></h1>
+        {sub ? <p className="line-clamp-2 text-start text-xs text-muted"><bdi>{sub}</bdi></p> : null}
       </div>
       {right ?? null}
     </header>
@@ -748,9 +748,20 @@ function PlayerRow({ career, status }: { career: Career; status?: ReactNode }) {
   );
 }
 
+/** League names are data ("England Third Division"); show them in the player's language. */
+function leagueLabel(tr: (key: string, vars?: Record<string, string | number>) => string, name: string) {
+  const m = name.match(/^(.+) (Premier|First|Second|Third) Division$/);
+  if (!m) return name;
+  const country = COUNTRIES.find((c) => c.name === m[1]);
+  return tr(`div.${m[2]}`, { country: country ? tr(`country.${country.id}`) : m[1] });
+}
+
 /** Three-letter club code from the crest monogram (MOR, COL). */
 function clubCode(id: string, name: string) {
-  return (crestSpec(id, name).mono || name.slice(0, 3)).toUpperCase();
+  const mono = crestSpec(id, name).mono;
+  if (mono && mono.length >= 3) return mono.slice(0, 3).toUpperCase();
+  const letters = name.replace(/[^A-Za-z]/g, "");
+  return (letters.slice(0, 3) || mono || name.slice(0, 3)).toUpperCase();
 }
 
 /** The next fixture in the dark match card. Home side first, so it mirrors with the reading direction. */
@@ -790,10 +801,12 @@ function TabHeader({ title, sub, right }: { title: string; sub?: string; right?:
   return (
     <header className="tabbar">
       <div className="min-w-0">
-        <h1 dir="auto">{title}</h1>
+        <h1>
+          <bdi>{title}</bdi>
+        </h1>
         {sub ? (
-          <p dir="auto" className="mt-1.5 text-sm text-muted">
-            {sub}
+          <p className="mt-1.5 text-sm text-muted">
+            <bdi>{sub}</bdi>
           </p>
         ) : null}
       </div>
@@ -1076,11 +1089,11 @@ function Home({
         <>
           <PlayerRow career={career} status={`${seasonLabel(career.year)} · ${tr("matchday", { n: Math.min((count?.played ?? 0) + 1, count?.total ?? 0), m: count?.total ?? 0 })}`} />
           <div className="mt-5">
-            {playable ? (
+            {nextFixture(career) ? (
               <NextMatchCard career={career}>
                 <button type="button" className="btn-light h-14 w-full" onClick={onContinue}>
                   <Play className="size-5 fill-current rtl:-scale-x-100" aria-hidden="true" />
-                  {tr("playMatch")}
+                  {playable ? tr("playMatch") : tr("continue")}
                 </button>
               </NextMatchCard>
             ) : (
@@ -1174,7 +1187,7 @@ function Home({
 
       <p className="mt-4 flex items-center gap-1.5 text-sm font-semibold text-muted">
         <Flame className="size-4 text-accent" aria-hidden="true" />
-        {tr("streak", { n: streak })}
+        {streak === 1 ? tr("streakOne") : tr("streak", { n: streak })}
       </p>
 
       <div className="mt-6 grid gap-1 border-t border-line pt-3 text-sm">
@@ -1305,7 +1318,7 @@ function Create({
               className={`min-h-12 rounded-md border px-3 py-3 text-start ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"} ${open ? "" : "opacity-60"}`}
             >
               <span className="block font-semibold">{tr(`country.${item.id}`)}</span>
-              <span className="mt-1 block text-xs text-muted">{open ? entryLeague(item.id).name : tr("eco.lockedCountry", { n: formatCoins(ECONOMY.prices["unlock-country"]) })}</span>
+              <span className="mt-1 block text-xs text-muted">{open ? leagueLabel(tr, entryLeague(item.id).name) : tr("eco.lockedCountry", { n: formatCoins(ECONOMY.prices["unlock-country"]) })}</span>
             </button>
           );
         })}
@@ -1470,7 +1483,7 @@ function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onCh
     <Shell>
       <TabHeader
         title={`${tr("season")} ${seasonLabel(career.year)}`}
-        sub={league.name}
+        sub={leagueLabel(tr, league.name)}
         right={
           <button
             type="button"
@@ -2175,7 +2188,7 @@ function SeasonScreen({
         <div className="min-w-0">
           <p className="text-sm font-bold">
             {preview.tablePos}
-            {rows.length ? ` ${tr("of", { n: rows.length })}` : ""} · {league.name}
+            {rows.length ? ` ${tr("of", { n: rows.length })}` : ""} · {leagueLabel(tr, league.name)}
           </p>
           <p className="truncate text-xs text-muted">{text(preview.targetLabel)}</p>
           <p className="text-xs text-muted" dir="auto">
@@ -2399,7 +2412,7 @@ function OffersScreen({
                     <div className="min-w-0">
                       <h2>{keepHyphens(club.name)}</h2>
                       <p className="text-sm font-semibold opacity-80">
-                        <bdi>{league.name}</bdi> · <bdi>{offerCountry.name}</bdi>
+                        <bdi>{leagueLabel(tr, league.name)}</bdi>
                       </p>
                     </div>
                   </div>
@@ -2594,7 +2607,7 @@ function DailyLobby({ attempt, onBack, onBegin }: { attempt: DailyAttempt | null
   return (
     <Shell>
       <ScreenHeader title={tr("dailyTitle")} sub={tr("dailyKicker")} onBack={onBack} />
-      <p className="text-sm leading-6 text-muted">{tr("dailyCopy", { pos: tr(`pos.${board.position}`), club: club.name, league: league.name })}</p>
+      <p className="text-sm leading-6 text-muted">{tr("dailyCopy", { pos: tr(`pos.${board.position}`), club: club.name, league: leagueLabel(tr, league.name) })}</p>
       {best != null ? <ShareResult seasons={best} date={board.date} pos={tr(`pos.${board.position}`)} club={club.name} /> : null}
       <div className="panel mt-4 px-4 py-4">
         <p className="text-xs font-semibold text-muted">{tr("starting")}</p>
@@ -2979,7 +2992,7 @@ function BigTrialCard({ career, onChange }: { career: Career; onChange: (c: Care
               {/* Two lines, so the Latin league name never wraps around the Hebrew phrase. */}
               <p className="text-sm font-semibold opacity-80">{tr("eco.trialTitle")}</p>
               <p className="text-sm font-semibold opacity-80">
-                <bdi>{getLeague(club.leagueId).name}</bdi>
+                <bdi>{leagueLabel(tr, getLeague(club.leagueId).name)}</bdi>
               </p>
             </div>
           </div>
@@ -3319,7 +3332,7 @@ function MyPlayerScreen({ career, onChange }: { career: Career; onChange: (c: Ca
             <span className="num">{formatCoins(price)}</span>
           </button>
         ) : null}
-        {!picking && nextTier && check !== "ok" && check !== "coins" ? <p className="gear-note">{reason[check]}</p> : null}
+        {!picking && nextTier && check !== "ok" && check !== "coins" && check !== "locked" ? <p className="gear-note">{reason[check]}</p> : null}
       </div>
     );
   };
@@ -3328,8 +3341,17 @@ function MyPlayerScreen({ career, onChange }: { career: Career; onChange: (c: Ca
       <TabHeader title={tr("gear.myPlayer")} sub={getClub(career.clubId).name} right={<CoinChip n={career.coins} />} />
       <div className="gear-stage">
         <div className="myplayer-grid">
-          <div className="gear-col">{[0, 1, 2].map(slotTile)}</div>
-          <button type="button" className="look-open myplayer-stage" data-look-open aria-label={tr("look.edit")} onClick={() => setLook(true)}>
+          {[0, 1, 2].map((i) => (
+            <div key={`l${i}`} className="gear-cell" style={{ gridColumn: 1, gridRow: i + 1 }}>
+              {slotTile(i)}
+            </div>
+          ))}
+          {[3, 4, 5].map((i) => (
+            <div key={`r${i}`} className="gear-cell" style={{ gridColumn: 3, gridRow: i - 2 }}>
+              {slotTile(i)}
+            </div>
+          ))}
+          <button type="button" className="look-open myplayer-stage" style={{ gridColumn: 2, gridRow: "1 / span 3" }} data-look-open aria-label={tr("look.edit")} onClick={() => setLook(true)}>
             <PlayerCharacter career={career}>
               <span className="ovr-badge player-ovr">
                 <span className="num">{overall(career.player.position, attrs)}</span>
@@ -3340,7 +3362,6 @@ function MyPlayerScreen({ career, onChange }: { career: Career; onChange: (c: Ca
               <Paintbrush className="size-4" />
             </span>
           </button>
-          <div className="gear-col">{[3, 4, 5].map(slotTile)}</div>
         </div>
       </div>
 
