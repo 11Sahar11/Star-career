@@ -1707,7 +1707,8 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
   const shown = report.events.filter((event) => (focusMoment ? event.minute < minute || (reveal !== null && event.minute === minute) : true));
   const current = shown[shown.length - 1];
   const ours = getClub(career.clubId).name;
-  const theirs = text(pending.base.opponentName);
+  // data name: the crest key; cname() translates it where it is shown
+  const theirs = pending.base.opponentName.startsWith("@") ? text(pending.base.opponentName) : pending.base.opponentName;
   const left = pending.base.home ? ours : theirs;
   const right = pending.base.home ? theirs : ours;
   const us = current?.us ?? 0;
@@ -1860,8 +1861,10 @@ function MatchScreen({ career, onReport, onMenu }: { career: Career; onReport: (
   const done = step >= report.events.length;
   const minute = current?.minute ?? 0;
   const ours = getClub(career.clubId).name;
-  const left = report.home ? ours : text(report.opponentName);
-  const right = report.home ? text(report.opponentName) : ours;
+  // data names (crest keys); cname() translates them where shown
+  const opp = report.opponentName.startsWith("@") ? text(report.opponentName) : report.opponentName;
+  const left = report.home ? ours : opp;
+  const right = report.home ? opp : ours;
   const leftGoals = report.home ? (current?.us ?? 0) : (current?.them ?? 0);
   const rightGoals = report.home ? (current?.them ?? 0) : (current?.us ?? 0);
 
