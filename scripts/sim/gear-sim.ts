@@ -2,9 +2,21 @@
 import { createCareer, playStep, answerCamp, answerBreak, resolveMoment, finishBigMatch, afterReport, startSummer, playSummer, commitSeason, acceptOffer, isTopLeague, leagueOf, primaryKeys } from "../../src/game/engine";
 import { answerStory } from "../../src/game/stories";
 import { GEAR_SLOTS, GEAR_TIERS, buyGear, canBuyGear } from "../../src/game/gear";
-import { ECONOMY } from "../../src/game/economy";
+import { ECONOMY, grantDoubleCoins, rewardAvailable } from "../../src/game/economy";
 import { POSITIONS } from "../../src/game/data";
 import type { Career } from "../../src/game/types";
+
+/** DOUBLE=1: the player uses every double-coins clip (cap per season) on good matches; no other ads. */
+const DOUBLE = process.env.DOUBLE === "1";
+const DOUBLE_MIN = Number(process.env.DOUBLE_MIN ?? 60);
+
+/** A real player doubles a big payday, or any payday once the matches left no longer exceed the clips left. */
+function maybeDouble(c: Career): Career {
+  if (!DOUBLE || !rewardAvailable(c, "double-coins", "sim")) return c;
+  const left = ECONOMY.caps.doubleCoinsPerSeason - c.adState.doubleCoinsThisSeason;
+  const remaining = c.season.fixtures.length - c.season.cursor;
+  return (c.coinsEarnedLast ?? 0) >= DOUBLE_MIN || remaining <= left ? grantDoubleCoins(c) : c;
+}
 
 const CAREERS = Number(process.env.CAREERS ?? 200);
 const SEASONS = Number(process.env.SEASONS ?? 15);
@@ -49,7 +61,7 @@ for (let n = 0; n < CAREERS; n += 1) {
       case "bigmatch": {
         const p = c.pending!;
         const i = p.moments.findIndex((m) => !m.picked);
-        if (i < 0) c = finishBigMatch(c);
+        if (i < 0) c = maybeDouble(finishBigMatch(c));
         else {
           const best = [...p.moments[i].options].sort((a, b) => b.odds - a.odds)[0];
           c = resolveMoment(c, i, best.id);
@@ -81,7 +93,7 @@ for (let n = 0; n < CAREERS; n += 1) {
         break;
       }
       default: {
-        c = playStep(c);
+        c = maybeDouble(playStep(c));
         if (c.coins > lastCoins) earned += c.coins - lastCoins;
         // a no-ads player buys gear as soon as they can afford it
         const r = shop(c, `d${season}`);
@@ -92,7 +104,7 @@ for (let n = 0; n < CAREERS; n += 1) {
 }
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 const pct = (xs: number[], p: number) => { const s = [...xs].sort((a, b) => a - b); return s[Math.floor((s.length - 1) * p)] ?? 0; };
-console.log(`careers=${CAREERS} (no ads)`);
+console.log(`careers=${CAREERS} (${DOUBLE ? `double-coins clips only, min ${DOUBLE_MIN}` : "no ads"})`);
 console.log(`season1 bronze affordable from season-1 earnings: avg ${avg(bronzeS1).toFixed(2)} · p10 ${pct(bronzeS1, 0.1)} · median ${pct(bronzeS1, 0.5)} · p90 ${pct(bronzeS1, 0.9)} · share in 2-3: ${((bronzeS1.filter((x) => x >= 2 && x <= 3).length / bronzeS1.length) * 100).toFixed(0)}%`);
 for (let s = 0; s < SEASONS; s += 1) {
   if (!earnBySeason[s].length) continue;
