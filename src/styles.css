@@ -980,3 +980,5 @@
 .look-sheet .player-figure { max-width: none; margin-top: 0; }
 .skin-swatch { width: 44px; height: 44px; border-radius: 999px; border: 2px solid rgba(255, 255, 255, 0.25); }
 .skin-swatch[aria-checked="true"] { border-color: #2bff88; box-shadow: 0 0 0 3px rgba(43, 255, 136, 0.35); }
+.look-chip { min-height: 44px; border-radius: 0.75rem; border: 1px solid rgba(140, 156, 196, 0.4); font-size: 0.8rem; font-weight: 600; }
+.look-chip[aria-checked="true"] { border-color: #2bff88; color: #2bff88; }

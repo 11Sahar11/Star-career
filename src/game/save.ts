@@ -1,3 +1,4 @@
+import { isHairColor, isHairStyle, isSkin } from "./look";
 import { OPEN_COUNTRIES, withEconomy } from "./economy";
 import { unlockCountry, withDeviceCosmetics } from "./legacy";
 import { SAVE_VERSION, type Career } from "./types";
@@ -29,11 +30,14 @@ export function migrateCareer(raw: unknown): Career | null {
   return career ? withSkin(career) : null;
 }
 
-/** Keeps player.skin only when it is a valid tone (1-6); anything else falls back to the default art. */
+/** Drops look fields that are not valid ids so old or edited saves fall back to the default look. */
 function withSkin(career: Career): Career {
-  const skin = career.player.skin;
-  if (skin === undefined || (Number.isInteger(skin) && skin >= 1 && skin <= 6)) return career;
-  const { skin: _drop, ...player } = career.player;
+  const { skin, hair, hairColor } = career.player;
+  if ((skin === undefined || isSkin(skin)) && (hair === undefined || isHairStyle(hair)) && (hairColor === undefined || isHairColor(hairColor))) return career;
+  const player = { ...career.player };
+  if (!isSkin(skin)) delete player.skin;
+  if (!isHairStyle(hair)) delete player.hair;
+  if (!isHairColor(hairColor)) delete player.hairColor;
   return { ...career, player };
 }
 
