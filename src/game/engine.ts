@@ -1,4 +1,5 @@
 import { EARN, ECONOMY, earnForReport, freshAdState } from "./economy";
+import { gearBonus, gearItemFor, injuryFactor } from "./gear";
 import {
   ATTR_LABEL,
   BIAS,
@@ -386,10 +387,12 @@ function sampleScore(attack: number, defense: number, home: boolean, rng: () => 
 }
 
 /** Attributes as they play: saved attrs plus season gear, never above the stat cap. */
-export function effectiveAttrs(career: Career): Attrs {
+export function effectiveAttrs(career: Career, keyMatch = false): Attrs {
   const attrs = { ...career.player.attrs };
-  for (const item of career.gear ?? []) {
-    attrs[item.key] = Math.max(attrs[item.key], Math.min(attrs[item.key] + item.amount, statCap(career.player.position, career.player.potential, item.key)));
+  const bonus = gearBonus(career, keyMatch);
+  for (const key of ATTR_KEYS) {
+    const add = bonus[key] ?? 0;
+    if (add) attrs[key] = Math.max(attrs[key], Math.min(attrs[key] + add, statCap(career.player.position, career.player.potential, key)));
   }
   return attrs;
 }
@@ -828,7 +831,7 @@ export function createCareer(name: string, position: PositionId, countryId: stri
     retired: false,
     news: [],
     coins: 0,
-    gear: [],
+    gear: {},
     agentHired: false,
     trialCall: false,
     keyCampBonus: 0,
@@ -883,7 +886,7 @@ function simulateAgainst(career: Career, fixture: Fixture, playing: boolean, rng
       })
     : 0;
   const deltas = playing ? microGrowth(career.player.position, career.player.attrs, career.player.potential, career.player.age, rating, rng) : emptyAttrs();
-  const injured = playing && career.player.fitness < 64 && rng() < (64 - career.player.fitness) / 150;
+  const injured = playing && career.player.fitness < 64 && rng() < ((64 - career.player.fitness) / 150) * injuryFactor(career);
   const report: MatchReport = {
     fixtureId: fixture.id,
     competition: fixture.competition,
@@ -1175,13 +1178,23 @@ const KEEPER_POOL = ["gkdive", "gkstand", "gkcomeoff"];
 
 /** Odds for each choice; `gain` is how much training since the last key match added. */
 function momentOptions(career: Career, situation: string, opponent: number): MomentOption[] {
-  const a = effectiveAttrs(career);
+  const a = effectiveAttrs(career, true);
+  const bare = career.player.attrs;
   const gains = career.keyGain ?? {};
   const camp = career.keyCampBonus ?? 0;
+  const cap = ECONOMY.gear.oddsCap;
   return SITUATIONS[situation].options.map(([id, attr, bias, reward]) => {
-    const odds = clamp(momentOdds(a[attr], opponent, bias) + camp, 8, 92);
-    const gain = odds - momentOdds(a[attr] - (gains[attr] ?? 0), opponent, bias);
-    return gain > 0 ? { id, attr, odds, reward, gain } : { id, attr, odds, reward };
+    const odds = clamp(momentOdds(a[attr], opponent, bias) + camp, 8, cap);
+    const option: MomentOption = { id, attr, odds, reward };
+    const gain = odds - clamp(momentOdds(a[attr] - (gains[attr] ?? 0), opponent, bias) + camp, 8, cap);
+    if (gain > 0) option.gain = gain;
+    const gear = odds - clamp(momentOdds(bare[attr], opponent, bias) + camp, 8, cap);
+    const item = gearItemFor(career, attr, true);
+    if (gear > 0 && item) {
+      option.gear = gear;
+      option.gearItem = item;
+    }
+    return option;
   });
 }
 
@@ -1244,7 +1257,7 @@ function openBigMatch(career: Career, fixture: Fixture, roll: () => number, rng:
   const moments = buildMoments(career, fixture, roll);
   const seed = Math.floor(roll() * 2147483647) || 1;
   const pending: PendingMatch = { base, moments, seed, rngState: rng.state() };
-  return { ...career, pending, screen: "bigmatch", recentDeltas: null, lastTrain: null, keyGain: null, keyCampBonus: 0 };
+  return { ...career, pending, screen: "bigmatch", recentDeltas: null, lastTrain: null, keyGain: null, keyCampBonus: 0, gearTrial: null };
 }
 
 /** Plays one moment. Deterministic for a given career, moment and choice, so the daily race stays fair. */
@@ -1908,8 +1921,8 @@ export function commitSeason(career: Career): Career {
     aged.coins = (aged.coins ?? 0) + earned;
   }
   aged.bigTrial = aged.race ? null : makeBigTrial(aged, ovr);
-  // Season items end here; the agent and the trial call were used by buildOffers.
-  aged.gear = [];
+  // Season items end here; the agent and the trial call were used by buildOffers. Gear stays with the career.
+  aged.gearTrial = null;
   aged.agentHired = false;
   aged.trialCall = false;
   aged.adState = freshAdState(aged.year + 1);
@@ -2222,7 +2235,7 @@ export function createDailyCareer(name: string, date = todayKey()): Career {
     retired: false,
     news: [],
     coins: 0,
-    gear: [],
+    gear: {},
     agentHired: false,
     trialCall: false,
     keyCampBonus: 0,

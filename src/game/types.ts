@@ -1,4 +1,4 @@
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 
 export const ATTR_KEYS = ["pace", "tackle", "passing", "dribbling", "shooting", "physical"] as const;
 export type AttrKey = (typeof ATTR_KEYS)[number];
@@ -266,8 +266,10 @@ export type Career = {
   /** Coins from the last match, for the double-coins clip. */
   coinsEarnedLast?: number;
   coinsFixtureId?: string | null;
-  /** Season-long gear; counts in simulation and odds, never written into player.attrs. */
-  gear: GearItem[];
+  /** Equipment by slot (save v10); belongs to the career, counts in simulation and odds, never written into player.attrs. */
+  gear: GearLoadout;
+  /** "Try gold" clip: this slot plays at gold tier in the next key match only. */
+  gearTrial?: GearSlotId | null;
   agentHired: boolean;
   trialCall: boolean;
   /** Percentage points added to every choice in the next key match (0 or 6). */
@@ -281,7 +283,12 @@ export type Career = {
 
 export type BigTrial = { year: number; clubId: string; chance: number; boosted: boolean; result: "open" | "won" | "lost" };
 
-export type GearItem = { key: AttrKey; amount: 1 | 2 };
+/** Stable slot ids (one per key-match situation type). Keepers wear diving / handling gloves in the first two. */
+export type GearSlotId = "kick" | "dribble" | "sleeve" | "headband" | "wristband" | "shin";
+export type GearTierId = "bronze" | "silver" | "gold";
+export type GearLoadout = Partial<Record<GearSlotId, GearTierId>>;
+/** Save v9 gear shape, kept for migration. */
+export type LegacyGearItem = { key: AttrKey; amount: 1 | 2 };
 
 export type AdState = {
   seasonYear: number;
@@ -298,6 +305,11 @@ export type AdState = {
   interstitialsThisSeason: number;
   halftimeShownFixtureIds: string[];
   restHalf: string | null;
+  /** "Try gold" used this season. */
+  tryGoldTaken: boolean;
+  /** Day the daily gear offer got its extra ad discount / was bought. */
+  gearOfferAdDate: string | null;
+  gearOfferBoughtDate: string | null;
 };
 
 export type MomentKind = "chance" | "defend" | "keeper";
@@ -310,6 +322,9 @@ export type MomentOption = {
   reward: MomentReward;
   /** Odds gained from training since the last key match. */
   gain?: number;
+  /** Odds added by gear, and the slot variant that gives them (for "Shot 58% (+4% boots)"). */
+  gear?: number;
+  gearItem?: string;
 };
 
 export type Moment = {

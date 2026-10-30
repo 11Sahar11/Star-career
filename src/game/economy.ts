@@ -1,4 +1,5 @@
-import type { AdState, AttrKey, Career, MatchReport, Moment } from "./types";
+import { isGearSlot, normalizeGear } from "./gear";
+import type { AdState, Career, MatchReport, Moment } from "./types";
 
 // Every economy number lives here. All are design proposals to tune with real data.
 
@@ -22,19 +23,17 @@ export const ECONOMY = {
     trial: 900,
     "camp-premium": 350,
     "camp-key": 250,
-    "gear-1": 300,
-    "gear-2": 700,
     agent: 400,
     "med-fast": 200,
     "med-rest": 120,
     "cos-crest": 250,
     "cos-shirt": 100,
     "cos-legend": 500,
+    "cos-armband": 300,
   },
   caps: {
     doubleCoinsPerSeason: 4,
     retryPerSeason: 2,
-    maxGear: 2,
     interstitialsPerSeason: 2,
   },
   keyCampBonus: 6,
@@ -43,6 +42,26 @@ export const ECONOMY = {
   /** Daily chest (replaces the daily-login coins): coins, or sometimes a key camp; an ad doubles it. */
   chest: { coins: 40, campEvery: 4 },
   discount: 0.25,
+  /** Equipment ("My Player"): 6 slots, one per key-match situation. Gear belongs to the career. */
+  gear: {
+    tiers: {
+      bronze: { bonus: 1, price: 300 },
+      silver: { bonus: 2, price: 700 },
+      gold: { bonus: 3, price: 1400 },
+    },
+    /** Gold can only be bought while playing in a country's top league. */
+    goldNeedsTopLeague: true,
+    /** Most gear may add to one attribute, in total. Moment odds stay capped at 92%. */
+    attrCap: 4,
+    oddsCap: 92,
+    /** Shin guards: share of the match-injury chance removed, by tier. */
+    injuryCut: { bronze: 0.15, silver: 0.3, gold: 0.45 },
+    /** Daily offer: one item off; one rewarded clip a day takes the same again. */
+    dailyOff: 0.25,
+    dailyAdOff: 0.25,
+    /** "Try gold" rewarded clip: a gold item for one key match. */
+    tryGoldPerSeason: 1,
+  },
   // Coins are per career and reset on a new career (owner decision): no carry-over.
   legacyShare: 0,
   legacyMax: 0,
@@ -65,31 +84,32 @@ export type StoreItemId =
   | "trial"
   | "camp-premium"
   | "camp-key"
-  | "gear-1"
-  | "gear-2"
   | "agent"
   | "med-fast"
   | "med-rest"
   | "cos-crest"
   | "cos-shirt"
-  | "cos-legend";
+  | "cos-legend"
+  | "cos-armband";
 
-export type StoreGroup = "leagues" | "camps" | "gear" | "agent" | "medical" | "cosmetics";
+export type StoreGroup = "leagues" | "camps" | "agent" | "medical" | "cosmetics";
 
-export const CATALOG: { id: StoreItemId; price: number; group: StoreGroup; needsAttr?: boolean }[] = [
+export const CATALOG: { id: StoreItemId; price: number; group: StoreGroup }[] = [
   { id: "unlock-country", price: ECONOMY.prices["unlock-country"], group: "leagues" },
   { id: "trial", price: ECONOMY.prices["trial"], group: "leagues" },
   { id: "camp-premium", price: ECONOMY.prices["camp-premium"], group: "camps" },
   { id: "camp-key", price: ECONOMY.prices["camp-key"], group: "camps" },
-  { id: "gear-1", price: ECONOMY.prices["gear-1"], group: "gear", needsAttr: true },
-  { id: "gear-2", price: ECONOMY.prices["gear-2"], group: "gear", needsAttr: true },
   { id: "agent", price: ECONOMY.prices["agent"], group: "agent" },
   { id: "med-fast", price: ECONOMY.prices["med-fast"], group: "medical" },
   { id: "med-rest", price: ECONOMY.prices["med-rest"], group: "medical" },
   { id: "cos-crest", price: ECONOMY.prices["cos-crest"], group: "cosmetics" },
   { id: "cos-shirt", price: ECONOMY.prices["cos-shirt"], group: "cosmetics" },
   { id: "cos-legend", price: ECONOMY.prices["cos-legend"], group: "cosmetics" },
+  { id: "cos-armband", price: ECONOMY.prices["cos-armband"], group: "cosmetics" },
 ];
+
+/** Cosmetics are permanent: kept in the device profile (star-economy-v1), not in the career. */
+export const COSMETIC_IDS: StoreItemId[] = ["cos-crest", "cos-shirt", "cos-legend", "cos-armband"];
 
 export const DISCOUNT = ECONOMY.discount;
 
@@ -112,6 +132,9 @@ export function freshAdState(year: number): AdState {
     interstitialsThisSeason: 0,
     halftimeShownFixtureIds: [],
     restHalf: null,
+    tryGoldTaken: false,
+    gearOfferAdDate: null,
+    gearOfferBoughtDate: null,
   };
 }
 
@@ -121,7 +144,8 @@ export function withEconomy(career: Career): Career {
   return {
     ...career,
     coins: typeof career.coins === "number" && career.coins >= 0 ? Math.floor(career.coins) : 0,
-    gear: Array.isArray(career.gear) ? career.gear : [],
+    gear: normalizeGear(career.gear),
+    gearTrial: isGearSlot(career.gearTrial) ? career.gearTrial : null,
     agentHired: career.agentHired === true,
     trialCall: career.trialCall === true,
     keyCampBonus: typeof career.keyCampBonus === "number" ? career.keyCampBonus : 0,
@@ -164,9 +188,6 @@ export function canBuy(career: Career, id: StoreItemId, today: string, admin = f
       return career.premiumCamp ? "owned" : "ok";
     case "camp-key":
       return career.keyCampBonus > 0 ? "owned" : "ok";
-    case "gear-1":
-    case "gear-2":
-      return career.gear.length >= CAPS.maxGear ? "full" : "ok";
     case "agent":
       return career.agentHired ? "owned" : "ok";
     case "med-fast":
@@ -176,6 +197,7 @@ export function canBuy(career: Career, id: StoreItemId, today: string, admin = f
     case "cos-crest":
     case "cos-shirt":
     case "cos-legend":
+    case "cos-armband":
       return career.cosmetics.includes(id) ? "owned" : "ok";
     default:
       return "ok";
@@ -187,10 +209,8 @@ export function halfKey(career: Career) {
 }
 
 /** Buys an item. unlock-country is applied by the caller on the device (legacy); this only takes the coins. */
-export function buy(career: Career, id: StoreItemId, today: string, opts: { attr?: AttrKey; admin?: boolean } = {}): Career {
+export function buy(career: Career, id: StoreItemId, today: string, opts: { admin?: boolean } = {}): Career {
   if (canBuy(career, id, today, opts.admin) !== "ok") return career;
-  const item = CATALOG.find((entry) => entry.id === id)!;
-  if (item.needsAttr && !opts.attr) return career;
   const price = itemPrice(career, id, today, opts.admin);
   const ad = career.adState;
   const next: Career = {
@@ -208,10 +228,6 @@ export function buy(career: Career, id: StoreItemId, today: string, opts: { attr
     case "camp-key":
       next.keyCampBonus = ECONOMY.keyCampBonus;
       break;
-    case "gear-1":
-    case "gear-2":
-      next.gear = [...career.gear, { key: opts.attr!, amount: id === "gear-2" ? 2 : 1 }];
-      break;
     case "agent":
       next.agentHired = true;
       break;
@@ -226,6 +242,7 @@ export function buy(career: Career, id: StoreItemId, today: string, opts: { attr
     case "cos-crest":
     case "cos-shirt":
     case "cos-legend":
+    case "cos-armband":
       next.cosmetics = [...career.cosmetics, id];
       break;
   }
@@ -234,7 +251,7 @@ export function buy(career: Career, id: StoreItemId, today: string, opts: { attr
 
 // ---------- rewarded clips: caps live in the save ----------
 
-export type RewardId = "double-coins" | "retry-moment" | "free-camp" | "store-discount" | "attribute-boost" | "injury-return";
+export type RewardId = "double-coins" | "retry-moment" | "free-camp" | "store-discount" | "attribute-boost" | "injury-return" | "gear-offer" | "try-gold";
 
 export function rewardAvailable(career: Career, id: RewardId, today: string, fixtureId?: string): boolean {
   const ad = career.adState;
@@ -257,6 +274,10 @@ export function rewardAvailable(career: Career, id: RewardId, today: string, fix
       return !ad.boostTaken;
     case "injury-return":
       return !ad.healTaken && career.season.outFor > 0;
+    case "gear-offer":
+      return !career.race && ad.gearOfferAdDate !== today && ad.gearOfferBoughtDate !== today;
+    case "try-gold":
+      return !career.race && !ad.tryGoldTaken && !career.gearTrial;
   }
 }
 

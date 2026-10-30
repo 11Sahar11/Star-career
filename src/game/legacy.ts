@@ -150,12 +150,14 @@ export type DeviceEconomy = {
   coinBonus: number;
   careersFinished: number;
   settled: string[];
+  /** Permanent cosmetics (colours, captain armband, ...), shared by every career. */
+  cosmetics: string[];
 };
 
 const DEVICE_KEY = "star-economy-v1";
 
 export function loadDevice(): DeviceEconomy {
-  const empty: DeviceEconomy = { unlockedCountries: [], dailyLoginDate: null, dailyRetryDate: null, removeAds: { owned: false, checkedAt: 0 }, coinBonus: 0, careersFinished: 0, settled: [] };
+  const empty: DeviceEconomy = { unlockedCountries: [], dailyLoginDate: null, dailyRetryDate: null, removeAds: { owned: false, checkedAt: 0 }, coinBonus: 0, careersFinished: 0, settled: [], cosmetics: [] };
   try {
     const raw = localStorage.getItem(DEVICE_KEY);
     if (!raw) return empty;
@@ -168,6 +170,7 @@ export function loadDevice(): DeviceEconomy {
       coinBonus: typeof data.coinBonus === "number" ? Math.max(0, Math.min(ECONOMY.legacyMax, data.coinBonus)) : 0,
       careersFinished: typeof data.careersFinished === "number" ? data.careersFinished : 0,
       settled: Array.isArray(data.settled) ? data.settled : [],
+      cosmetics: Array.isArray(data.cosmetics) ? data.cosmetics.filter((id) => typeof id === "string") : [],
     };
   } catch {
     return empty;
@@ -230,4 +233,22 @@ export function takeCoinBonus(): number {
   if (!device.coinBonus) return 0;
   saveDevice({ ...device, coinBonus: 0 });
   return device.coinBonus;
+}
+
+/** Adds a permanent cosmetic to the device profile. */
+export function ownCosmetic(id: string): DeviceEconomy {
+  const device = loadDevice();
+  if (device.cosmetics.includes(id)) return device;
+  const next = { ...device, cosmetics: [...device.cosmetics, id] };
+  saveDevice(next);
+  return next;
+}
+
+/** Cosmetics are permanent: a career shows every cosmetic the device owns, and older careers' cosmetics move to the device. */
+export function withDeviceCosmetics(career: Career): Career {
+  if (career.race) return career;
+  let device = loadDevice();
+  for (const id of career.cosmetics ?? []) if (!device.cosmetics.includes(id)) device = ownCosmetic(id);
+  const all = [...new Set([...(career.cosmetics ?? []), ...device.cosmetics])];
+  return all.length === (career.cosmetics ?? []).length ? career : { ...career, cosmetics: all };
 }

@@ -68,6 +68,7 @@ import { ACHIEVEMENTS, checkAchievements, loadUnlocked } from "@/game/achievemen
 import { initAds, setAdsSuppressed, showInterstitial, showRewarded } from "@/game/ads";
 import {
   CATALOG,
+  COSMETIC_IDS,
   ECONOMY,
   HALFTIME_INTERSTITIAL,
   canBuy,
@@ -82,8 +83,9 @@ import {
   buy,
   type StoreItemId,
 } from "@/game/economy";
-import { chestToday, countryOpen, loadDevice, markChest, settleRetirement, unlockCountry } from "@/game/legacy";
-import { attemptBigTrial, boostBigTrial, keyFixtureIds, retryMoment } from "@/game/engine";
+import { chestToday, countryOpen, loadDevice, markChest, ownCosmetic, settleRetirement, unlockCountry, withDeviceCosmetics } from "@/game/legacy";
+import { GEAR_SLOTS, GEAR_TIERS, buyGear, canBuyGear, dailyGearOffer, gearBonus, gearPrice, grantGearOfferAd, grantTryGold, slotFor, slotTier, tierInfo } from "@/game/gear";
+import { attemptBigTrial, boostBigTrial, effectiveAttrs, isTopLeague, keyFixtureIds, leagueOf, retryMoment } from "@/game/engine";
 import { getIsAdmin, getViewerAccess, type ViewerAccess } from "@/lib/access";
 import { PERKS, adminGrant, adminUnlockAll, applyPerks, buyPerk, canDouble, doubleLegacy, loadLegacy, payLegacy, perkState, type Legacy, type PerkId } from "@/game/legacy";
 import { ATTR_KEYS, type AttrKey, type Career, type Difficulty, type MatchLog, type MatchReport, type Role } from "@/game/types";
@@ -124,7 +126,7 @@ export function GameApp() {
   const [access, setAccess] = useState<ViewerAccess | null>(null);
   const [toasts, setToasts] = useState<string[]>([]);
   const [admin, setAdmin] = useState(false);
-  const [storeOpen, setStoreOpen] = useState(false);
+  const [storeOpen, setStoreOpen] = useState<boolean | "player">(false);
   /** Set while the season-end interstitial is running, so a second tap cannot replay an old state. */
   const summerLock = useRef(false);
 
@@ -274,7 +276,7 @@ export function GameApp() {
         onStart={(name, position, countryId, nationId, salt, difficulty) => {
           setPlaying("main");
           unlockAudio();
-          const fresh = applyPerks(createCareer(name, position, countryId, salt, difficulty, nationId), loadLegacy().perks);
+          const fresh = withDeviceCosmetics(applyPerks(createCareer(name, position, countryId, salt, difficulty, nationId), loadLegacy().perks));
           setCareer(fresh); // coins are per career and start from zero
           setView("game");
         }}
@@ -302,7 +304,12 @@ export function GameApp() {
     );
   } else if (view === "admin") screen = <Splash />; else if (!run) screen = <Splash />;
   else if (storeOpen && playing === "main" && run.screen !== "bigmatch" && run.screen !== "match") {
-    screen = <StoreScreen career={run} onChange={update} onBack={() => setStoreOpen(false)} />;
+    screen =
+      storeOpen === "player" ? (
+        <MyPlayerScreen career={run} onChange={update} onBack={() => setStoreOpen(true)} />
+      ) : (
+        <StoreScreen career={run} onChange={update} onBack={() => setStoreOpen(false)} onPlayer={() => setStoreOpen("player")} />
+      );
   } else if (run.screen === "camp" || run.screen === "break") {
     screen = <TrainingScreen career={run} onChange={update} onMenu={menu} />;
   } else if (run.screen === "bigmatch" && run.pending) {
@@ -1459,6 +1466,11 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
                     </span>
                   </span>
                   <span className="flex shrink-0 items-baseline gap-1.5">
+                    {option.gear && option.gearItem ? (
+                      <span className="text-xs font-bold text-accent">
+                        <bdi dir="ltr">(+{option.gear}%</bdi> {tr(`gear.short.${option.gearItem}`)})
+                      </span>
+                    ) : null}
                     {option.odds >= 92 ? (
                       <span className="text-xs font-bold text-good">{tr("mo.max")}</span>
                     ) : option.gain ? (
@@ -2583,21 +2595,20 @@ function BigTrialCard({ career, onChange }: { career: Career; onChange: (c: Care
   );
 }
 
-function StoreScreen({ career, onChange, onBack }: { career: Career; onChange: (c: Career) => void; onBack: () => void }) {
+function StoreScreen({ career, onChange, onBack, onPlayer }: { career: Career; onChange: (c: Career) => void; onBack: () => void; onPlayer?: () => void }) {
   const { tr } = useTx();
   const admin = useContext(AdminContext);
   const today = todayKey();
   const [device, setDevice] = useState(() => loadDevice());
-  const [attrFor, setAttrFor] = useState<StoreItemId | null>(null);
   const [discountPick, setDiscountPick] = useState(false);
   const nextLocked = COUNTRIES.find((item) => !countryOpen(device, item.id, admin));
   const reasonText: Record<string, string> = { coins: tr("eco.short"), owned: tr("eco.owned"), full: tr("eco.full"), notNeeded: tr("eco.notNeeded"), daily: tr("eco.short") };
-  const purchase = (id: StoreItemId, attr?: AttrKey) => {
-    const next = buy(career, id, today, { attr, admin });
+  const purchase = (id: StoreItemId) => {
+    const next = buy(career, id, today, { admin });
     if (next === career) return;
     if (id === "unlock-country" && nextLocked) setDevice(unlockCountry(nextLocked.id));
+    if (COSMETIC_IDS.includes(id)) setDevice(ownCosmetic(id));
     onChange(next);
-    setAttrFor(null);
   };
   return (
     <Shell>
@@ -2613,6 +2624,12 @@ function StoreScreen({ career, onChange, onBack }: { career: Career; onChange: (
             <RewardButton name="store-discount" className="btn-ghost h-12 w-full text-sm" label={tr("eco.discount", { n: Math.round(ECONOMY.discount * 100) })} onReward={() => setDiscountPick(true)} />
           </div>
         )
+      ) : null}
+      <GearOfferCard career={career} onChange={onChange} />
+      {onPlayer ? (
+        <button type="button" className="btn-primary mt-3 h-12 w-full text-sm" onClick={onPlayer}>
+          {tr("gear.myPlayer")}
+        </button>
       ) : null}
       <div className="mt-4 grid gap-2">
         {CATALOG.map((item) => {
@@ -2643,31 +2660,147 @@ function StoreScreen({ career, onChange, onBack }: { career: Career; onChange: (
                     type="button"
                     className="btn-primary h-12 min-w-20 shrink-0 px-3 text-sm"
                     disabled={check !== "ok"}
-                    onClick={() => (item.needsAttr ? setAttrFor(attrFor === item.id ? null : item.id) : purchase(item.id))}
+                    onClick={() => purchase(item.id)}
                   >
                     <span className="num">{price === item.price ? formatCoins(price) : `${formatCoins(price)} ✓`}</span>
                   </button>
                 )}
               </div>
               {check !== "ok" && !discountPick ? <p className="mt-1 text-xs text-muted">{reasonText[check] ?? ""}</p> : null}
-              {attrFor === item.id ? (
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  {ATTR_KEYS.map((key) => (
-                    <button key={key} type="button" className="btn-ghost h-12 text-sm" onClick={() => purchase(item.id, key)}>
-                      {tr(`attr.${key}`)}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
             </div>
           );
         })}
       </div>
-      {career.gear.length ? (
-        <p className="mt-3 text-xs text-muted">
-          {tr("eco.gearOn")} {career.gear.map((item) => `${tr(`attr.${item.key}`)} +${item.amount}`).join(" · ")}
-        </p>
+    </Shell>
+  );
+}
+
+// ---------- equipment ("My Player") ----------
+// Functional layout only: the designer restyles it. All rules come from @/game/gear by slot/tier id.
+
+function gearTopLeague(career: Career) {
+  return isTopLeague(leagueOf(career, career.clubId));
+}
+
+function GearOfferCard({ career, onChange }: { career: Career; onChange: (c: Career) => void }) {
+  const { tr } = useTx();
+  const admin = useContext(AdminContext);
+  const today = todayKey();
+  const top = gearTopLeague(career);
+  const offer = dailyGearOffer(career, today, top);
+  if (career.race || !offer || career.adState.gearOfferBoughtDate === today) return null;
+  const slot = GEAR_SLOTS.find((item) => item.id === offer.slot)!;
+  const worn = slotFor(slot, career.player.position);
+  const price = gearPrice(career, offer.slot, offer.tier, today, admin);
+  const check = canBuyGear(career, offer.slot, offer.tier, today, top, admin);
+  const off = Math.round((ECONOMY.gear.dailyOff + (career.adState.gearOfferAdDate === today ? ECONOMY.gear.dailyAdOff : 0)) * 100);
+  return (
+    <section className="card mt-3 grid gap-2 px-3 py-2.5" data-gear-offer={`${offer.slot}:${offer.tier}`}>
+      <p className="text-xs font-semibold text-accent-2">{tr("gear.offer", { n: off })}</p>
+      <div className="flex items-center gap-3">
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">
+            {tr(`gear.item.${worn.item}`)} · {tr(`gear.tier.${offer.tier}`)}
+          </span>
+          <span className="block text-xs text-muted">
+            {tr(`attr.${worn.attr}`)} <bdi dir="ltr">+{tierInfo(offer.tier).bonus}</bdi>
+          </span>
+        </span>
+        <button type="button" className="btn-primary h-12 min-w-20 shrink-0 px-3 text-sm" disabled={check !== "ok"} onClick={() => onChange(buyGear(career, offer.slot, offer.tier, today, top, admin))}>
+          <span className="num">{formatCoins(price)}</span>
+        </button>
+      </div>
+      {rewardAvailable(career, "gear-offer", today) ? (
+        <RewardButton name="gear-offer" className="btn-ghost h-12 w-full text-sm" label={tr("gear.offerAd", { n: Math.round(ECONOMY.gear.dailyAdOff * 100) })} onReward={() => onChange(grantGearOfferAd(career, today))} />
       ) : null}
+    </section>
+  );
+}
+
+function MyPlayerScreen({ career, onChange, onBack }: { career: Career; onChange: (c: Career) => void; onBack: () => void }) {
+  const { tr } = useTx();
+  const admin = useContext(AdminContext);
+  const today = todayKey();
+  const top = gearTopLeague(career);
+  const bonus = gearBonus(career);
+  const [picking, setPicking] = useState(false);
+  const reason: Record<string, string> = { coins: tr("eco.short"), owned: tr("eco.owned"), locked: tr("gear.goldLocked"), daily: tr("eco.short") };
+  const slotCard = (index: number) => {
+    const slot = GEAR_SLOTS[index];
+    const worn = slotFor(slot, career.player.position);
+    const tier = slotTier(career, slot.id);
+    const nextTier = tier ? GEAR_TIERS[GEAR_TIERS.indexOf(tier) + 1] : "bronze";
+    const check = nextTier ? canBuyGear(career, slot.id, nextTier, today, top, admin) : "owned";
+    return (
+      <div key={slot.id} className="rounded-md border border-line bg-surface px-2.5 py-2" data-gear-slot={slot.id} data-gear-tier={tier ?? "none"}>
+        <p className="text-sm font-semibold">{tr(`gear.item.${worn.item}`)}</p>
+        <p className="text-xs text-muted">
+          {tr(`gear.for.${worn.item}`)} · {tr(`attr.${worn.attr}`)}
+        </p>
+        <p className="mt-1 text-xs">
+          {tier ? (
+            <>
+              {tr(`gear.tier.${tier}`)} <bdi dir="ltr">+{tierInfo(tier).bonus}</bdi>
+            </>
+          ) : (
+            <span className="text-muted">{tr("gear.empty")}</span>
+          )}
+          {career.gearTrial === slot.id ? <span className="ms-1 text-trophy">· {tr("gear.trialOn")}</span> : null}
+        </p>
+        {worn.injury && tier ? <p className="text-xs text-good">{tr("gear.injury", { n: Math.round(ECONOMY.gear.injuryCut[tier] * 100) })}</p> : null}
+        {picking ? (
+          <button
+            type="button"
+            className="btn-ghost mt-2 h-12 w-full text-sm"
+            onClick={() => {
+              onChange(grantTryGold(career, slot.id));
+              setPicking(false);
+            }}
+          >
+            {tr("gear.tier.gold")}
+          </button>
+        ) : nextTier ? (
+          <button type="button" className="btn-primary mt-2 h-12 w-full text-sm" disabled={check !== "ok"} onClick={() => onChange(buyGear(career, slot.id, nextTier, today, top, admin))}>
+            {tr(`gear.tier.${nextTier}`)} · <span className="num">{formatCoins(gearPrice(career, slot.id, nextTier, today, admin))}</span>
+          </button>
+        ) : (
+          <p className="mt-2 text-xs text-good">{tr("gear.maxed")}</p>
+        )}
+        {!picking && nextTier && check !== "ok" && check !== "coins" ? <p className="mt-1 text-xs text-muted">{reason[check]}</p> : null}
+      </div>
+    );
+  };
+  return (
+    <Shell>
+      <ScreenHeader title={tr("gear.myPlayer")} sub={tr("gear.sub", { n: ECONOMY.gear.attrCap })} onBack={onBack} right={<CoinChip n={career.coins} />} />
+      <div className="grid grid-cols-3 items-center gap-2">
+        <div className="grid gap-2">{[0, 1, 2].map(slotCard)}</div>
+        <div className="flex flex-col items-center gap-1 text-center">
+          <div className="ovr-badge">
+            <span className="num">{overall(career.player.position, effectiveAttrs(career))}</span>
+          </div>
+          <p className="text-sm font-bold">{career.player.name}</p>
+          <p className="text-xs text-muted">
+            {ATTR_KEYS.filter((key) => bonus[key]).map((key) => (
+              <span key={key} className="block">
+                {tr(`attr.${key}`)} <bdi dir="ltr">+{bonus[key]}</bdi>
+              </span>
+            ))}
+          </p>
+        </div>
+        <div className="grid gap-2">{[3, 4, 5].map(slotCard)}</div>
+      </div>
+      <GearOfferCard career={career} onChange={onChange} />
+      {rewardAvailable(career, "try-gold", today) ? (
+        picking ? (
+          <p className="mt-3 text-sm text-accent">{tr("gear.tryPick")}</p>
+        ) : (
+          <div className="mt-3">
+            <RewardButton name="try-gold" className="btn-ghost h-12 w-full text-sm" label={tr("gear.tryGold")} onReward={() => setPicking(true)} />
+          </div>
+        )
+      ) : null}
+      {!top ? <p className="mt-3 text-xs text-muted">{tr("gear.goldLocked")}</p> : null}
     </Shell>
   );
 }

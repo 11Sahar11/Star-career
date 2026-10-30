@@ -1,9 +1,9 @@
 import { OPEN_COUNTRIES, withEconomy } from "./economy";
-import { unlockCountry } from "./legacy";
+import { unlockCountry, withDeviceCosmetics } from "./legacy";
 import { SAVE_VERSION, type Career } from "./types";
 
-const CAREER_KEY = "kochav-career-v9";
-const OLD_CAREER_KEY = "kochav-career-v8";
+const CAREER_KEY = "kochav-career-v10";
+const OLD_CAREER_KEYS = ["kochav-career-v9", "kochav-career-v8"];
 const SOUND_KEY = "kochav-sound";
 const DAILY_KEY = "kochav-daily-v2";
 
@@ -28,14 +28,16 @@ export function migrateCareer(raw: unknown): Career | null {
   if (!raw || typeof raw !== "object") return null;
   const data = raw as Career & { version: number };
   if (!data.player || !data.season || typeof data.clubId !== "string") return null;
-  if (data.version === SAVE_VERSION) return withEconomy(data);
+  if (data.version === SAVE_VERSION) return withDeviceCosmetics(withEconomy(data));
+  // v9 → v10: gear moves from [{key, amount}] to one tier per slot (withEconomy converts it).
+  if (data.version === 9) return withDeviceCosmetics(withEconomy({ ...data, version: SAVE_VERSION } as Career));
   if (data.version !== 8) return null;
   const upgraded = withEconomy({ ...data, version: SAVE_VERSION } as Career);
   const id = boostId(data.player.name, data.year);
   upgraded.adState = { ...upgraded.adState, boostTaken: boostTaken(id), healTaken: healTaken(id) };
   // League unlocks live in the device profile; a career already running abroad keeps its country open.
   if (!upgraded.race && !upgraded.daily && !OPEN_COUNTRIES.includes(upgraded.countryId)) unlockCountry(upgraded.countryId);
-  return upgraded;
+  return withDeviceCosmetics(upgraded);
 }
 
 export function loadCareer(): Career | null {
@@ -45,14 +47,17 @@ export function loadCareer(): Career | null {
       const parsed = migrateCareer(JSON.parse(raw));
       return parsed && isCareer(parsed) ? parsed : null;
     }
-    const old = localStorage.getItem(OLD_CAREER_KEY);
-    if (!old) return null;
-    const migrated = migrateCareer(JSON.parse(old));
-    if (!migrated) return null;
-    // Keep the v8 copy until the v9 save is written.
-    localStorage.setItem(CAREER_KEY, JSON.stringify(migrated));
-    if (localStorage.getItem(CAREER_KEY)) localStorage.removeItem(OLD_CAREER_KEY);
-    return migrated;
+    for (const oldKey of OLD_CAREER_KEYS) {
+      const old = localStorage.getItem(oldKey);
+      if (!old) continue;
+      const migrated = migrateCareer(JSON.parse(old));
+      if (!migrated) continue;
+      // Keep the old copy until the new save is written.
+      localStorage.setItem(CAREER_KEY, JSON.stringify(migrated));
+      if (localStorage.getItem(CAREER_KEY)) localStorage.removeItem(oldKey);
+      return migrated;
+    }
+    return null;
   } catch {
     return null;
   }
