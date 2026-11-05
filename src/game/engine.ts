@@ -1160,50 +1160,61 @@ export function isBigFixture(career: Career, fixture: Fixture) {
   return keyFixtureIds(career.season, career.clubId).includes(fixture.id);
 }
 
-/** Points of attribute per 100% of odds. */
-const MOMENT_SLOPE = 38;
-
-/** Opponent on the player-attribute scale: a club's strength is a team rating, an individual attribute runs ~12 above it (a starter in a 58-rated side has ~70s). */
+/** Map team strength to the individual-attribute scale (kept for save/replay compatibility). */
 export function momentOpponent(strength: number) {
-  return strength + MOMENT_OFFSET;
-}
-const MOMENT_OFFSET = 10;
-
-export function momentOdds(attr: number, opponent: number, bias: number) {
-  return clamp(Math.round((0.5 + (attr - opponent) / MOMENT_SLOPE + bias) * 100), 8, 92);
+  return strength + 10;
 }
 
-type OptionSpec = [id: string, attr: AttrKey, bias: number, reward: MomentReward];
+/**
+ * Football conversion rate at attribute 60 against an individual opponent rated 70.
+ * Training changes log-odds, not percentage points: +10 attribute multiplies the
+ * odds ratio by exp(0.45). Opposition matters, but is bounded so an elite club
+ * cannot erase an elite player's progression. All returned values are the exact
+ * integer percentages stored on the option and used by resolveMoment/retryMoment.
+ */
+export function momentOdds(attr: number, opponent: number, baseChance: number, ceiling = 92) {
+  const quality = (clamp(attr, 1, 99) - 60) * 0.045;
+  const opposition = clamp(opponent - 70, -20, 25) * 0.018;
+  const logOdds = Math.log(baseChance / (1 - baseChance)) + quality - opposition;
+  return clamp(Math.round(100 / (1 + Math.exp(-logOdds))), 5, ceiling);
+}
 
+type OptionSpec = [id: string, attr: AttrKey, baseChance: number, reward: MomentReward, ceiling: number];
+
+// Rates are for the complete reward (including the finish), not just completing
+// a pass/dribble. No open-play long-shot situation exists; curl is the difficult
+// outside-box shot. Its lower ceiling preserves that difficulty even at 99.
 const SITUATIONS: Record<string, { kind: MomentKind; options: OptionSpec[] }> = {
-  penalty: { kind: "chance", options: [["pen", "shooting", 0.2, "goal"], ["power", "physical", 0.08, "goal"]] },
-  freekick: { kind: "chance", options: [["curl", "shooting", -0.08, "goal"], ["layoff", "passing", 0.06, "assist"]] },
-  oneonone: { kind: "chance", options: [["dribble", "dribbling", 0, "goal"], ["shoot", "shooting", -0.06, "goal"]] },
-  runbehind: { kind: "chance", options: [["sprint", "pace", 0, "goal"], ["pass", "passing", 0.04, "assist"]] },
-  aerial: { kind: "chance", options: [["header", "physical", -0.02, "goal"], ["knock", "passing", 0.06, "assist"]] },
-  keypass: { kind: "chance", options: [["through", "passing", 0.02, "assist"], ["carry", "dribbling", -0.1, "goal"]] },
-  defend: { kind: "defend", options: [["tackle", "tackle", 0, "stop"], ["block", "physical", 0.05, "stop"], ["track", "pace", -0.03, "stop"]] },
-  gkdive: { kind: "keeper", options: [["dive", "physical", 0, "stop"], ["stand", "tackle", -0.06, "stop"]] },
-  gkstand: { kind: "keeper", options: [["stand", "tackle", 0.04, "stop"], ["dive", "physical", -0.04, "stop"]] },
-  gkcomeoff: { kind: "keeper", options: [["rush", "pace", -0.04, "stop"], ["sweep", "passing", -0.02, "stop"]] },
+  penalty: { kind: "chance", options: [["pen", "shooting", 0.78, "goal", 92], ["power", "physical", 0.74, "goal", 92]] },
+  freekick: { kind: "chance", options: [["curl", "shooting", 0.08, "goal", 35], ["layoff", "passing", 0.30, "assist", 80]] },
+  oneonone: { kind: "chance", options: [["dribble", "dribbling", 0.35, "goal", 82], ["shoot", "shooting", 0.40, "goal", 85]] },
+  runbehind: { kind: "chance", options: [["sprint", "pace", 0.32, "goal", 80], ["pass", "passing", 0.55, "assist", 90]] },
+  aerial: { kind: "chance", options: [["header", "physical", 0.22, "goal", 72], ["knock", "passing", 0.35, "assist", 82]] },
+  keypass: { kind: "chance", options: [["through", "passing", 0.30, "assist", 80], ["carry", "dribbling", 0.18, "goal", 65]] },
+  defend: { kind: "defend", options: [["tackle", "tackle", 0.55, "stop", 90], ["block", "physical", 0.60, "stop", 92], ["track", "pace", 0.45, "stop", 87]] },
+  gkdive: { kind: "keeper", options: [["dive", "physical", 0.65, "stop", 92], ["stand", "tackle", 0.50, "stop", 88]] },
+  gkstand: { kind: "keeper", options: [["stand", "tackle", 0.60, "stop", 92], ["dive", "physical", 0.50, "stop", 88]] },
+  gkcomeoff: { kind: "keeper", options: [["rush", "pace", 0.55, "stop", 90], ["sweep", "passing", 0.60, "stop", 92]] },
 };
 
 const ATTACK_POOL = ["penalty", "freekick", "oneonone", "runbehind", "aerial", "keypass"];
 const KEEPER_POOL = ["gkdive", "gkstand", "gkcomeoff"];
 
 /** Odds for each choice; `gain` is how much training since the last key match added. */
-function momentOptions(career: Career, situation: string, opponent: number): MomentOption[] {
+export function momentOptions(career: Career, situation: string, opponent: number): MomentOption[] {
   const a = effectiveAttrs(career, true);
   const bare = career.player.attrs;
   const gains = career.keyGain ?? {};
   const camp = career.keyCampBonus ?? 0;
   const cap = ECONOMY.gear.oddsCap;
-  return SITUATIONS[situation].options.map(([id, attr, bias, reward]) => {
-    const odds = clamp(momentOdds(a[attr], opponent, bias) + camp, 8, cap);
+  return SITUATIONS[situation].options.map(([id, attr, baseChance, reward, ceiling]) => {
+    const limit = Math.min(cap, ceiling);
+    const oddsFor = (value: number) => clamp(momentOdds(value, opponent, baseChance, limit) + camp, 5, limit);
+    const odds = oddsFor(a[attr]);
     const option: MomentOption = { id, attr, odds, reward };
-    const gain = odds - clamp(momentOdds(a[attr] - (gains[attr] ?? 0), opponent, bias) + camp, 8, cap);
+    const gain = odds - oddsFor(a[attr] - (gains[attr] ?? 0));
     if (gain > 0) option.gain = gain;
-    const gear = odds - clamp(momentOdds(bare[attr], opponent, bias) + camp, 8, cap);
+    const gear = odds - oddsFor(bare[attr]);
     const item = gearItemFor(career, attr, true);
     if (gear > 0 && item) {
       option.gear = gear;
