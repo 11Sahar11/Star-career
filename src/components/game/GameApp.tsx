@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { Crest, crestSpec } from "@/components/game/crest";
 import { STAR_THEME, clubTheme, keepHyphens, type ClubTheme } from "@/components/game/kit";
+import { PitchBoard, ResultCard, headlineKey, outcomeOf } from "./PitchBoard";
 import { HAIR_COLOR_IDS, HAIR_COLORS, HAIR_STYLES, SKIN_TONES, resolveLook, type HairColor, type HairStyle } from "@/game/look";
 
 function NameCrest({ name, className = "mx-auto mb-1 block h-10 w-10" }: { name: string; className?: string }) {
@@ -1704,7 +1705,11 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
   const focus = reveal ?? (active >= 0 ? active : null);
   const focusMoment = focus !== null ? pending.moments[focus] : null;
   const minute = focusMoment ? focusMoment.minute : 90;
-  const shown = report.events.filter((event) => (focusMoment ? event.minute < minute || (reveal !== null && event.minute === minute) : true));
+  const momentKey = focus !== null && focusMoment?.picked ? `${focus}|${focusMoment.picked}|${focusMoment.success}` : null;
+  // The board plays the moment first; the result card (and the score) land once it ends.
+  const [cardFor, setCardFor] = useState<string | null>(null);
+  const showCard = momentKey !== null && cardFor === momentKey;
+  const shown = report.events.filter((event) => (focusMoment ? event.minute < minute || (reveal !== null && showCard && event.minute === minute) : true));
   const current = shown[shown.length - 1];
   const ours = getClub(career.clubId).name;
   // data name: the crest key; cname() translates it where it is shown
@@ -1779,57 +1784,90 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
         </div>
       </div>
 
-      {focusMoment && focus !== null ? (
-        <section className="card moment-card mt-3 overflow-hidden" aria-live="polite" aria-label={tr("mo.title")}>
-          <h2 className="moment-head">{tr(focusMoment.situation ? `mo.sit.${focusMoment.situation}` : `mo.${focusMoment.kind}`, { min: focusMoment.minute })}</h2>
-          {focusMoment.picked ? (
-            <div className="grid gap-3 border-t border-line px-4 py-3.5">
-              <p className={`text-lg font-bold ${focusMoment.success ? "text-good" : "text-bad"}`}>{focusMoment.success ? tr("mo.yes") : tr("mo.no")}</p>
-              <p className="text-sm">
-                {text(
-                  report.events.find((event) => event.minute === focusMoment.minute && event.text.startsWith("@mo."))?.text ?? "",
-                )}
-              </p>
-              <button
-                type="button"
-                className="btn-primary h-12 w-full"
-                onClick={() => (active < 0 ? onChange(finishBigMatch(career)) : setReveal(null))}
-              >
-                {active < 0 ? tr("mo.finish") : tr("mo.next")}
+      {focusMoment && focus !== null ? (() => {
+        const line = report.events.find((event) => event.minute === focusMoment.minute && event.text.startsWith("@mo."))?.text;
+        const outcome = focusMoment.picked ? outcomeOf(line) : null;
+        const good = outcome === "goal" || outcome === "stop";
+        const before = focusMoment.picked ? composeReport({ ...pending, moments: pending.moments.map((m, at) => (at === focus ? { ...m, picked: undefined, success: undefined } : m)) }).rating : report.rating;
+        if (showCard && focusMoment.picked) {
+          return (
+            <ResultCard
+              good={good}
+              kicker={<><bdi dir="ltr" className="font-num">{focusMoment.minute}'</bdi><span aria-hidden="true">·</span>{tr(`mo.opt.${focusMoment.picked}`)}</>}
+              headline={tr(headlineKey(line))}
+              line={outcome === "goal" ? text(line ?? "").replace(/^[^.!?]{1,12}!\s*/u, "") : text(line ?? "")}
+              ratingLabel={tr("pb.rating")}
+              rating={{ value: report.rating, delta: Math.round((report.rating - before) * 10) / 10 }}
+              score={
+                <span className="pb-score" dir="ltr">
+                  <NameCrest name={left} className="h-8 w-8" />
+                  <span className="font-num pb-score-n">{leftGoals}<i>–</i>{rightGoals}</span>
+                  <NameCrest name={right} className="h-8 w-8" />
+                </span>
+              }
+            >
+              <button type="button" className="btn-primary h-14 w-full" onClick={() => (active < 0 ? onChange(finishBigMatch(career)) : setReveal(null))}>
+                {active < 0 ? tr("mo.finish") : tr("pb.continue")}
               </button>
-              {focusMoment.success === false && focus !== null && rewardAvailable(career, "retry-moment", todayKey(), pending.base.fixtureId) ? (
+              {focusMoment.success === false && rewardAvailable(career, "retry-moment", todayKey(), pending.base.fixtureId) ? (
                 <RewardButton name="retry-moment" className="btn-ghost h-12 w-full text-sm" label={tr("eco.retry")} onReward={() => onChange(retryMoment(career, focus))} />
               ) : null}
-            </div>
-          ) : (
-            <div className="list rounded-none border-x-0 border-b-0">
-              {focusMoment.options.map((option) => (
-                <button key={option.id} type="button" className="list-row" onClick={() => choose(focus, option.id)}>
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-semibold">{tr(`mo.opt.${option.id}`)}</span>
-                    <span className="block text-xs text-muted">
-                      {tr(`attr.${option.attr}`)} {career.player.attrs[option.attr]}
-                    </span>
-                  </span>
-                  <span className="flex shrink-0 items-baseline gap-1.5">
-                    {option.gear && option.gearItem ? (
-                      <span className="text-xs font-bold text-accent">
-                        <bdi dir="ltr">(+{option.gear}%</bdi> {tr(`gear.short.${option.gearItem}`)})
+            </ResultCard>
+          );
+        }
+        return (
+          <section className="card moment-card mt-3 overflow-hidden" aria-live="polite" aria-label={tr("mo.title")}>
+            <h2 className="moment-head">
+              <span className="pb-tag">{tr("mo.title")}</span>
+              {tr(focusMoment.situation ? `mo.sit.${focusMoment.situation}` : `mo.${focusMoment.kind}`, { min: focusMoment.minute })}
+            </h2>
+            <PitchBoard
+              key={`${focus}-${focusMoment.picked ?? "open"}`}
+              moment={focusMoment}
+              picked={focusMoment.picked}
+              outcome={outcome}
+              num={shirtNumber(career.player.position)}
+              play={Boolean(focusMoment.picked && outcome)}
+              onDone={() => momentKey && setCardFor(momentKey)}
+              label={tr("mo.title")}
+            />
+            {(
+              <div className="list rounded-none border-x-0 border-b-0">
+                {focusMoment.options.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`list-row pb-option ${focusMoment.picked === option.id ? "is-picked" : ""}`}
+                    disabled={Boolean(focusMoment.picked) || reveal !== null}
+                    aria-pressed={focusMoment.picked === option.id}
+                    onClick={() => choose(focus, option.id)}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-semibold">{tr(`mo.opt.${option.id}`)}</span>
+                      <span className="block text-xs text-muted">
+                        {tr(`attr.${option.attr}`)} {career.player.attrs[option.attr]}
                       </span>
-                    ) : null}
-                    {option.odds >= 92 ? (
-                      <span className="text-xs font-bold text-good">{tr("mo.max")}</span>
-                    ) : option.gain ? (
-                      <span className="num text-sm font-bold text-good">+{option.gain}%</span>
-                    ) : null}
-                    <span className={`num text-lg font-bold band-${option.odds >= 65 ? "high" : option.odds >= 45 ? "good" : option.odds >= 30 ? "mid" : "low"}`}>{option.odds}%</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-      ) : null}
+                    </span>
+                    <span className="flex shrink-0 items-baseline gap-1.5">
+                      {option.gear && option.gearItem ? (
+                        <span className="text-xs font-bold text-accent">
+                          <bdi dir="ltr">(+{option.gear}%</bdi> {tr(`gear.short.${option.gearItem}`)})
+                        </span>
+                      ) : null}
+                      {option.odds >= 92 ? (
+                        <span className="text-xs font-bold text-good">{tr("mo.max")}</span>
+                      ) : option.gain ? (
+                        <span className="num text-sm font-bold text-good">+{option.gain}%</span>
+                      ) : null}
+                      <span className={`num text-lg font-bold band-${option.odds >= 65 ? "high" : option.odds >= 45 ? "good" : option.odds >= 30 ? "mid" : "low"}`}>{option.odds}%</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })() : null}
 
       <ol className="card mt-3 flex flex-col">
         {[...shown].reverse().map((event, index) => (
