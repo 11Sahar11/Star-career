@@ -12,19 +12,15 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: APP_NAME },
       { name: "description", content: "A football player career. Pick a country at 16 and climb to a European final." },
-      { name: "theme-color", content: "#0b1433" },
+      { name: "theme-color", content: "#f3f1ec" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       { rel: "preload", as: "image", href: "/loading-bg.webp", type: "image/webp", fetchPriority: "high" },
       { rel: "stylesheet", href: appCss },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      {
-        // Rubik + Secular One (both ship Hebrew and Latin subsets; Google serves them via unicode-range).
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=Secular+One&display=swap",
-      },
+      // Self-hosted fonts (public/fonts): Oswald for Latin display, condensed Noto Sans Hebrew for Hebrew display, Heebo for text.
+      { rel: "preload", as: "font", href: "/fonts/heebo-var.woff", type: "font/woff", crossOrigin: "anonymous" },
+      { rel: "preload", as: "font", href: "/fonts/oswald-var.woff", type: "font/woff", crossOrigin: "anonymous" },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
     ],

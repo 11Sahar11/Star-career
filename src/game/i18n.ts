@@ -1,3 +1,4 @@
+import { localClub } from "./clubnames";
 export type Lang = "en" | "he" | "es" | "fr";
 
 const KEY = "star-lang";
@@ -32,6 +33,23 @@ export function setLang(lang: Lang) {
 }
 
 const en: Record<string, string> = {
+  "ovr": "OVR",
+  "div.Premier": "{country} Premier Division",
+  "div.First": "{country} First Division",
+  "div.Second": "{country} Second Division",
+  "div.Third": "{country} Third Division",
+  "streakOne": "1-day streak",
+  "nextMatch": "Next match",
+  "playMatch": "Play match",
+  "vs": "vs",
+  "seasonGoal": "Season goal",
+  "eco.videoCoins": "Watch video · +{n} coins",
+  "eco.openPlain": "Or open it now: +{n}",
+  "eco.openPlainCamp": "Or open it now: free camp",
+  "gear.head": "Gear",
+  "gear.capShort": "Max +{n} per attribute",
+  "gear.tryShort": "Try gold",
+  "settings": "Settings",
   "lang.en": "EN",
   "lang.he": "עב",
   "lang.es": "ES",
@@ -390,6 +408,7 @@ const en: Record<string, string> = {
   fullTable: "Full table",
   shortTable: "Around you",
   matchday: "Matchday {n} of {m}",
+  placeN: "Place {n}",
   ovrUp: "{n} overall",
   "ovrSame": "Overall unchanged",
   "mo.max": "MAX",
@@ -399,7 +418,7 @@ const en: Record<string, string> = {
   "seasonCoins": "Coins earned this season: {n}",
   "seasonCoinsAds": "(+{n} from doubling)",
   "seasonCoinsHint": "Doubling available every match",
-  "nav.label": "Main", "nav.home": "Home", "nav.player": "My Player", "nav.season": "Season", "nav.trophies": "Trophies", "nav.store": "Store", "nav.storeNew": "New in store", "look.title": "Your look", "look.skin": "Skin tone", "look.tone": "Tone {n}", "look.save": "Save", "look.cancel": "Cancel", "look.edit": "Change look (free)", "look.hair": "Hair", "look.hairColor": "Hair colour", "look.hair.buzz": "Buzz", "look.hair.short": "Short", "look.hair.curly": "Curly", "look.hair.afro": "Afro", "look.hair.long": "Long", "look.hair.mohawk": "Mohawk", "look.color.black": "Black", "look.color.dark_brown": "Dark brown", "look.color.brown": "Brown", "look.color.blond": "Blond", "look.color.red": "Red", "look.color.grey": "Grey",
+  "nav.label": "Main", "nav.home": "Home", "nav.player": "My Player", "nav.season": "Season", "nav.trophies": "Trophies", "nav.store": "Shop", "nav.storeNew": "New in store", "look.title": "Your look", "look.skin": "Skin tone", "look.tone": "Tone {n}", "look.save": "Save", "look.cancel": "Cancel", "look.edit": "Change look (free)", "look.hair": "Hair", "look.hairColor": "Hair colour", "look.hair.buzz": "Buzz", "look.hair.short": "Short", "look.hair.curly": "Curly", "look.hair.afro": "Afro", "look.hair.long": "Long", "look.hair.mohawk": "Mohawk", "look.color.black": "Black", "look.color.dark_brown": "Dark brown", "look.color.brown": "Brown", "look.color.blond": "Blond", "look.color.red": "Red", "look.color.grey": "Grey",
   "seasonSalary": "Salary bonus: {n} (included)",
   "keyTag": "Key",
   "keyBonusNote": "Key matches count double: a win adds +3 bonus points, a draw +1, and each key win boosts your cup run. Key wins this season: {n}.",
@@ -711,6 +730,23 @@ const en: Record<string, string> = {
 };
 
 const he: Record<string, string> = {
+  "ovr": "דירוג",
+  "div.Premier": "ליגת העל של {country}",
+  "div.First": "הליגה הראשונה של {country}",
+  "div.Second": "הליגה השנייה של {country}",
+  "div.Third": "הליגה השלישית של {country}",
+  "streakOne": "רצף של יום אחד",
+  "nextMatch": "המשחק הבא",
+  "playMatch": "שחק משחק",
+  "vs": "נגד",
+  "seasonGoal": "יעד העונה",
+  "eco.videoCoins": "צפה בסרטון · \u200e+{n} מטבעות",
+  "eco.openPlain": "או לפתוח עכשיו: \u200e+{n}",
+  "eco.openPlainCamp": "או לפתוח עכשיו: מחנה חינם",
+  "gear.head": "ציוד",
+  "gear.capShort": "עד \u200e+{n} לתכונה",
+  "gear.tryShort": "נסה זהב",
+  "settings": "הגדרות",
   "lang.en": "EN",
   "lang.he": "עב",
   "lang.es": "ES",
@@ -1069,6 +1105,7 @@ const he: Record<string, string> = {
   fullTable: "טבלה מלאה",
   shortTable: "סביבך",
   matchday: "מחזור {n} מתוך {m}",
+  placeN: "מקום {n}",
   ovrUp: "{n} אוברול",
   "ovrSame": "אוברול ללא שינוי",
   "mo.max": "מקס",
@@ -1390,6 +1427,23 @@ const he: Record<string, string> = {
 };
 
 const es: Record<string, string> = {
+  "ovr": "MED",
+  "div.Premier": "Primera división de {country}",
+  "div.First": "Segunda división de {country}",
+  "div.Second": "Tercera división de {country}",
+  "div.Third": "Cuarta división de {country}",
+  "streakOne": "Racha de 1 día",
+  "nextMatch": "Próximo partido",
+  "playMatch": "Jugar partido",
+  "vs": "vs",
+  "seasonGoal": "Objetivo de la temporada",
+  "eco.videoCoins": "Ver vídeo · +{n} monedas",
+  "eco.openPlain": "O ábrelo ya: +{n}",
+  "eco.openPlainCamp": "O ábrelo ya: campo gratis",
+  "gear.head": "Equipo",
+  "gear.capShort": "Máx. +{n} por atributo",
+  "gear.tryShort": "Probar oro",
+  "settings": "Ajustes",
   "lang.en": "EN",
   "lang.he": "עב",
   "lang.es": "ES",
@@ -1748,6 +1802,7 @@ const es: Record<string, string> = {
   fullTable: "Tabla completa",
   shortTable: "Tu zona",
   matchday: "Jornada {n} de {m}",
+  placeN: "Puesto {n}",
   ovrUp: "{n} de media",
   "ovrSame": "Media sin cambios",
   "mo.max": "MÁX",
@@ -2069,6 +2124,23 @@ const es: Record<string, string> = {
 };
 
 const fr: Record<string, string> = {
+  "ovr": "GÉN",
+  "div.Premier": "Première division ({country})",
+  "div.First": "Deuxième division ({country})",
+  "div.Second": "Troisième division ({country})",
+  "div.Third": "Quatrième division ({country})",
+  "streakOne": "Série de 1 jour",
+  "nextMatch": "Prochain match",
+  "playMatch": "Jouer le match",
+  "vs": "vs",
+  "seasonGoal": "Objectif de la saison",
+  "eco.videoCoins": "Regarder la vidéo · +{n} pièces",
+  "eco.openPlain": "Ou l’ouvrir maintenant : +{n}",
+  "eco.openPlainCamp": "Ou l’ouvrir maintenant : stage gratuit",
+  "gear.head": "Équipement",
+  "gear.capShort": "Max +{n} par attribut",
+  "gear.tryShort": "Essayer l’or",
+  "settings": "Réglages",
   "lang.en": "EN",
   "lang.he": "עב",
   "lang.es": "ES",
@@ -2427,6 +2499,7 @@ const fr: Record<string, string> = {
   fullTable: "Classement complet",
   shortTable: "Autour de toi",
   matchday: "Journée {n} sur {m}",
+  placeN: "{n}e place",
   ovrUp: "{n} de général",
   "ovrSame": "Général inchangé",
   "mo.max": "MAX",
@@ -2758,8 +2831,14 @@ export function t(key: string, vars?: Record<string, string | number>, lang: Lan
   return text;
 }
 
+/** A club name in the current (or given) language. */
+export function cname(name: string, lang: Lang = current): string {
+  return localClub(name, lang);
+}
+
 export function show(raw: string, lang: Lang = current): string {
-  if (!raw || !raw.startsWith("@")) return raw;
+  if (!raw) return raw;
+  if (!raw.startsWith("@")) return localClub(raw, lang);
   const body = raw.slice(1);
   const hash = body.indexOf("#");
   const main = hash >= 0 ? body.slice(0, hash) : body;
@@ -2768,7 +2847,7 @@ export function show(raw: string, lang: Lang = current): string {
   const key = parts[0] ?? "";
   const a = parts[1] ?? "";
   const b = parts[2] ?? "";
-  const named = (value: string) => (value.includes(".") ? t(value, undefined, lang) : value);
+  const named = (value: string) => (value.includes(".") ? t(value, undefined, lang) : localClub(value, lang));
   const name = named(a);
   const second = ["Quarter-final", "Semi-final", "Final", "Winners"].includes(b) ? t(`stage.${b}`, undefined, lang) : named(b);
   let text = t(key, { n: b ? second : name, name, p: second, g: second, y: a }, lang);

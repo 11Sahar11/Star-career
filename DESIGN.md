@@ -1,292 +1,232 @@
 ---
 name: STAR
-description: A one-player football career, run like a manager runs a club — dark lists, readable data, one green Continue.
+description: A football career on cream paper. Ink type, one green, amber for rewarded videos, the next match in a dark card.
 colors:
-  pitch-night: "#14171c"
-  slate-panel: "#1d2229"
-  slate-raised: "#262c35"
-  hairline: "#303844"
-  chalk: "#eef1f5"
-  fog: "#9aa4b2"
-  dim-slate: "#6c7684"
-  continue-green: "#2fb463"
-  continue-green-light: "#6edc97"
-  continue-green-deep: "#23904e"
-  green-ink: "#06160c"
-  good: "#5cd68f"
-  bad: "#f06363"
-  trophy-gold: "#e5b84a"
-  band-low: "#8f99a7"
-  band-mid: "#e5b84a"
-  band-good: "#b5d86b"
-  band-high: "#5cd68f"
-  band-elite: "#3fd0c9"
+  paper: "#f3f1ec"
+  paper-band: "#eae6dc"
+  card: "#ffffff"
+  card-pressed: "#f6f4ef"
+  hairline: "#e2dfd7"
+  hairline-strong: "#d3cfc4"
+  ink: "#111418"
+  ink-muted: "#62666d"
+  ink-dim: "#9a9da3"
+  on-ink-muted: "#a9adb4"
+  pitch-green: "#0b6b3a"
+  pitch-green-deep: "#08552e"
+  pitch-green-tint: "#e3efe7"
+  reward-amber: "#ffb020"
+  reward-amber-light: "#ffc24d"
+  reward-amber-deep: "#e89c10"
+  on-amber: "#1d1300"
+  coin-gold: "#f2c443"
+  good: "#0e7a42"
+  bad: "#c8232f"
+  alert-dot: "#ff4d4f"
 typography:
   display:
-    fontFamily: "Rubik, Segoe UI, system-ui, sans-serif"
-    fontSize: "1.7rem"
-    fontWeight: 700
-    lineHeight: 1.25
-  score:
-    fontFamily: "Rubik, Segoe UI, system-ui, sans-serif"
-    fontSize: "2.75rem"
+    fontFamily: "STAR Display, Heebo, Arial Narrow, sans-serif"
+    fontSize: "2.15rem"
     fontWeight: 700
     lineHeight: 1
-    fontFeature: "tnum"
-  figure:
-    fontFamily: "Rubik, Segoe UI, system-ui, sans-serif"
-    fontSize: "2.25rem"
-    fontWeight: 600
-    lineHeight: 1.1
+  score:
+    fontFamily: "STAR Display, Heebo, Arial Narrow, sans-serif"
+    fontSize: "3.5rem"
+    fontWeight: 700
+    lineHeight: 0.95
     fontFeature: "tnum"
   title:
-    fontFamily: "Rubik, Segoe UI, system-ui, sans-serif"
-    fontSize: "1.05rem"
+    fontFamily: "STAR Display, Heebo, Arial Narrow, sans-serif"
+    fontSize: "1.95rem"
     fontWeight: 700
-    lineHeight: 1.25
-  title-row:
-    fontFamily: "Rubik, Segoe UI, system-ui, sans-serif"
+    lineHeight: 1
+  section:
+    fontFamily: "STAR Display, Heebo, Arial Narrow, sans-serif"
+    fontSize: "1.5rem"
+    fontWeight: 700
+    lineHeight: 1
+  status:
+    fontFamily: "STAR Display, Heebo, Arial Narrow, sans-serif"
+    fontSize: "0.9rem"
+    fontWeight: 600
+    lineHeight: 1.2
+    letterSpacing: "0.12em"
+  body:
+    fontFamily: "Heebo, Segoe UI, system-ui, sans-serif"
+    fontSize: "0.95rem"
+    fontWeight: 400
+    lineHeight: 1.4
+  row-title:
+    fontFamily: "Heebo, Segoe UI, system-ui, sans-serif"
     fontSize: "1rem"
     fontWeight: 600
-    lineHeight: 1.5
-  body:
-    fontFamily: "Rubik, Segoe UI, system-ui, sans-serif"
-    fontSize: "0.875rem"
-    fontWeight: 400
-    lineHeight: 1.45
+    lineHeight: 1.3
   label:
-    fontFamily: "Rubik, Segoe UI, system-ui, sans-serif"
+    fontFamily: "Heebo, Segoe UI, system-ui, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 600
-    lineHeight: 1.33
+    lineHeight: 1.2
 rounded:
-  bar: "2px"
-  chip: "4px"
-  control: "6px"
-  container: "8px"
+  chip: "8px"
+  button: "12px"
+  tile: "12px"
+  card: "20px"
   pill: "999px"
 spacing:
   xs: "4px"
   sm: "8px"
   md: "12px"
-  lg: "16px"
-  xl: "20px"
-  row-y: "9.6px"
-  row-x: "14.4px"
+  lg: "20px"
+  xl: "24px"
 components:
   button-primary:
-    backgroundColor: "{colors.continue-green}"
-    textColor: "{colors.green-ink}"
-    rounded: "{rounded.control}"
-    typography: "{typography.title-row}"
-    height: "52px"
-    width: "100%"
-  button-primary-hover:
-    backgroundColor: "{colors.continue-green-light}"
-  button-primary-active:
-    backgroundColor: "{colors.continue-green-deep}"
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.card}"
+    typography: "{typography.row-title}"
+    rounded: "{rounded.button}"
+    height: "56px"
+  button-on-dark:
+    backgroundColor: "{colors.card}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.button}"
+    height: "56px"
   button-ghost:
-    backgroundColor: "transparent"
-    textColor: "{colors.chalk}"
-    rounded: "{rounded.control}"
+    backgroundColor: "{colors.card}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.button}"
     height: "48px"
-  button-ghost-hover:
-    backgroundColor: "{colors.slate-raised}"
-  button-danger:
-    backgroundColor: "{colors.bad}"
-    textColor: "#1c0505"
-    rounded: "{rounded.control}"
-  card:
-    backgroundColor: "{colors.slate-panel}"
-    rounded: "{rounded.container}"
-  list-row:
-    backgroundColor: "{colors.slate-panel}"
-    textColor: "{colors.chalk}"
-    padding: "9.6px 14.4px"
-    height: "56px"
-  list-row-hover:
-    backgroundColor: "{colors.slate-raised}"
-  input:
-    backgroundColor: "{colors.slate-panel}"
-    textColor: "{colors.chalk}"
-    rounded: "{rounded.control}"
-    padding: "0 16px"
-    height: "48px"
-  chip:
-    backgroundColor: "{colors.slate-raised}"
-    textColor: "{colors.fog}"
-    rounded: "{rounded.chip}"
-    typography: "{typography.label}"
-    padding: "2.4px 8px"
-  chip-accent:
-    backgroundColor: "{colors.continue-green}"
-    textColor: "{colors.green-ink}"
-  ovr-badge:
-    backgroundColor: "{colors.slate-raised}"
-    rounded: "{rounded.control}"
-    size: "52px"
-  segmented-option:
-    textColor: "{colors.fog}"
-    rounded: "{rounded.chip}"
-    height: "44px"
-  segmented-option-on:
-    backgroundColor: "{colors.slate-raised}"
-    textColor: "{colors.chalk}"
-  topbar:
-    backgroundColor: "{colors.pitch-night}"
-    height: "56px"
+  button-reward:
+    backgroundColor: "{colors.reward-amber}"
+    textColor: "{colors.on-amber}"
+    rounded: "{rounded.button}"
+    height: "52px"
+  coin-pill:
+    backgroundColor: "{colors.card}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.pill}"
+    height: "40px"
+  match-card:
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.card}"
+    rounded: "{rounded.card}"
+    padding: "20px"
+  list-card:
+    backgroundColor: "{colors.card}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.card}"
+    padding: "12px 20px"
+  gear-tile:
+    backgroundColor: "{colors.card}"
+    rounded: "{rounded.tile}"
+    size: "88px"
+  shop-tab:
+    backgroundColor: "{colors.pitch-green}"
+    textColor: "{colors.card}"
+    rounded: "18px"
+    size: "56px"
 ---
 
 # Design System: STAR
 
 ## Overview
 
-**Creative North Star: "The Manager's Clipboard"**
+**Creative North Star: "The Matchday Programme"**
 
-STAR is the football-manager standard played straight, at Football Manager Mobile's craft level. The whole career is read off a dark clipboard: a charcoal-slate ground, flat panels split by hairlines, rows of data that can be scanned in a glance on a phone held in one hand. Nothing glows and nothing is gradient-filled; hierarchy comes from tone steps, weight, and a single action colour.
+STAR reads like a printed matchday programme: cream paper, ink headlines in condensed capitals, one green for the club, and the next fixture set in a dark block you cannot miss. This world was chosen by the owner from his own reference screens (home and My Player) over a dark club-colour direction. It is calm and grown-up for a 14+ audience. The excitement comes from the content (the next match, your name, your gear), not from effects.
 
-Density is that of a good sports app: 56px list rows, 14px body text, 12px labels, tabular numerals everywhere a number appears. Every screen resolves into one full-width green Continue (or its equivalent primary action) at the bottom of the flow or in the sticky dock. Hebrew and English are equal citizens: every layout uses logical properties (start/end, inline borders) and directional icons mirror under RTL, while numbers, scores and the wordmark are isolated left-to-right.
-
-The world explicitly refuses the FIFA / Ultimate Team card-and-glow look and the neon esports look.
+Hebrew and English are equal. The display face is two scripts under one family name, so headlines keep their condensed voice in both. Every layout mirrors with the reading direction.
 
 **Key Characteristics:**
-- Charcoal-slate ground with three tonal steps and a 1px hairline; no shadows, no gradients.
-- One action green, reserved for the primary action, the player's own table row, and goal moments.
-- Attribute and rating numbers coloured by band, FM style (grey, amber, light green, green, teal).
-- Ability and potential as five gold stars in halves.
-- Rubik for Hebrew and Latin alike, tabular numerals for all data.
-- RTL and LTR mirrored through logical properties, numbers always isolated LTR.
+- Cream paper ground, white cards with hairline borders and 20px corners.
+- One dark ink card per screen for what matters most: the next match, the score, an offer head, the decisive moment.
+- Green is the accent: active tab, raised Shop button, owned gear, progress, your table row.
+- Amber marks rewarded videos only, always with the camera mark.
+- Condensed caps (Oswald + condensed Noto Sans Hebrew) for names, codes, titles and statuses; Heebo for everything read as a sentence.
 
 ## Colors
 
-A cool, low-chroma slate scale (hue ~258) carries everything; saturated colour appears only as signal.
+Paper and ink with one green, and amber held back for rewards.
 
 ### Primary
-- **Continue Green** (`continue-green`): the one action colour. Fills the primary button, the accent chip, attribute preview bars, meters, and tints (14%) the player's own league-table row and goal events in the match feed.
-- **Continue Green Light** (`continue-green-light`): hover state of the primary button, focus rings, caret, and accent text on dark (player's row text, goal minute, highlight figures).
-- **Continue Green Deep** (`continue-green-deep`): pressed state of the primary button only.
-- **Green Ink** (`green-ink`): text and icons on green fills (6.9:1 on Continue Green).
+- **Pitch Green** (pitch-green): the active tab, the raised Shop button, owned-gear borders, progress bars, status lines, your league-table row (on its tint), the target-met verdict.
 
 ### Secondary
-- **Trophy Gold** (`trophy-gold`): stars, trophies, legacy points, the daily-race icon, and the trophy chip. It is the reward colour, never an action colour.
-
-### Tertiary
-- **Good / Bad** (`good`, `bad`): outcome signals only — wins, form "hot/cold", attribute gains and losses, the live dot and live tag, error text and the destructive button. Tinted backgrounds use 15–20% mixes; red text on red tints lifts to `#ff8a8a` for legibility.
-- **Attribute bands** (`band-low` → `band-elite`): grey, amber, light green, green, teal. Applied to attribute values, the overall badge and match ratings by threshold.
+- **Reward Amber** (reward-amber): rewarded-video buttons only. A second video on the same view uses the amber outline.
+- **Coin Gold** (coin-gold): the coin itself, a shaded gold disc in the coin pill and on prices.
 
 ### Neutral
-- **Pitch Night** (`pitch-night`): page ground, top bar and bottom dock.
-- **Slate Panel** (`slate-panel`): cards, lists, inputs, score box, offers.
-- **Slate Raised** (`slate-raised`): hover rows, selected segments and choices, chips, badges, empty bar tracks.
-- **Hairline** (`hairline`): every border and divider; inner dividers mix it to 60–70%.
-- **Chalk** (`chalk`): primary text (15.9:1 on ground).
-- **Fog** (`fog`): secondary text, labels, `dt` terms (6.3:1 on panel).
-- **Dim Slate** (`dim-slate`): tertiary, past or missing values only (out-of-squad rate, the "before" overall); never body copy.
+- **Paper** is the ground; **Paper Band** is the darker band behind the My Player gear stage.
+- **Card** is white cards, tiles and the nav bar; **Hairline** is every border and divider.
+- **Ink** is text, the primary button and the dark match card. **Ink Muted** is secondary text (4.5:1 or better on paper).
 
 ### Named Rules
-**The One Green Rule.** Continue Green is the only action colour. If something is green-filled it is the primary action on that screen, or it is the player themself. One green fill per screen.
+**The One Dark Card Rule.** Each screen has at most one dark ink block: the thing to look at first.
 
-**The Signal-Only Rule.** Gold, good-green, red and the band colours mean something (reward, outcome, rating). They never decorate.
+**The Amber Is Video Rule.** Amber means "watch a video for a reward". Nothing else is amber.
 
 ## Typography
 
-**Display Font:** Rubik (with Segoe UI, system-ui)
-**Body Font:** Rubik
-**Label/Mono Font:** Rubik with `tabular-nums`
+**Display Font:** STAR Display: Oswald (Latin, digits) plus a condensed bold instance of Noto Sans Hebrew, split by unicode-range. Both faces declare the same weight range (200–900) so the browser keeps them in one family.
+**Body Font:** Heebo (variable, Latin and Hebrew).
 
-**Character:** One rounded-geometric family that sets Hebrew and Latin with the same voice; weight (400/500/600/700) does all the ranking.
+**Character:** Programme headlines over a neutral, legible grotesque.
 
 ### Hierarchy
-- **Display** (700, 1.7rem, 1.25): the home title for a new player; one per screen at most.
-- **Score** (700, 2.75rem, 1, tabular): the match score in the score box.
-- **Figure** (600–700, 1.5–2.25rem, tabular): headline numbers — overall on report and create, legacy points, match rating.
-- **Title** (700, 1.05rem, 1.25): the top-bar screen title; 1.125rem bold for the player name in the profile header.
-- **Row title** (600, 1rem): list-row labels, section headings (`h2` at 1rem/600 or 0.875rem/600 above a table).
-- **Body** (400, 0.875rem, 1.45): rows, events, terms, attributes; 0.95rem / 1.5rem leading for the one intro paragraph.
-- **Label** (600, 0.75rem; chips at 0.72rem): row sublines, stat terms, chips, the segmented control text. Sentence case, no letter-spacing.
+- **Display** (700, 2.15rem): the player's name.
+- **Score** (700, 3.5–3.6rem): club codes in the match card, match scores.
+- **Title** (700, 1.95rem): tab screen titles (MY PLAYER, SEASON 2026/27).
+- **Section** (700, 1.5rem): section titles (GEAR, RESULTS, TABLE).
+- **Status** (600, 0.9rem, tracked 0.12em in Latin only): status lines under a name or in the match card.
+- **Row title** (Heebo 600, 1rem) and **Body** (Heebo 400, 0.95rem).
+- **Label** (Heebo 600, 0.75rem): chips, nav labels (12px).
 
 ### Named Rules
-**The Tabular Rule.** Every number that can change — ratings, scores, minutes, money, counts — is set in tabular numerals and isolated left-to-right, so columns align and RTL never reorders digits.
+**The Status Trails Rule.** Status lines sit under a name or inside a card's foot, never as a label above a heading.
 
-**The Weight-Not-Case Rule.** Hierarchy is made with weight and size. No uppercase labels, no tracked small caps, no small coloured label stacked above a heading.
+**The Untracked Hebrew Rule.** Hebrew is never letter-spaced.
 
 ## Layout
 
-A single phone column: max width 32rem, centred, 16px side gutters and 20px top/bottom. The top bar is sticky at the safe-area top (56px, ground-coloured, hairline below); when a screen has a primary action that must stay reachable, a sticky bottom dock (ground-coloured, hairline above, safe-area padded) holds it.
-
-Vertical rhythm runs on 4px steps: 12px between related blocks, 16px between sections, 20px before a section heading or the final primary button. Rows pad 9.6px × 14.4px; attribute and term rows are tighter (8px × 16px, 7.2px vertical). Data is laid out as two-column attribute grids, four-column stat rows, and fixed-column league-table rows (position, team, played, points). Touch targets are 44px minimum; primary buttons 52px, secondary 48px.
+One 32rem column with a 20px gutter. Tab screens open with a big title and its status line, with the coin pill on the end side. Home: wordmark and coin pill, then the player row (avatar, name, meta, season status), the dark next-match card with a white Play button, the amber daily-chest video, and a white list. My Player: a full-bleed paper band with three gear tiles on each side of a large figure, the OVR block at his feet, then the Gear section with stats in two columns. The bottom nav spans the column and reserves 72px plus the safe area.
 
 ## Elevation & Depth
 
-Flat by construction. There are no box-shadows anywhere in the system; depth is tonal — ground, panel, raised — with a 1px hairline wherever two surfaces meet. Sticky bars separate from content with a hairline, not a shadow.
-
-### Named Rules
-**The Hairline Rule.** Surfaces separate by a 1px hairline and a tone step, never by a shadow, blur or glow.
+Flat paper with hairline borders. Two lifted elements carry a soft offset shadow: the raised Shop button (`0 8px 18px -8px rgb(11 107 58 / 0.6)`) and the toast (`0 16px 32px -14px rgb(17 20 24 / 0.55)`).
 
 ## Shapes
 
-Quietly squared. Containers (cards, lists, score box, offers, stat rows) use 8px corners; controls (buttons, inputs, choice tiles, icon wells, overall badge, segmented track) use 6px; chips, form squares, rate pills and segment options use 4px; progress bars 2px. Only the live dot is round. Lists clip their rows so dividers meet the container border cleanly. Dashed hairlines are reserved for two meanings: the gap in a truncated league table and the ad slot.
+Generous, friendly corners: 20px cards, 12px buttons and tiles, 8px chips, pills for the coin pill and prices, a 56px rounded square (18px) for the Shop tab. The match card and offer heads carry a faint centre-circle ring behind the away side.
 
 ## Components
 
 ### Buttons
-Confident and plain: solid fill, no icon-only primaries, 120ms colour transition.
-- **Shape:** gently squared (6px).
-- **Primary:** Continue Green fill, Green Ink text, 600 weight, full width, 52px tall on flow-ending actions (48px / 40–44px when inline in a row).
-- **Hover / Focus:** hover lifts to Continue Green Light, press drops to Continue Green Deep; focus is a 2px Continue Green Light outline offset 2px. Disabled is 45% opacity.
-- **Ghost:** transparent with a hairline border, Chalk text, 500 weight; hover fills Slate Raised. Used for the secondary choice next to a primary (stay at club, sign out, Google sign-in).
-- **Danger:** Bad fill with near-black red text; destructive confirmations only.
-
-### Chips
-- **Style:** 4px corners, 0.72rem/600, Slate Raised with Fog text by default.
-- **State:** tinted variants for trophy (gold 16%), good (15%) and bad (16%); the accent chip is solid green for the player's own status (e.g. admin).
+- **Primary:** ink with white Heebo 600 text, 12px corners, 56px (48px compact). On the dark card it inverts to white with ink text.
+- **Ghost:** white with a strong hairline.
+- **Reward:** amber with the camera mark; quiet variant is an amber outline.
+- **Price:** white pill with the coin and the price; in My Player the price is a bare coin + number under the tile.
 
 ### Cards / Containers
-- **Corner Style:** 8px.
-- **Background:** Slate Panel.
-- **Shadow Strategy:** none (see Elevation & Depth).
-- **Border:** 1px Hairline.
-- **Internal Padding:** 16px horizontal, 12–20px vertical; inner sections split by full-bleed hairlines.
-
-### Inputs / Fields
-- **Style:** 48px tall, Slate Panel, 1px Hairline, 6px corners, 16px side padding, 1rem text; label above in 0.875rem/600.
-- **Focus:** 2px Continue Green Light outline, caret in the same colour.
-- **Error / Disabled:** error text in Bad below the form (`role="alert"`).
-
-### Choice Tiles
-Selectable country, nation, position and difficulty options: 6px Slate Panel tiles with a hairline; the selected tile takes a Continue Green border on Slate Raised.
+White, 1px hairline, 20px corners, 12–20px inside. Lists use inset dividers.
 
 ### Navigation
-- **Top bar:** back chevron (44px, mirrors in RTL) at start, title + one-line subline, optional actions at end.
-- **Menu list:** the home menu is a list of 56px rows — 32px icon well, title with optional subline, value or chevron at end.
-- **Segmented control:** Slate Panel track with 2px inset, 44px options; the pressed option fills Slate Raised with Chalk text. The language switch is the same pattern, compact.
+White bar, five tabs. Idle tabs are ink-muted, the active tab is green. Store is a raised green rounded square with a white bag and a red new-item dot.
 
-### Player Header (signature)
-The profile card: overall badge (52px, 6px corners, number coloured by band), name/position/club/age, a two-cell ability/potential row of five gold half-stars, and a two-column attribute grid with band-coloured values. It is the "who am I" of every hub screen.
+### Match Card (signature)
+Dark ink card: both crests, three-letter club codes in display caps, full names under them, a status line (Next match · Home/Away · round), and the white Play button.
 
-### League Table and Results (signature)
-Fixed-column rows split by 70% hairlines; the player's club row is tinted green 14% with Continue Green Light 600 text. Result rows lead with a 24px W/D/L square (good tint, raised neutral, solid dark red). The four-cell stat row (8px container, inline hairline dividers) replaces any tile grid for season totals.
-
-### Match Feed (signature)
-Score box (8px panel) with the 2.75rem score; events as hairline-split rows with a tabular minute column. Goals tint green 14% and bold; a new event flashes a faint chalk wash for 260ms. The live dot pulses at 1.4s; both animations stop under reduced motion.
-
-### Offer Card
-Plain 8px panel with a terms list (`dt` in Fog, `dd` 600) between hairlines, read like contract lines to compare. The offer to move is the primary button; staying is ghost.
+### Gear Tile (signature)
+A white square holding the gear art; owned tiles take a 2px green border and a green "attribute +N" line; unowned art is greyed with its price under it.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** end every screen with one full-width Continue Green primary action (52px), in the sticky dock when the content scrolls.
-- **Do** separate every surface with a 1px Hairline and a tone step (ground, panel, raised).
-- **Do** colour attribute values, the overall badge and match ratings by band, and show ability/potential as five gold half-stars.
-- **Do** set every changing number in tabular numerals, isolated left-to-right.
-- **Do** use logical properties (start/end, inline borders) and mirror directional icons under RTL so Hebrew and English get identical layouts.
-- **Do** keep touch targets at 44px minimum.
+- **Do** put the next match in the dark card with a white action.
+- **Do** keep amber for rewarded videos, with the camera mark.
+- **Do** show real game data only (home/away and the round; the game has no kickoff times).
+- **Do** keep the owner's assets: the layered character art, gear images, club crests, the five-tab nav.
 
 ### Don't:
-- **Don't** use gradients, glows, box-shadows or blur; this is not the FIFA card look or a neon esports look.
-- **Don't** fill anything green that is not the primary action or the player themself.
-- **Don't** use gold, good-green, red or band colours as decoration.
-- **Don't** put a small coloured or uppercase label above a heading or title; rank with weight and size.
-- **Don't** use Dim Slate for readable copy; it is for past or missing values only.
-- **Don't** use dashed borders except for the league-table gap and the ad slot.
+- **Don't** put a small caps label above a heading.
+- **Don't** letter-space Hebrew or set display text in a face without Hebrew.
+- **Don't** add a second dark block or a second solid amber button to a view.
+- **Don't** paint screens in club colours; identity comes from crests and names.

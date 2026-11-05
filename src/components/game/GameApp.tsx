@@ -1,5 +1,5 @@
 import { PRIVACY_EMAIL } from "@/game/contact";
-import { Fragment, useContext, useEffect, useMemo, useRef, useState, createContext, type ReactNode } from "react";
+import { Fragment, useContext, useEffect, useMemo, useRef, useState, createContext, type CSSProperties, type ReactNode } from "react";
 import {
   ArrowLeftRight,
   Check,
@@ -23,7 +23,8 @@ import {
   Zap,
   Paintbrush,
 } from "lucide-react";
-import { Crest } from "@/components/game/crest";
+import { Crest, crestSpec } from "@/components/game/crest";
+import { STAR_THEME, clubTheme, keepHyphens, type ClubTheme } from "@/components/game/kit";
 import { HAIR_COLOR_IDS, HAIR_COLORS, HAIR_STYLES, SKIN_TONES, resolveLook, type HairColor, type HairStyle } from "@/game/look";
 
 function NameCrest({ name, className = "mx-auto mb-1 block h-10 w-10" }: { name: string; className?: string }) {
@@ -68,7 +69,7 @@ import {
   trainOdds,
 } from "@/game/engine";
 import { loadCareer, loadDailyAttempt, loadSound, saveCareer, saveDailyAttempt, saveSound, touchStreak, type DailyAttempt } from "@/game/save";
-import { loadLang, setLang, show, t, type Lang } from "@/game/i18n";
+import { cname, loadLang, setLang, show, t, type Lang } from "@/game/i18n";
 import { authEnabled } from "@/lib/auth/client";
 import { STORIES, answerStory, storyAttr } from "@/game/stories";
 import { ACHIEVEMENTS, checkAchievements, loadUnlocked } from "@/game/achievements";
@@ -267,6 +268,12 @@ export function GameApp() {
 
   const run = playing === "daily" ? (daily?.career ?? null) : career;
   const menu = () => (playing === "daily" ? leaveDaily() : setView("home"));
+  const themeClub = (view === "game" ? run : career)?.clubId ?? null;
+
+  // The whole game wears the player's current club colours; a transfer repaints it.
+  useEffect(() => {
+    applyTheme(themeClub ? clubTheme(themeClub) : STAR_THEME);
+  }, [themeClub]);
 
   let screen: ReactNode = null;
   if (view === "home") {
@@ -292,6 +299,7 @@ export function GameApp() {
         onAchievements={() => setView("achievements")}
         access={access}
         onAdmin={() => setView("admin")}
+        onChange={update}
         streak={streak}
         onNew={() => {
           setPlaying("main");
@@ -314,7 +322,20 @@ export function GameApp() {
         }}
       />
     );
-  } else if (view === "collection") screen = <Collection career={career} onBack={() => setView("home")} />;
+  } else if (view === "collection") {
+    screen = (
+      <Collection
+        career={career}
+        onBack={() => setView("home")}
+        onPlay={() => {
+          if (!career) return setView("create");
+          setPlaying("main");
+          unlockAudio();
+          setView("game");
+        }}
+      />
+    );
+  }
   else if (view === "summary") screen = <Summary career={career} onBack={() => setView("home")} />;
   else if (view === "daily") {
     screen = <DailyLobby attempt={daily} onBack={() => setView("home")} onBegin={beginDaily} />;
@@ -598,8 +619,8 @@ function ScreenHeader({
         <span className="w-3" aria-hidden="true" />
       )}
       <div className="min-w-0 flex-1">
-        <h1 dir="auto" className="line-clamp-2 text-start text-[1.05rem] font-bold leading-tight">{title}</h1>
-        {sub ? <p dir="auto" className="line-clamp-2 text-start text-xs text-muted">{sub}</p> : null}
+        <h1 className="line-clamp-2 text-start text-[1.05rem] font-bold leading-tight"><bdi>{title}</bdi></h1>
+        {sub ? <p className="line-clamp-2 text-start text-xs text-muted"><bdi>{sub}</bdi></p> : null}
       </div>
       {right ?? null}
     </header>
@@ -684,48 +705,145 @@ function Stars({ value, label }: { value: number; label: string }) {
   );
 }
 
+function applyTheme(theme: ClubTheme) {
+  const root = document.documentElement.style;
+  root.setProperty("--club", theme.club);
+  root.setProperty("--club-2", theme.club2);
+  root.setProperty("--club-ink", theme.ink);
+  root.setProperty("--club-text", theme.text);
+}
+
+/** Inline style that paints a block in another club's colours (offers, opponents). */
+function clubVars(clubId: string, prefix = "offer") {
+  const theme = clubTheme(clubId);
+  return { [`--${prefix}-club`]: theme.club, [`--${prefix}-ink`]: theme.ink, [`--${prefix}-text`]: theme.text } as CSSProperties;
+}
+
+/** The player's head and shoulders in a round frame: the layered character, cropped. */
+function PlayerAvatar({ career }: { career: Career }) {
+  return (
+    <span className="avatar" aria-hidden="true">
+      <PlayerCharacter career={career} />
+    </span>
+  );
+}
+
+/** Avatar, name, then position · club · OVR, then an optional status line (statuses trail; nothing sits above the name). */
+function PlayerRow({ career, status }: { career: Career; status?: ReactNode }) {
+  const { tr } = useTx();
+  const player = career.player;
+  const club = getClub(career.clubId);
+  const ovr = overall(player.position, effectiveAttrs(career));
+  return (
+    <section className="player-row" aria-label={player.name}>
+      <PlayerAvatar career={career} />
+      <div className="min-w-0 flex-1">
+        <h1 className="player-name">{player.name}</h1>
+        <p className="player-meta">
+          {tr(`pos.${player.position}`)} · <bdi>{keepHyphens(cname(club.name))}</bdi> · <b className="num">{ovr} {tr("ovr")}</b>
+        </p>
+        {status ? <p className="caps-status mt-1.5">{status}</p> : null}
+      </div>
+    </section>
+  );
+}
+
+/** League names are data ("England Third Division"); show them in the player's language. */
+function leagueLabel(tr: (key: string, vars?: Record<string, string | number>) => string, name: string) {
+  const m = name.match(/^(.+) (Premier|First|Second|Third) Division$/);
+  if (!m) return name;
+  const country = COUNTRIES.find((c) => c.name === m[1]);
+  return tr(`div.${m[2]}`, { country: country ? tr(`country.${country.id}`) : m[1] });
+}
+
+/** Three-letter club code from the crest monogram (MOR, COL). */
+function clubCode(id: string, name: string) {
+  const mono = crestSpec(id, name).mono;
+  if (mono && mono.length >= 3) return mono.slice(0, 3).toUpperCase();
+  const letters = name.replace(/[^A-Za-z]/g, "");
+  return (letters.slice(0, 3) || mono || name.slice(0, 3)).toUpperCase();
+}
+
+/** The next fixture in the dark match card. Home side first, so it mirrors with the reading direction. */
+function NextMatchCard({ career, children }: { career: Career; children?: ReactNode }) {
+  const { tr, text } = useTx();
+  const fixture = nextFixture(career);
+  if (!fixture) return null;
+  const ours = getClub(career.clubId);
+  // Keep the data name for the code and crest; the display name is translated where it is shown.
+  const theirs = { id: fixture.opponentId, name: fixture.opponentName.startsWith("@") ? text(fixture.opponentName) : fixture.opponentName };
+  const sides = fixture.home ? [{ id: ours.id, name: ours.name }, theirs] : [theirs, { id: ours.id, name: ours.name }];
+  return (
+    <section className="match-card" aria-label={tr("nextMatch")}>
+      <div className="match-teams">
+        {sides.map((side, index) => (
+          <Fragment key={side.id}>
+            {index === 1 ? <span className="match-vs">{tr("vs")}</span> : null}
+            <div className={`min-w-0 ${index === 0 ? "text-start" : "text-end"}`}>
+              <Crest clubId={side.id} name={side.name} monogram={false} className={`mb-2 h-9 w-9 ${index === 0 ? "" : "ms-auto"}`} />
+              <span className="match-code">{clubCode(side.id, side.name)}</span>
+              <span className="match-club">
+                {keepHyphens(cname(side.name))}
+              </span>
+            </div>
+          </Fragment>
+        ))}
+      </div>
+      <p className="match-status">
+        {tr("nextMatch")} · {tr(fixture.home ? "home" : "away")} · {text(fixture.roundLabel)}
+      </p>
+      {children ? <div className="relative mt-4">{children}</div> : null}
+    </section>
+  );
+}
+
+/** Header of a tab screen: a big title with its status line under it, and one control on the end side. */
+function TabHeader({ title, sub, right }: { title: string; sub?: string; right?: ReactNode }) {
+  return (
+    <header className="tabbar">
+      <div className="min-w-0">
+        <h1>
+          <bdi>{title}</bdi>
+        </h1>
+        {sub ? (
+          <p className="mt-1.5 text-sm text-muted">
+            <bdi>{sub}</bdi>
+          </p>
+        ) : null}
+      </div>
+      {right ?? null}
+    </header>
+  );
+}
+
 function PlayerHeader({ career }: { career: Career }) {
   const { tr } = useTx();
   const player = career.player;
   const ovr = overall(player.position, player.attrs);
-  const club = getClub(career.clubId);
-  const league = getLeague(career.season.leagueId);
   return (
-    <section className="card overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3.5">
-        <div className={`ovr-badge band-${band(ovr)}`}>
-          <span className="num">{ovr}</span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-lg font-bold leading-tight">{player.name}</p>
-          <p className="truncate text-sm text-muted">
-            {tr(`pos.${player.position}`)} · {club.name}
-          </p>
-          <p className="truncate text-xs text-muted" dir="ltr" style={{ textAlign: "start" }}>
-            {tr("ageN", { n: player.age })} · <bdi>{league.name}</bdi>
-          </p>
-        </div>
-        <span className="num self-start text-sm font-semibold text-muted">#{shirtNumber(player.position)}</span>
-      </div>
-      <div className="grid grid-cols-2 border-t border-line">
-        <div className="grid gap-1 px-4 py-2.5">
-          <span className="text-xs text-muted">{tr("ability")}</span>
-          <Stars value={starsFor(ovr)} label={tr("ability")} />
-        </div>
-        <div className="grid gap-1 border-s border-line px-4 py-2.5">
-          <span className="text-xs text-muted">{tr("potentialWord")}</span>
-          <Stars value={starsFor(player.potential)} label={tr("potentialWord")} />
-        </div>
-      </div>
-      <dl className="attr-grid">
-        {ATTR_KEYS.map((key) => (
-          <div key={key} className="attr-row">
-            <dt>{tr(`attr.${key}`)}</dt>
-            <dd className={`num band-${band(player.attrs[key])}`}>{player.attrs[key]}</dd>
+    <>
+      <PlayerRow career={career} />
+      <section className="card mt-4 overflow-hidden">
+        <div className="grid grid-cols-2">
+          <div className="grid gap-1 px-4 py-2.5">
+            <span className="text-xs text-muted">{tr("ability")}</span>
+            <Stars value={starsFor(ovr)} label={tr("ability")} />
           </div>
-        ))}
-      </dl>
-    </section>
+          <div className="grid gap-1 border-s border-line px-4 py-2.5">
+            <span className="text-xs text-muted">{tr("potentialWord")}</span>
+            <Stars value={starsFor(player.potential)} label={tr("potentialWord")} />
+          </div>
+        </div>
+        <dl className="attr-grid">
+          {ATTR_KEYS.map((key) => (
+            <div key={key} className="attr-row">
+              <dt>{tr(`attr.${key}`)}</dt>
+              <dd className={`num band-${band(player.attrs[key])}`}>{player.attrs[key]}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+    </>
   );
 }
 
@@ -735,19 +853,25 @@ function leagueCount(career: Career) {
   return { played, total };
 }
 
-function SeasonProgress({ career }: { career: Career }) {
+/**
+ * Season strip under the hero: matchday on the start side, the board target and league place on the end side.
+ * The hub's top bar already names the season, so it passes withYear={false}.
+ */
+function SeasonProgress({ career, withYear = true }: { career: Career; withYear?: boolean }) {
   const { tr, text } = useTx();
   const { played, total } = leagueCount(career);
   const place = tablePosition(career);
   const onTrack = place <= career.season.targetLine;
   return (
-    <div className="mt-3 grid gap-2 px-1">
-      <div className="flex items-center justify-between gap-3 text-xs">
+    <div className="season-strip">
+      <div className="flex items-baseline justify-between gap-3 text-xs">
         <span className="text-muted">
-          {seasonLabel(career.year)} · {tr("matchday", { n: played, m: total })}
+          {withYear ? `${seasonLabel(career.year)} · ` : ""}
+          {tr("matchday", { n: played, m: total })}
         </span>
-        <span className={`font-bold ${onTrack ? "text-good" : "text-bad"}`}>
+        <span className={`text-end font-bold ${played ? (onTrack ? "text-good" : "text-bad") : "text-muted"}`}>
           {text(career.season.targetLabel)}
+          {played ? <> · {tr("placeN", { n: place })}</> : null}
         </span>
       </div>
       <div className="meter">
@@ -788,7 +912,7 @@ function LeagueTable({ career, compact }: { career: Career; compact?: boolean })
   return (
     <section className="mt-4">
       <div className="mb-2 flex items-baseline justify-between">
-        <h2 className="text-sm font-semibold">{tr("table")}</h2>
+        <h2 className="section-title">{tr("table")}</h2>
         {compact && rows.length > 7 ? (
           <button type="button" className="min-h-12 text-sm font-bold text-accent" onClick={() => setFull((value) => !value)}>
             {full ? tr("shortTable") : tr("fullTable")}
@@ -809,7 +933,7 @@ function LeagueTable({ career, compact }: { career: Career; compact?: boolean })
           return (
             <div key={row.clubId} className={`ltable-row ${me ? "is-me" : ""} ${gap ? "ltable-gap" : ""}`}>
               <span className="font-num text-muted">{index + 1}</span>
-              <span className="flex min-w-0 items-center gap-1.5"><Crest clubId={row.clubId} name={getClub(row.clubId).name} monogram={false} className="h-5 w-5 shrink-0" /><span className="truncate">{getClub(row.clubId).name}</span></span>
+              <span className="flex min-w-0 items-center gap-1.5"><Crest clubId={row.clubId} name={getClub(row.clubId).name} monogram={false} className="h-5 w-5 shrink-0" /><span className="truncate">{cname(getClub(row.clubId).name)}</span></span>
               <span className="num text-center text-muted">{diff > 0 ? `+${diff}` : diff}</span>
               <span className="font-num text-center font-bold">{row.pts}</span>
             </div>
@@ -829,9 +953,10 @@ function SeasonBreak({ career, onBoost }: { career: Career; onBoost: (key: AttrK
       {used ? (
         <p className="text-xs text-muted">{tr("adRewardDone")}</p>
       ) : pick ? (
-        <div className="grid grid-cols-2 gap-2" data-ad-slot="rewarded">
+        // The clip was already chosen with the gold button; the six attributes are plain choices.
+        <div className="grid grid-cols-2 gap-2">
           {ATTR_KEYS.map((key) => (
-            <RewardButton key={key} name="attribute-boost" className="btn-ghost h-12 text-sm" label={tr(`attr.${key}`)} onReward={() => onBoost(key)} />
+            <RewardButton key={key} name="attribute-boost" className="reward-quiet h-12 text-sm" label={tr(`attr.${key}`)} onReward={() => onBoost(key)} />
           ))}
         </div>
       ) : (
@@ -913,6 +1038,7 @@ function Home({
   access,
   onAdmin,
   onNew,
+  onChange,
   dailyBest,
   streak,
 }: {
@@ -931,10 +1057,11 @@ function Home({
   access: ViewerAccess | null;
   onAdmin: () => void;
   onNew: () => void;
+  onChange: (c: Career) => void;
   dailyBest: number | null;
   streak: number;
 }) {
-  const { tr } = useTx();
+  const { tr, text } = useTx();
   const [confirm, setConfirm] = useState(false);
   const [legacyPts, setLegacyPts] = useState(0);
   const [achCount, setAchCount] = useState(0);
@@ -946,120 +1073,134 @@ function Home({
   const board = useMemo(() => dailyBoard(), []);
   const dailyClub = getClub(board.clubId);
   const dailyPos = tr(`pos.${board.position}`);
+  const chevron = <ChevronLeft className="size-5 shrink-0 -scale-x-100 text-muted rtl:scale-x-100" aria-hidden="true" />;
+  // The next match is playable straight from home while the season runs; other steps (camp, review, offers) just continue.
+  const playable = career && (career.screen === "run" || career.screen === "bigmatch") && nextFixture(career);
+  const count = career ? leagueCount(career) : null;
+  const place = career ? tablePosition(career) : 0;
 
   return (
     <Shell>
-      <header className="topbar">
-        <span className="wordmark">
-          <Crest className="h-6 w-6" />
-          STAR
-        </span>
-        <div className="flex-1" />
-        <LangSwitch onLang={onLang} />
-        <button type="button" className="icon-btn" onClick={onSound} aria-label={sound ? tr("mute") : tr("sound")}>
-          {sound ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}
-        </button>
+      <header className="flex items-center justify-between gap-3 pt-2 pb-6">
+        <span className="wordmark">STAR</span>
+        {career ? <CoinChip n={career.coins} /> : null}
       </header>
 
       {career ? (
         <>
-          <PlayerHeader career={career} />
-          <SeasonProgress career={career} />
+          <PlayerRow career={career} status={`${seasonLabel(career.year)} · ${tr("matchday", { n: Math.min((count?.played ?? 0) + 1, count?.total ?? 0), m: count?.total ?? 0 })}`} />
+          <div className="mt-5">
+            {nextFixture(career) ? (
+              <NextMatchCard career={career}>
+                <button type="button" className="btn-light h-14 w-full" onClick={onContinue}>
+                  <Play className="size-5 fill-current rtl:-scale-x-100" aria-hidden="true" />
+                  {playable ? tr("playMatch") : tr("continue")}
+                </button>
+              </NextMatchCard>
+            ) : (
+              <button type="button" className="btn-primary h-14 w-full" onClick={onContinue}>
+                {tr("continue")}
+                <Play className="size-4 fill-current rtl:-scale-x-100" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+          <DailyChest career={career} onChange={onChange} />
         </>
       ) : (
-        <section className="grid gap-3 pt-2">
-          <h1 className="text-[1.7rem] font-bold leading-tight">
+        <section className="match-card">
+          <h1 className="relative font-display text-[2.6rem] leading-[1.02]">
             {tr("title1")}
-            <br />
-            <span className="text-accent-2">{tr("title2")}</span>
+            <span className="block">{tr("title2")}</span>
           </h1>
-          <p className="max-w-[34rem] text-[0.95rem] leading-6 text-muted">{tr("homeCopy")}</p>
-          <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
+          <p className="relative mt-3 text-[0.95rem] leading-6 text-on-ink-muted">{tr("homeCopy")}</p>
+          <p className="relative mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-on-ink-muted">
             <span>
-              <b className="num text-fg">{COUNTRIES.length}</b> {tr("countries")}
+              <b className="num text-white">{COUNTRIES.length}</b> {tr("countries")}
             </span>
             <span>
-              <b className="num text-fg">{LEAGUES.length}</b> {tr("leagues")}
+              <b className="num text-white">{LEAGUES.length}</b> {tr("leagues")}
             </span>
             <span>
-              <b className="num text-fg">{CLUBS.length}</b> {tr("clubs")}
+              <b className="num text-white">{CLUBS.length}</b> {tr("clubs")}
             </span>
           </p>
+          <button type="button" className="btn-light relative mt-5 h-14 w-full" onClick={onCreate}>
+            {tr("start")}
+            <Play className="size-4 fill-current rtl:-scale-x-100" aria-hidden="true" />
+          </button>
         </section>
       )}
 
-      <button type="button" className="btn-primary mt-4 flex h-13 w-full items-center justify-center gap-2 text-base" onClick={career ? onContinue : onCreate}>
-        {career ? tr("continue") : tr("start")}
-        <Play className="size-4 rtl:-scale-x-100" />
-      </button>
-
-      <nav className="list mt-5" aria-label={tr("menu")}>
-        <button type="button" className="list-row" onClick={onDaily}>
-          <span className="list-icon text-trophy">
-            <Medal className="size-5" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate font-semibold">{tr("dailyTitle")}</span>
-            <span className="block truncate text-xs text-muted">
-              {tr("today", { pos: dailyPos, club: dailyClub.name })}
+      <nav className="list mt-4" aria-label={tr("menu")}>
+        {career ? (
+          <button type="button" className="list-row" onClick={onSummary}>
+            <span className="min-w-0 flex-1">
+              <span className="list-title">{tr("seasonGoal")}</span>
+              <span className="list-sub">
+                {text(career.season.targetLabel)}
+                {count?.played ? ` · ${tr("placeN", { n: place })}` : ""}
+              </span>
             </span>
+            {chevron}
+          </button>
+        ) : null}
+        <button type="button" className="list-row" onClick={onDaily}>
+          <span className="min-w-0 flex-1">
+            <span className="list-title">{tr("dailyTitle")}</span>
+            <span className="list-sub">
+              {tr("closes", { n: closes })} · {tr("today", { pos: dailyPos, club: cname(dailyClub.name) })}
+            </span>
+            {dailyBest != null ? <span className="list-sub text-good">{tr("dailyDone", { n: dailyBest })}</span> : null}
           </span>
-          <span className="shrink-0 whitespace-nowrap text-end text-xs text-muted">
-            <span className="block num">{tr("closes", { n: closes })}</span>
-            {dailyBest != null ? <span className="block text-good">{tr("dailyDone", { n: dailyBest })}</span> : null}
-          </span>
-        </button>
-        <button type="button" className="list-row" onClick={onCollection}>
-          <span className="list-icon">
-            <Trophy className="size-5" />
-          </span>
-          <span className="flex-1 font-semibold">{tr("trophies")}</span>
-          <span className="num text-muted">{career ? career.trophies.length : 0}</span>
-          <ChevronLeft className="size-4 -scale-x-100 text-muted rtl:scale-x-100" />
+          {chevron}
         </button>
         <button type="button" className="list-row" onClick={onAchievements}>
-          <span className="list-icon">
-            <Medal className="size-5" />
+          <span className="min-w-0 flex-1">
+            <span className="list-title">{tr("achievements")}</span>
+            <span className="list-sub num">
+              {achCount}/{ACHIEVEMENTS.length}
+            </span>
           </span>
-          <span className="flex-1 font-semibold">{tr("achievements")}</span>
-          <span className="num text-muted">
-            {achCount}/{ACHIEVEMENTS.length}
-          </span>
-        </button>
-        <button type="button" className="list-row" onClick={onSummary}>
-          <span className="list-icon">
-            <Play className="size-5" />
-          </span>
-          <span className="flex-1 font-semibold">{career ? tr("seasonOf", { name: career.player.name }) : tr("season")}</span>
-          <ChevronLeft className="size-4 -scale-x-100 text-muted rtl:scale-x-100" />
+          {chevron}
         </button>
         <button type="button" className="list-row" onClick={onLegacy}>
-          <span className="list-icon">
-            <Shield className="size-5" />
-          </span>
           <span className="min-w-0 flex-1">
-            <span className="block font-semibold">{tr("legacy")}</span>
-            <span className="block text-xs leading-snug text-muted">{tr("legacyShort")}</span>
+            <span className="list-title">{tr("legacy")}</span>
+            <span className="list-sub">{tr("legacyShort")}</span>
           </span>
-          <span className="num font-semibold text-trophy">{legacyPts}</span>
+          <span className="num font-bold">{legacyPts}</span>
+          {chevron}
+        </button>
+        <button type="button" className="list-row" onClick={onCollection}>
+          <span className="min-w-0 flex-1">
+            <span className="list-title">{tr("trophies")}</span>
+          </span>
+          <span className="num font-bold">{career ? career.trophies.length : 0}</span>
+          {chevron}
         </button>
         {access?.admin ? (
           <button type="button" className="list-row" onClick={onAdmin}>
-            <span className="list-icon">
-              <Shield className="size-5" />
-            </span>
-            <span className="flex-1 font-semibold">{tr("admin.open")}</span>
-            <ChevronLeft className="size-4 -scale-x-100 text-muted rtl:scale-x-100" />
+            <span className="list-title min-w-0 flex-1">{tr("admin.open")}</span>
+            {chevron}
           </button>
         ) : null}
       </nav>
 
-      <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-muted">
-        <Flame className="size-3.5 text-accent-2" />
-        {tr("streak", { n: streak })}
+      <p className="mt-4 flex items-center gap-1.5 text-sm font-semibold text-muted">
+        <Flame className="size-4 text-accent" aria-hidden="true" />
+        {streak === 1 ? tr("streakOne") : tr("streak", { n: streak })}
       </p>
 
       <div className="mt-6 grid gap-1 border-t border-line pt-3 text-sm">
+        <div className="flex min-h-12 items-center justify-between gap-3">
+          <span className="text-muted">{tr("settings")}</span>
+          <span className="flex items-center gap-2">
+            <LangSwitch onLang={onLang} />
+            <button type="button" className="icon-btn" onClick={onSound} aria-label={sound ? tr("mute") : tr("sound")}>
+              {sound ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}
+            </button>
+          </span>
+        </div>
         {authEnabled ? (
           <a href="/login" className="flex min-h-12 items-center text-muted underline-offset-4 hover:underline">
             {access?.signedIn ? tr("acct.signedInShort", { email: access.email ?? "" }) : tr("acct.cta")}
@@ -1089,6 +1230,35 @@ function Home({
         </button>
       </div>
     </Shell>
+  );
+}
+
+/** The daily chest on home: the video doubles it (the one amber action), or open it plain. */
+function DailyChest({ career, onChange }: { career: Career; onChange: (c: Career) => void }) {
+  const { tr } = useTx();
+  const today = todayKey();
+  const [chest, setChest] = useState(() => chestToday(today));
+  if (!chest || career.race) return null;
+  const open = (double: boolean) => {
+    markChest(today);
+    setChest(null);
+    if (chest.kind === "coins") {
+      const withBase = { ...career, seasonCoins: earnSeasonCoins(career, "bonuses", chest.coins) };
+      onChange({ ...withBase, coins: career.coins + chest.coins * (double ? 2 : 1), seasonCoins: double ? earnSeasonCoins(withBase, "ads", chest.coins) : withBase.seasonCoins });
+    } else onChange({ ...grantFreeCamp(career, career.adState.freeCampDate ?? ""), keyCampBonus: ECONOMY.keyCampBonus * (double ? 2 : 1) });
+  };
+  return (
+    <div className="mt-3 grid">
+      <RewardButton
+        name="daily-chest"
+        className="h-[3.25rem] w-full"
+        label={chest.kind === "coins" ? tr("eco.videoCoins", { n: formatCoins(chest.coins * 2) }) : tr("eco.chestDouble")}
+        onReward={() => open(true)}
+      />
+      <button type="button" className="min-h-11 text-sm font-semibold text-muted underline-offset-4 hover:underline" onClick={() => open(false)}>
+        {chest.kind === "coins" ? tr("eco.openPlain", { n: formatCoins(chest.coins) }) : tr("eco.openPlainCamp")}
+      </button>
+    </div>
   );
 }
 
@@ -1130,7 +1300,7 @@ function Create({
         placeholder={tr("namePh")}
       />
 
-      <h2 className="mt-5 text-base font-semibold">{tr("startCountry")}</h2>
+      <h2 className="section-title mt-6">{tr("startCountry")}</h2>
       <div className="mt-3 grid grid-cols-2 gap-2">
         {COUNTRIES.map((item) => {
           const selected = countryId === item.id;
@@ -1149,13 +1319,13 @@ function Create({
               className={`min-h-12 rounded-md border px-3 py-3 text-start ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"} ${open ? "" : "opacity-60"}`}
             >
               <span className="block font-semibold">{tr(`country.${item.id}`)}</span>
-              <span className="mt-1 block text-xs text-muted">{open ? entryLeague(item.id).name : tr("eco.lockedCountry", { n: formatCoins(ECONOMY.prices["unlock-country"]) })}</span>
+              <span className="mt-1 block text-xs text-muted">{open ? leagueLabel(tr, entryLeague(item.id).name) : tr("eco.lockedCountry", { n: formatCoins(ECONOMY.prices["unlock-country"]) })}</span>
             </button>
           );
         })}
       </div>
 
-      <h2 className="mt-5 text-base font-semibold">{tr("nation")}</h2>
+      <h2 className="section-title mt-6">{tr("nation")}</h2>
       <div className="mt-3 grid grid-cols-2 gap-2">
         {NATIONS.map((item) => {
           const selected = nationId === item.id;
@@ -1173,7 +1343,7 @@ function Create({
       </div>
 
       <div className="mt-5 flex items-center justify-between">
-        <h2 className="text-base font-semibold">{tr("position")}</h2>
+        <h2 className="section-title">{tr("position")}</h2>
         <button type="button" className="flex min-h-12 items-center gap-1 text-sm text-accent" onClick={() => setSalt((value) => value + 1)}>
           <RotateCcw className="size-4" />
           {tr("reroll")}
@@ -1199,7 +1369,7 @@ function Create({
         })}
       </div>
 
-      <h2 className="mt-5 text-base font-semibold">{tr("difficulty")}</h2>
+      <h2 className="section-title mt-6">{tr("difficulty")}</h2>
       <div className="mt-3 grid gap-2">
         {(
           [
@@ -1287,7 +1457,7 @@ function HealClip({ career, onChange }: { career: Career; onChange: (c: Career) 
   return (
     <RewardButton
       name="injury-return"
-      className="btn-ghost mt-3 h-12 w-full px-3 text-sm"
+      className="reward-quiet mt-3 h-12 w-full px-3 text-sm"
       label={missesKey ? tr("eco.healKey") : tr("healClip", { n: career.season.outFor })}
       onReward={() => onChange({ ...career, season: { ...career.season, outFor: 0 }, adState: { ...career.adState, healTaken: true } })}
     />
@@ -1297,16 +1467,9 @@ function HealClip({ career, onChange }: { career: Career; onChange: (c: Career) 
 function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onChange: (c: Career) => void; onMenu: () => void; onStore?: () => void }) {
   const [paused, setPaused] = useState(() => Boolean(career.lastTrain));
   const [speed, setSpeed] = useState<1 | 2 | 4>(1);
-  const club = getClub(career.clubId);
   const league = getLeague(career.season.leagueId);
-  const country = getCountry(career.countryId);
-  const ovr = overall(career.player.position, career.player.attrs);
-  const rows = sortTable(career.season.table);
-  const place = tablePosition(career);
-  const onTrack = place <= career.season.targetLine;
   const latest = career.season.fixturesPlayed[career.season.fixturesPlayed.length - 1];
   const log = career.season.fixturesPlayed.slice(-6).reverse();
-  const { played, total } = leagueCount(career);
   const { tr, text } = useTx();
 
   useEffect(() => {
@@ -1319,14 +1482,13 @@ function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onCh
 
   return (
     <Shell>
-      <ScreenHeader
-        title={league.name}
-        sub={`${seasonLabel(career.year)} · ${tr("matchday", { n: played, m: total })}`}
-        onBack={onMenu}
+      <TabHeader
+        title={`${tr("season")} ${seasonLabel(career.year)}`}
+        sub={leagueLabel(tr, league.name)}
         right={
           <button
             type="button"
-            className="btn-primary flex h-12 min-w-12 shrink-0 items-center justify-center gap-1.5 px-3 text-sm"
+            className="btn-ghost flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 px-3 text-sm"
             aria-label={career.season.breakDone ? tr("skipEnd") : tr("skipBreak")}
             onClick={() => {
               unlockAudio();
@@ -1335,29 +1497,18 @@ function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onCh
             }}
           >
             <span className="max-[380px]:sr-only">{career.season.breakDone ? tr("skipEnd") : tr("skipBreak")}</span>
-            <Play className="size-3.5 rtl:-scale-x-100" />
+            <Play className="size-3.5 fill-current rtl:-scale-x-100" />
           </button>
         }
       />
-      {onStore && !career.race ? <EconomyBar career={career} onChange={onChange} onStore={onStore} /> : null}
-      {onStore && !career.race && career.activeReport && career.coinsFixtureId === career.activeReport.fixtureId ? <DoubleCoins career={career} onChange={onChange} /> : null}
 
-      <section className="scorebox px-4 py-3.5">
-        <div className="flex items-center gap-3">
-          <div className={`ovr-badge band-${band(ovr)}`}>
-            <span className="num">{ovr}</span>
-          </div>
-          <Crest clubId={club.id} name={club.name} className="h-11 w-11 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-lg font-bold leading-tight">{career.player.name}</h2>
-            <p className="truncate text-sm text-muted">
-              #{shirtNumber(career.player.position)} · {club.name} · {tr(`country.${nationById(career.nationId || career.countryId).id}`)}
-            </p>
-            <p className="truncate text-xs text-muted">{career.season.breakDone ? tr("second") : tr("first")}</p>
-          </div>
-          {career.race ? <span className="chip chip-trophy shrink-0 self-start">{tr("raceTag")}</span> : null}
-        </div>
-        <p className="goal-strip">{tr(`aim.${careerAim(career)}`)}</p>
+      <PlayerRow career={career} status={career.race ? tr("raceTag") : undefined} />
+      <div className="mt-5">
+        <NextMatchCard career={career} />
+      </div>
+      <SeasonProgress career={career} />
+      <section className="scorebox mt-4 px-5 py-4">
+        <p className="goal-strip mt-0">{tr(`aim.${careerAim(career)}`)}</p>
         <p className="mt-1 text-xs text-muted">
           {tr(career.difficulty === "easy" ? "diff.easy" : career.difficulty === "hard" ? "diff.hard" : "diff.normal")}
           {" · "}
@@ -1395,20 +1546,13 @@ function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onCh
         )}
       </section>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <div className="card grid gap-2 px-3 py-3">
-          <span className="text-xs font-bold text-muted">{tr("formLast")}</span>
+      {onStore && !career.race && career.activeReport && career.coinsFixtureId === career.activeReport.fixtureId ? <DoubleCoins career={career} onChange={onChange} /> : null}
+      {career.keyCampBonus > 0 ? <p className="mt-3"><span className="chip chip-good">{tr("eco.campActive", { n: career.keyCampBonus })}</span></p> : null}
+
+      <div className="card mt-3 flex items-center gap-3 px-3 py-3">
+        <span className="shrink-0 text-xs font-bold text-muted">{tr("formLast")}</span>
+        <div className="min-w-0 flex-1">
           <RateTiles logs={career.season.fixturesPlayed} />
-        </div>
-        <div className="card grid content-start gap-1 px-3 py-3">
-          <span className="text-xs font-bold text-muted">{tr("boardHead")}</span>
-          <span className="text-sm font-bold leading-snug">{text(career.season.targetLabel)}</span>
-          {rows.length && played ? (
-            <span className={`flex items-center gap-1 text-xs font-bold ${onTrack ? "text-good" : "text-bad"}`}>
-              {onTrack ? <Check className="size-3.5" /> : null}
-              {tr(onTrack ? "onTrack" : "offTrack", { n: place })}
-            </span>
-          ) : null}
         </div>
       </div>
 
@@ -1438,12 +1582,13 @@ function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onCh
         ))}
       </div>
 
-      <button type="button" className="btn-ghost mt-3 h-12 w-full" onClick={() => setPaused((value) => !value)}>
+      {/* Paused, resuming is the one thing to do here, so it takes the white action. */}
+      <button type="button" className={`${paused ? "btn-primary" : "btn-ghost"} mt-3 h-12 w-full`} onClick={() => setPaused((value) => !value)}>
         {paused ? tr("resume") : tr("pause")}
       </button>
 
       <section className="mt-4">
-        <h2 className="mb-2 text-sm font-semibold">{tr("results")}</h2>
+        <h2 className="section-title mb-2">{tr("results")}</h2>
         {log.length === 0 ? <p className="text-sm text-muted">{tr("soon")}</p> : null}
         <div className="results-list">
           {log.filter((item) => item.competition !== "europe").map((item, index) => (
@@ -1465,7 +1610,7 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
   const { tr } = useTx();
   return (
     <Shell>
-      <ScreenHeader title={tr("coach")} sub={`${camp ? tr("preseason") : tr("winter")} · ${club.name}`} onBack={onMenu} right={career.race ? <span className="chip chip-trophy">{tr("raceTag")}</span> : undefined} />
+      <ScreenHeader title={tr("coach")} sub={`${camp ? tr("preseason") : tr("winter")} · ${cname(club.name)}`} onBack={onMenu} right={career.race ? <span className="chip chip-trophy">{tr("raceTag")}</span> : undefined} />
       <p className="text-sm leading-6 text-muted">
         {camp ? tr("campAsk") : tr("breakAsk", { avg: avg ? tr("avgBit", { n: avg.toFixed(1) }) : "" })}
       </p>
@@ -1525,10 +1670,7 @@ function StoryCard({ career, onChange }: { career: Career; onChange: (c: Career)
   if (!id) return null;
   return (
     <section className="card mt-3 overflow-hidden" aria-live="polite">
-      <div className="px-4 pt-3.5 pb-3">
-        <p className="text-xs text-muted">{tr("story.title")}</p>
-        <p className="mt-0.5 font-semibold leading-snug">{tr(`story.${id}.q`)}</p>
-      </div>
+      <h2 className="px-4 pt-3.5 pb-3 font-semibold leading-snug">{tr(`story.${id}.q`)}</h2>
       <div className="grid grid-cols-2 border-t border-line">
         {(["a", "b"] as const).map((choice) => (
           <button
@@ -1565,7 +1707,8 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
   const shown = report.events.filter((event) => (focusMoment ? event.minute < minute || (reveal !== null && event.minute === minute) : true));
   const current = shown[shown.length - 1];
   const ours = getClub(career.clubId).name;
-  const theirs = text(pending.base.opponentName);
+  // data name: the crest key; cname() translates it where it is shown
+  const theirs = pending.base.opponentName.startsWith("@") ? text(pending.base.opponentName) : pending.base.opponentName;
   const left = pending.base.home ? ours : theirs;
   const right = pending.base.home ? theirs : ours;
   const us = current?.us ?? 0;
@@ -1610,11 +1753,11 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
         }
       />
 
-      <div className="scorebox px-4 pt-4 pb-3">
+      <div className="scorebox is-dark px-4 pt-5 pb-4">
         <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-center" dir="ltr">
           <span className={`team-name ${left === ours ? "text-accent-2" : ""}`} dir="auto">
             <NameCrest name={left} />
-            {left}
+            {keepHyphens(cname(left))}
           </span>
           <span className="score-big">
             {leftGoals}
@@ -1623,7 +1766,7 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
           </span>
           <span className={`team-name ${right === ours ? "text-accent-2" : ""}`} dir="auto">
             <NameCrest name={right} />
-            {right}
+            {keepHyphens(cname(right))}
           </span>
         </div>
         <div className="mt-3 flex items-center gap-3">
@@ -1637,11 +1780,8 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
       </div>
 
       {focusMoment && focus !== null ? (
-        <section className="card moment-card mt-3 overflow-hidden" aria-live="polite">
-          <div className="px-4 pt-3.5 pb-3">
-            <p className="text-xs font-semibold text-accent-2">{tr("mo.title")}</p>
-            <p className="mt-0.5 font-semibold leading-snug">{tr(focusMoment.situation ? `mo.sit.${focusMoment.situation}` : `mo.${focusMoment.kind}`, { min: focusMoment.minute })}</p>
-          </div>
+        <section className="card moment-card mt-3 overflow-hidden" aria-live="polite" aria-label={tr("mo.title")}>
+          <h2 className="moment-head">{tr(focusMoment.situation ? `mo.sit.${focusMoment.situation}` : `mo.${focusMoment.kind}`, { min: focusMoment.minute })}</h2>
           {focusMoment.picked ? (
             <div className="grid gap-3 border-t border-line px-4 py-3.5">
               <p className={`text-lg font-bold ${focusMoment.success ? "text-good" : "text-bad"}`}>{focusMoment.success ? tr("mo.yes") : tr("mo.no")}</p>
@@ -1650,9 +1790,6 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
                   report.events.find((event) => event.minute === focusMoment.minute && event.text.startsWith("@mo."))?.text ?? "",
                 )}
               </p>
-              {focusMoment.success === false && focus !== null && rewardAvailable(career, "retry-moment", todayKey(), pending.base.fixtureId) ? (
-                <RewardButton name="retry-moment" className="btn-ghost h-12 w-full text-sm" label={tr("eco.retry")} onReward={() => onChange(retryMoment(career, focus))} />
-              ) : null}
               <button
                 type="button"
                 className="btn-primary h-12 w-full"
@@ -1660,6 +1797,9 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
               >
                 {active < 0 ? tr("mo.finish") : tr("mo.next")}
               </button>
+              {focusMoment.success === false && focus !== null && rewardAvailable(career, "retry-moment", todayKey(), pending.base.fixtureId) ? (
+                <RewardButton name="retry-moment" className="btn-ghost h-12 w-full text-sm" label={tr("eco.retry")} onReward={() => onChange(retryMoment(career, focus))} />
+              ) : null}
             </div>
           ) : (
             <div className="list rounded-none border-x-0 border-b-0">
@@ -1721,8 +1861,10 @@ function MatchScreen({ career, onReport, onMenu }: { career: Career; onReport: (
   const done = step >= report.events.length;
   const minute = current?.minute ?? 0;
   const ours = getClub(career.clubId).name;
-  const left = report.home ? ours : text(report.opponentName);
-  const right = report.home ? text(report.opponentName) : ours;
+  // data names (crest keys); cname() translates them where shown
+  const opp = report.opponentName.startsWith("@") ? text(report.opponentName) : report.opponentName;
+  const left = report.home ? ours : opp;
+  const right = report.home ? opp : ours;
   const leftGoals = report.home ? (current?.us ?? 0) : (current?.them ?? 0);
   const rightGoals = report.home ? (current?.them ?? 0) : (current?.us ?? 0);
 
@@ -1762,11 +1904,11 @@ function MatchScreen({ career, onReport, onMenu }: { career: Career; onReport: (
         }
       />
 
-      <div className="scorebox px-4 pt-4 pb-3">
+      <div className="scorebox is-dark px-4 pt-5 pb-4">
         <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-center" dir="ltr">
           <span className={`team-name ${left === ours ? "text-accent-2" : ""}`} dir="auto">
             <NameCrest name={left} />
-            {left}
+            {keepHyphens(cname(left))}
           </span>
           <span className="score-big">
             {leftGoals}
@@ -1775,7 +1917,7 @@ function MatchScreen({ career, onReport, onMenu }: { career: Career; onReport: (
           </span>
           <span className={`team-name ${right === ours ? "text-accent-2" : ""}`} dir="auto">
             <NameCrest name={right} />
-            {right}
+            {keepHyphens(cname(right))}
           </span>
         </div>
         <div className="mt-3 flex items-center gap-3">
@@ -1867,10 +2009,10 @@ function ReportScreen({
         </p>
       ) : null}
       {report.injured ? <p className="mt-3 text-sm text-bad">{tr("creaked")}</p> : null}
-      {extra}
       <button type="button" className="btn-primary mt-5 h-13 w-full text-base" onClick={onNext}>
         {last ? tr("seasonReview") : tr("backRun")}
       </button>
+      {extra}
     </Shell>
   );
 }
@@ -2039,16 +2181,18 @@ function SeasonScreen({
       </Shell>
     );
   }
-  const names = (ids: string[]) => ids.map((id) => getClub(id).name).join(", ") || tr("none");
+  const names = (ids: string[]) => ids.map((id) => cname(getClub(id).name)).join(", ") || tr("none");
   const ovrGain = preview.ovrAfter - preview.ovrBefore;
   return (
     <Shell>
-      <ScreenHeader title={`${tr("season")} ${seasonLabel(career.year)}`} sub={club.name} onBack={onMenu} />
-      <div className="card flex items-center justify-between gap-3 px-4 py-3">
+      <ScreenHeader title={`${tr("season")} ${seasonLabel(career.year)}`} sub={cname(club.name)} onBack={onMenu} />
+      {/* The verdict is announced, not tagged: a club-colour band when the target is met. */}
+      <p className={`verdict ${preview.targetHit ? "is-met" : "is-missed"}`}>{preview.targetHit ? tr("targetMet") : tr("targetMiss")}</p>
+      <div className="card mt-3 px-4 py-3">
         <div className="min-w-0">
           <p className="text-sm font-bold">
             {preview.tablePos}
-            {rows.length ? ` ${tr("of", { n: rows.length })}` : ""} · {league.name}
+            {rows.length ? ` ${tr("of", { n: rows.length })}` : ""} · {leagueLabel(tr, league.name)}
           </p>
           <p className="truncate text-xs text-muted">{text(preview.targetLabel)}</p>
           <p className="text-xs text-muted" dir="auto">
@@ -2071,7 +2215,6 @@ function SeasonScreen({
             </p>
           ) : null}
         </div>
-        <span className={`chip shrink-0 ${preview.targetHit ? "chip-good" : "chip-bad"}`}>{preview.targetHit ? tr("targetMet") : tr("targetMiss")}</span>
       </div>
 
       <div className="card mt-4 flex items-center justify-center gap-5 px-4 py-4">
@@ -2154,7 +2297,7 @@ function SeasonScreen({
         </div>
       ) : null}
 
-      <h2 className="mt-5 text-base font-semibold">{tr("attrsMoved")}</h2>
+      <h2 className="section-title mt-6">{tr("attrsMoved")}</h2>
       <div className="mt-3 grid grid-cols-[4.5rem_minmax(0,1fr)_3.2rem] items-center gap-x-3 gap-y-2.5 text-sm">
         {ATTR_KEYS.map((key) => {
           const before = preview.before[key];
@@ -2183,7 +2326,7 @@ function SeasonScreen({
         ))}
       </div>
 
-      <h2 className="mt-5 text-base font-semibold">{tr("awardsHead")}</h2>
+      <h2 className="section-title mt-6">{tr("awardsHead")}</h2>
       <div className="list mt-2">
         {preview.awards.map((award) => (
           <div key={award.id} className="list-row">
@@ -2201,10 +2344,8 @@ function SeasonScreen({
           <span className={`list-icon ${preview.ballonYours ? "text-trophy" : ""}`}>
             <Medal className="size-5" />
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-xs text-muted">{tr("award.ballon")}</span>
-            <span className={`block font-semibold ${preview.ballonYours ? "text-trophy" : ""}`}>{preview.ballon}</span>
-          </span>
+          <span className="min-w-0 flex-1 font-semibold">{tr("award.ballon")}</span>
+          <span className={`min-w-0 shrink truncate text-end text-sm ${preview.ballonYours ? "font-bold text-trophy" : "text-muted"}`}>{preview.ballon}</span>
         </div>
       </div>
 
@@ -2258,9 +2399,8 @@ function OffersScreen({
             ? tr("offerOld")
             : tr("whereCopy")}
       </p>
-      {!career.race ? <SeasonBreak career={career} onBoost={onBoost} /> : null}
-      {!career.race ? <BigTrialCard career={career} onChange={onChange} /> : null}
       {!offers.some((offer) => offer.kind === "stay") ? <p className="mt-3 text-sm font-bold text-bad">{tr("noRenew")}</p> : null}
+      {!career.race ? <BigTrialCard career={career} onChange={onChange} /> : null}
       <div className="mt-4 grid gap-3">
         {offers.map((offer) => {
           const club = getClub(offer.clubId);
@@ -2268,22 +2408,22 @@ function OffersScreen({
           const offerCountry = getCountry(league.countryId);
           const mins = ROLE_MINUTES[offer.role];
           return (
-            <article key={offer.clubId} className="offer-plain">
-              <div className="offer-in">
+            <article key={offer.clubId} className="offer-plain" style={clubVars(club.id)}>
+              <header className="offer-head">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-start gap-2.5">
-                    <Crest clubId={club.id} name={club.name} className="h-10 w-10 shrink-0" />
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <Crest clubId={club.id} name={club.name} className="h-11 w-11 shrink-0" />
                     <div className="min-w-0">
-                    <h2 className="truncate text-base font-bold">{club.name}</h2>
-                    <p className="text-sm text-muted">
-                      {league.name} · {offerCountry.name}
-                    </p>
+                      <h2>{keepHyphens(cname(club.name))}</h2>
+                      <p className="text-sm font-semibold opacity-80">
+                        <bdi>{leagueLabel(tr, league.name)}</bdi>
+                      </p>
+                    </div>
                   </div>
-                  </div>
-                  <span className={`chip shrink-0 ${offer.role === "Star" ? "chip-trophy" : offer.role === "Bench" ? "chip-bad" : ""}`}>
-                    {tr(`role${offer.role}`)}
-                  </span>
+                  <span className="offer-chip">{tr(`role${offer.role}`)}</span>
                 </div>
+              </header>
+              <div className="offer-in">
                 <dl className="terms">
                   <div>
                     <dt>{tr("perMonth")}</dt>
@@ -2299,7 +2439,8 @@ function OffersScreen({
                   </div>
                 </dl>
                 <p className="text-sm leading-6">{text(offer.note)}</p>
-                <button type="button" className={`${offer.kind === "stay" ? "btn-ghost" : "btn-primary"} h-12 w-full`} onClick={() => onAccept(offer.clubId)}>
+                {/* Signing is done in the signing club's colours; the choices weigh the same. */}
+                <button type="button" className="btn-club h-12 w-full" onClick={() => onAccept(offer.clubId)}>
                   {offer.kind === "stay" ? tr("stay") : offer.kind === "side" ? tr("move") : tr("sign")}
                 </button>
               </div>
@@ -2307,6 +2448,7 @@ function OffersScreen({
           );
         })}
       </div>
+      {!career.race ? <SeasonBreak career={career} onBoost={onBoost} /> : null}
       <div className="mt-5">
         {ask ? (
           <div className="card px-4 py-3">
@@ -2330,13 +2472,18 @@ function OffersScreen({
   );
 }
 
-function Collection({ career, onBack }: { career: Career | null; onBack: () => void }) {
+function Collection({ career, onBack, onPlay }: { career: Career | null; onBack: () => void; onPlay: () => void }) {
   const { tr, text } = useTx();
   return (
     <Shell>
       <ScreenHeader title={tr("collection")} onBack={onBack} />
       {!career || career.trophies.length === 0 ? (
-        <p className="card px-4 py-6 text-center text-sm leading-6 text-muted">{tr("emptyCabinet")}</p>
+        <div className="card grid gap-4 px-4 py-6 text-center">
+          <p className="text-sm leading-6 text-muted">{tr("emptyCabinet")}</p>
+          <button type="button" className="btn-primary h-12 w-full" onClick={onPlay}>
+            {career ? tr("continue") : tr("start")}
+          </button>
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-2">
           {career.trophies.map((trophy) => (
@@ -2357,7 +2504,7 @@ function Collection({ career, onBack }: { career: Career | null; onBack: () => v
             {career.history.map((row) => (
               <div key={`${row.year}-${row.clubId}`} className="flex items-center justify-between gap-3 border-b border-line px-3.5 py-2.5 text-sm last:border-b-0">
                 <span className="truncate">
-                  {seasonLabel(row.year)} · {getClub(row.clubId).name}
+                  {seasonLabel(row.year)} · {cname(getClub(row.clubId).name)}
                 </span>
                 <span className="num text-muted">
                   #{row.pos} · {tr("goalsN", { n: row.goals })} · {row.ovr}
@@ -2389,7 +2536,7 @@ function Summary({ career, onBack }: { career: Career | null; onBack: () => void
     <Shell>
       <ScreenHeader title={career.player.name} sub={seasonLabel(career.year)} onBack={onBack} />
       <p className="text-sm text-muted">
-        {club.name} · {tablePosition(career)}
+        {cname(club.name)} · {tablePosition(career)}
         {rows.length ? ` ${tr("of", { n: rows.length })}` : ""} · {tr("appsN", { n: apps })} · {tr("goalsN", { n: career.season.goals })}
         {avg ? ` · ${tr("avgN", { n: avg.toFixed(1) })}` : ""}
       </p>
@@ -2464,8 +2611,8 @@ function DailyLobby({ attempt, onBack, onBegin }: { attempt: DailyAttempt | null
   return (
     <Shell>
       <ScreenHeader title={tr("dailyTitle")} sub={tr("dailyKicker")} onBack={onBack} />
-      <p className="text-sm leading-6 text-muted">{tr("dailyCopy", { pos: tr(`pos.${board.position}`), club: club.name, league: league.name })}</p>
-      {best != null ? <ShareResult seasons={best} date={board.date} pos={tr(`pos.${board.position}`)} club={club.name} /> : null}
+      <p className="text-sm leading-6 text-muted">{tr("dailyCopy", { pos: tr(`pos.${board.position}`), club: cname(club.name), league: leagueLabel(tr, league.name) })}</p>
+      {best != null ? <ShareResult seasons={best} date={board.date} pos={tr(`pos.${board.position}`)} club={cname(club.name)} /> : null}
       <div className="panel mt-4 px-4 py-4">
         <p className="text-xs font-semibold text-muted">{tr("starting")}</p>
         <div className="mt-3 grid gap-2">
@@ -2632,7 +2779,7 @@ function LegacyScreen({ onBack }: { onBack: () => void }) {
               ) : (
                 <button
                   type="button"
-                  className={`${state === "ready" ? "btn-primary" : "btn-ghost"} h-12 shrink-0 px-4 text-sm`}
+                  className="btn-ghost h-12 shrink-0 px-4 text-sm"
                   disabled={state !== "ready"}
                   onClick={() => setLegacy(buyPerk(perk.id as PerkId))}
                 >
@@ -2761,52 +2908,52 @@ function RewardButton({ name, label, onReward, className }: { name: string; labe
   );
 }
 
+/** The gold coin mark, drawn in CSS so it matches at every size. */
+function Coin() {
+  return <i className="coin" aria-hidden="true" />;
+}
+
 function CoinChip({ n }: { n: number }) {
   const { tr } = useTx();
   return (
-    <span className="chip chip-trophy num shrink-0" aria-label={tr("coinsN", { n: formatCoins(n) })}>
-      ● {formatCoins(n)}
+    <span className="coin-pill num" aria-label={tr("coinsN", { n: formatCoins(n) })}>
+      <Coin />
+      {formatCoins(n)}
     </span>
   );
 }
 
-function EconomyBar({ career, onChange, onStore }: { career: Career; onChange: (c: Career) => void; onStore: () => void }) {
+/** Buying with coins: an outline button carrying the coin and the price (the old price struck when discounted). */
+function PriceButton({
+  price,
+  was,
+  label,
+  disabled,
+  onClick,
+  className = "h-12 min-w-20 shrink-0 px-3",
+}: {
+  price: number;
+  was?: number;
+  label?: string;
+  disabled?: boolean;
+  onClick: () => void;
+  /** Size classes; replaces the default rather than adding to it. */
+  className?: string;
+}) {
   const { tr } = useTx();
-  const today = todayKey();
-  const [chest, setChest] = useState(() => chestToday(today));
-  const legend = career.cosmetics.includes("cos-legend");
-  const open = (double: boolean) => {
-    if (!chest) return;
-    markChest(today);
-    setChest(null);
-    if (chest.kind === "coins") {
-      const withBase = { ...career, seasonCoins: earnSeasonCoins(career, "bonuses", chest.coins) };
-      onChange({ ...withBase, coins: career.coins + chest.coins * (double ? 2 : 1), seasonCoins: double ? earnSeasonCoins(withBase, "ads", chest.coins) : withBase.seasonCoins });
-    }
-    else onChange({ ...grantFreeCamp(career, career.adState.freeCampDate ?? ""), keyCampBonus: ECONOMY.keyCampBonus * (double ? 2 : 1) });
-  };
+  const off = was != null && was > price;
   return (
-    <section className="card mb-3 grid gap-2 px-3 py-2.5">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <CoinChip n={career.coins} />
-        {legend ? <span className="chip chip-trophy">{tr("eco.legendTag")}</span> : null}
-        {career.keyCampBonus > 0 ? <span className="chip chip-good">{tr("eco.campActive", { n: career.keyCampBonus })}</span> : null}
-        <button type="button" className="btn-ghost ms-auto h-12 px-4 text-sm" onClick={onStore}>
-          {tr("eco.store")}
-        </button>
-      </div>
-      {chest ? (
-        <div className="grid gap-2 border-t border-line pt-2">
-          <p className="text-sm font-semibold">{chest.kind === "coins" ? tr("eco.chestCoins", { n: chest.coins }) : tr("eco.chestCamp")}</p>
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" className="btn-primary h-12 text-sm" onClick={() => open(false)}>
-              {tr("eco.chestOpen")}
-            </button>
-            <RewardButton name="daily-chest" className="btn-ghost h-12 w-full text-sm" label={tr("eco.chestDouble")} onReward={() => open(true)} />
-          </div>
-        </div>
-      ) : null}
-    </section>
+    <button
+      type="button"
+      className={`btn-price ${className}`}
+      disabled={disabled}
+      aria-label={label ? `${label} · ${tr("coinsN", { n: formatCoins(price) })}` : undefined}
+      onClick={onClick}
+    >
+      <Coin />
+      <span className="num">{formatCoins(price)}</span>
+      {off ? <s className="num price-was">{formatCoins(was)}</s> : null}
+    </button>
   );
 }
 
@@ -2837,30 +2984,40 @@ function BigTrialCard({ career, onChange }: { career: Career; onChange: (c: Care
   const trial = career.bigTrial;
   if (!trial || trial.year !== career.year) return null;
   const club = getClub(trial.clubId);
+  // The bigger club's own announcement: its colours, its name as the heading, the chance as the tag.
   return (
-    <section className="card mt-4 grid gap-2 px-4 py-3.5">
-      <p className="text-xs font-semibold text-accent-2">{tr("eco.trialTitle")}</p>
-      <div className="flex items-center gap-2.5">
-        <Crest clubId={club.id} name={club.name} className="h-10 w-10 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-bold">{club.name}</p>
-          <p className="text-xs text-muted">{getLeague(club.leagueId).name}</p>
+    <article className="offer-plain mt-4" style={clubVars(club.id)}>
+      <header className="offer-head">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Crest clubId={club.id} name={club.name} className="h-11 w-11 shrink-0" />
+            <div className="min-w-0">
+              <h2>{keepHyphens(cname(club.name))}</h2>
+              {/* Two lines, so the Latin league name never wraps around the Hebrew phrase. */}
+              <p className="text-sm font-semibold opacity-80">{tr("eco.trialTitle")}</p>
+              <p className="text-sm font-semibold opacity-80">
+                <bdi>{leagueLabel(tr, getLeague(club.leagueId).name)}</bdi>
+              </p>
+            </div>
+          </div>
+          <span className="offer-chip num">{trial.chance}%</span>
         </div>
-        <span className="num text-lg font-bold">{trial.chance}%</span>
+      </header>
+      <div className="offer-in">
+        {trial.result === "open" ? (
+          <>
+            <button type="button" className="btn-club h-12 w-full" onClick={() => onChange(attemptBigTrial(career))}>
+              {tr("eco.trialGo")}
+            </button>
+            {!trial.boosted && trial.chance < ECONOMY.bigTrial.boostCap ? (
+              <RewardButton name="trial-boost" className="h-12 w-full text-sm" label={tr("eco.trialBoost", { n: Math.min(ECONOMY.bigTrial.boostCap, trial.chance * 2) })} onReward={() => onChange(boostBigTrial(career))} />
+            ) : null}
+          </>
+        ) : (
+          <p className={`text-sm font-semibold ${trial.result === "won" ? "text-good" : "text-bad"}`}>{trial.result === "won" ? tr("eco.trialWon") : tr("eco.trialLost")}</p>
+        )}
       </div>
-      {trial.result === "open" ? (
-        <div className="grid gap-2">
-          {!trial.boosted && trial.chance < ECONOMY.bigTrial.boostCap ? (
-            <RewardButton name="trial-boost" className="btn-ghost h-12 w-full text-sm" label={tr("eco.trialBoost", { n: Math.min(ECONOMY.bigTrial.boostCap, trial.chance * 2) })} onReward={() => onChange(boostBigTrial(career))} />
-          ) : null}
-          <button type="button" className="btn-primary h-12 w-full" onClick={() => onChange(attemptBigTrial(career))}>
-            {tr("eco.trialGo")}
-          </button>
-        </div>
-      ) : (
-        <p className={`text-sm font-semibold ${trial.result === "won" ? "text-good" : "text-bad"}`}>{trial.result === "won" ? tr("eco.trialWon") : tr("eco.trialLost")}</p>
-      )}
-    </section>
+    </article>
   );
 }
 
@@ -2882,21 +3039,21 @@ function StoreScreen({ career, onChange, onBack, onPlayer }: { career: Career; o
   return (
     <Shell>
       <ScreenHeader title={tr("eco.store")} sub={admin ? tr("eco.adminFree") : tr("eco.storeSub")} onBack={onBack} right={<CoinChip n={career.coins} />} />
-      {rewardAvailable(career, "free-camp", today) ? (
-        <RewardButton name="free-camp" className="btn-ghost h-12 w-full text-sm" label={tr("eco.freeCamp", { n: ECONOMY.keyCampBonus })} onReward={() => onChange(grantFreeCamp(career, today))} />
-      ) : null}
-      {rewardAvailable(career, "store-discount", today) ? (
-        discountPick ? (
-          <p className="mt-2 text-sm text-accent">{tr("eco.discountPick", { n: Math.round(ECONOMY.discount * 100) })}</p>
-        ) : (
-          <div className="mt-2">
-            <RewardButton name="store-discount" className="btn-ghost h-12 w-full text-sm" label={tr("eco.discount", { n: Math.round(ECONOMY.discount * 100) })} onReward={() => setDiscountPick(true)} />
-          </div>
-        )
-      ) : null}
       <GearOfferCard career={career} onChange={onChange} />
+      {/* One rewarded clip at a time: the free camp first, then the discount once the camp is taken. */}
+      {discountPick ? (
+        <p className="mt-3 text-sm text-accent">{tr("eco.discountPick", { n: Math.round(ECONOMY.discount * 100) })}</p>
+      ) : rewardAvailable(career, "free-camp", today) ? (
+        <div className="mt-3">
+          <RewardButton name="free-camp" className="h-12 w-full text-sm" label={tr("eco.freeCamp", { n: ECONOMY.keyCampBonus })} onReward={() => onChange(grantFreeCamp(career, today))} />
+        </div>
+      ) : rewardAvailable(career, "store-discount", today) ? (
+        <div className="mt-3">
+          <RewardButton name="store-discount" className="h-12 w-full text-sm" label={tr("eco.discount", { n: Math.round(ECONOMY.discount * 100) })} onReward={() => setDiscountPick(true)} />
+        </div>
+      ) : null}
       {onPlayer ? (
-        <button type="button" className="btn-primary mt-3 h-12 w-full text-sm" onClick={onPlayer}>
+        <button type="button" className="btn-ghost mt-3 h-12 w-full text-sm" onClick={onPlayer}>
           {tr("gear.myPlayer")}
         </button>
       ) : null}
@@ -2925,14 +3082,7 @@ function StoreScreen({ career, onChange, onBack, onPlayer }: { career: Career; o
                     -{Math.round(ECONOMY.discount * 100)}%
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    className="btn-primary h-12 min-w-20 shrink-0 px-3 text-sm"
-                    disabled={check !== "ok"}
-                    onClick={() => purchase(item.id)}
-                  >
-                    <span className="num">{price === item.price ? formatCoins(price) : `${formatCoins(price)} ✓`}</span>
-                  </button>
+                  <PriceButton price={price} was={item.price} label={label} disabled={check !== "ok"} onClick={() => purchase(item.id)} />
                 )}
               </div>
               {check !== "ok" && !discountPick ? <p className="mt-1 text-xs text-muted">{reasonText[check] ?? ""}</p> : null}
@@ -2986,28 +3136,30 @@ function GearOfferCard({ career, onChange }: { career: Career; onChange: (c: Car
   const off = Math.round((ECONOMY.gear.dailyOff + (career.adState.gearOfferAdDate === today ? ECONOMY.gear.dailyAdOff : 0)) * 100);
   return (
     <section className="card mt-3 grid gap-2 px-3 py-2.5" data-gear-offer={`${offer.slot}:${offer.tier}`}>
-      <p className="text-xs font-semibold text-accent-2">{tr("gear.offer", { n: off })}</p>
       <div className="flex items-center gap-3">
-        <GearIcon key={`${worn.item}-${offer.tier}`} item={worn.item} tier={offer.tier} />
+        <GearIcon key={`${worn.item}-${offer.tier}`} item={worn.item} tier={offer.tier} className="gear-well h-14 w-14 p-1" />
         <span className="min-w-0 flex-1">
           <span className="block font-semibold">
             {tr(`gear.item.${worn.item}`)} · {tr(`gear.tier.${offer.tier}`)}
           </span>
           <span className="block text-xs text-muted">
-            {tr(`attr.${worn.attr}`)} <bdi dir="ltr">+{tierInfo(offer.tier).bonus}</bdi>
+            {tr(`attr.${worn.attr}`)} <bdi dir="ltr">+{tierInfo(offer.tier).bonus}</bdi> · <span className="font-semibold text-accent-2">{tr("gear.offer", { n: off })}</span>
           </span>
         </span>
-        <button type="button" className="btn-primary h-12 min-w-20 shrink-0 px-3 text-sm" disabled={check !== "ok"} onClick={() => {
-          if (buying.current) return;
-          buying.current = true;
-          window.setTimeout(() => (buying.current = false), 600);
-          onChange(buyGear(career, offer.slot, offer.tier, today, top, admin));
-        }}>
-          <span className="num">{formatCoins(price)}</span>
-        </button>
+        <PriceButton
+          price={price}
+          label={`${tr(`gear.item.${worn.item}`)} · ${tr(`gear.tier.${offer.tier}`)}`}
+          disabled={check !== "ok"}
+          onClick={() => {
+            if (buying.current) return;
+            buying.current = true;
+            window.setTimeout(() => (buying.current = false), 600);
+            onChange(buyGear(career, offer.slot, offer.tier, today, top, admin));
+          }}
+        />
       </div>
       {rewardAvailable(career, "gear-offer", today) ? (
-        <RewardButton name="gear-offer" className="btn-ghost h-12 w-full text-sm" label={tr("gear.offerAd", { n: Math.round(ECONOMY.gear.dailyAdOff * 100) })} onReward={() => apply((current) => grantGearOfferAd(current, today))} />
+        <RewardButton name="gear-offer" className="reward-quiet h-12 w-full text-sm" label={tr("gear.offerAd", { n: Math.round(ECONOMY.gear.dailyAdOff * 100) })} onReward={() => apply((current) => grantGearOfferAd(current, today))} />
       ) : null}
     </section>
   );
@@ -3120,12 +3272,13 @@ function PlayerCharacter({ career, children }: { career: Career; children?: Reac
   );
 }
 
-function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career; onChange: (c: Career) => void; onBack: () => void; onStore: () => void }) {
+function MyPlayerScreen({ career, onChange }: { career: Career; onChange: (c: Career) => void; onBack: () => void; onStore: () => void }) {
   const { tr } = useTx();
   const admin = useContext(AdminContext);
   const today = todayKey();
   const top = gearTopLeague(career);
   const bonus = gearBonus(career);
+  const attrs = effectiveAttrs(career);
   const [picking, setPicking] = useState(false);
   const [look, setLook] = useState(false);
   // Same rule as canBuyGear: gold needs a top league unless admin.
@@ -3134,23 +3287,27 @@ function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career;
   /** Blocks a fast second tap from buying the next tier off the same render. */
   const buying = useRef(false);
   const reason: Record<string, string> = { coins: tr("eco.short"), owned: tr("eco.owned"), locked: tr("gear.goldLocked"), daily: tr("eco.short") };
-  const slotCard = (index: number) => {
+  // A white tile per slot: the gear art, its name, then what it gives (worn) or what it costs (next tier).
+  const slotTile = (index: number) => {
     const slot = GEAR_SLOTS[index];
     const worn = slotFor(slot, career.player.position);
     const tier = slotTier(career, slot.id);
     const nextTier = tier ? GEAR_TIERS[GEAR_TIERS.indexOf(tier) + 1] : "bronze";
     const check = nextTier ? canBuyGear(career, slot.id, nextTier, today, top, admin) : "owned";
+    const price = nextTier ? gearPrice(career, slot.id, nextTier, today, admin, top) : 0;
     return (
-      <div key={slot.id} className="gear-slot rounded-md border border-line bg-surface px-1.5 py-1.5 text-center" data-gear-slot={slot.id} data-gear-tier={tier ?? "none"}>
-        <GearIcon key={`${worn.item}-${tier ?? "bronze"}`} item={worn.item} tier={tier ?? "bronze"} dim={!tier} className="gear-well mx-auto h-11 w-11 p-1" />
-        <p className={`gear-tier-label mt-0.5 text-[10px] font-bold uppercase tracking-wide ${tier ? "" : "text-muted"}`}>
-          {tier ? tr(`gear.tier.${tier}`) : tr("gear.empty")}
-          {tier ? <>{" "}<bdi dir="ltr" className="num">+{tierInfo(tier).bonus}</bdi></> : null}
-        </p>
-        <p className="text-xs font-semibold leading-tight">{tr(`gear.item.${worn.item}`)}</p>
-        <p className="text-[10px] leading-tight text-muted">{tr(`attr.${worn.attr}`)}</p>
-        {career.gearTrial === slot.id ? <p className="text-[10px] text-trophy">{tr("gear.trialOn")}</p> : null}
-        {worn.injury && tier ? <p className="text-[10px] text-good">{tr("gear.injury", { n: Math.round(ECONOMY.gear.injuryCut[tier] * 100) })}</p> : null}
+      <div key={slot.id} className="gear-tile" data-gear-slot={slot.id} data-gear-tier={tier ?? "none"} data-owned={tier ? "true" : undefined}>
+        <span className="gear-box">
+          <GearIcon key={`${worn.item}-${tier ?? "bronze"}`} item={worn.item} tier={tier ?? "bronze"} dim={!tier} className="" />
+        </span>
+        <p className="gear-name">{tr(`gear.item.${worn.item}`)}</p>
+        {tier ? (
+          <p className="gear-state" title={tr(`gear.tier.${tier}`)}>
+            {tr(`attr.${worn.attr}`)} <bdi dir="ltr" className="num">+{tierInfo(tier).bonus}</bdi>
+          </p>
+        ) : null}
+        {career.gearTrial === slot.id ? <p className="gear-note text-trophy">{tr("gear.trialOn")}</p> : null}
+        {worn.injury && tier ? <p className="gear-note text-good">{tr("gear.injury", { n: Math.round(ECONOMY.gear.injuryCut[tier] * 100) })}</p> : null}
         {picking ? (
           <button
             type="button"
@@ -3163,58 +3320,81 @@ function MyPlayerScreen({ career, onChange, onBack, onStore }: { career: Career;
             {tr("gear.tier.gold")}
           </button>
         ) : nextTier ? (
-          <button type="button" className="btn-primary mt-1 h-11 w-full px-1 text-xs" disabled={check !== "ok"} aria-label={`${tr(`gear.tier.${nextTier}`)} ${tr(`gear.item.${worn.item}`)}`} onClick={() => {
-            if (buying.current) return;
-            buying.current = true;
-            window.setTimeout(() => (buying.current = false), 600);
-            onChange(buyGear(career, slot.id, nextTier, today, top, admin));
-          }}>
-            <span className="num">{formatCoins(gearPrice(career, slot.id, nextTier, today, admin, top))}</span>
+          <button
+            type="button"
+            className="gear-price"
+            disabled={check !== "ok"}
+            aria-label={`${tr(`gear.tier.${nextTier}`)} ${tr(`gear.item.${worn.item}`)} · ${tr("coinsN", { n: formatCoins(price) })}`}
+            onClick={() => {
+              if (buying.current) return;
+              buying.current = true;
+              window.setTimeout(() => (buying.current = false), 600);
+              onChange(buyGear(career, slot.id, nextTier, today, top, admin));
+            }}
+          >
+            <Coin />
+            <span className="num">{formatCoins(price)}</span>
           </button>
-        ) : (
-          <p className="mt-1 text-[10px] text-good">{tr("gear.maxed")}</p>
-        )}
-        {!picking && nextTier && check !== "ok" && check !== "coins" ? <p className="mt-0.5 text-[10px] leading-tight text-muted">{reason[check]}</p> : null}
+        ) : null}
+        {!picking && nextTier && check !== "ok" && check !== "coins" && check !== "locked" ? <p className="gear-note">{reason[check]}</p> : null}
       </div>
     );
   };
   return (
     <Shell>
-      <ScreenHeader title={tr("gear.myPlayer")} sub={tr("gear.sub", { n: ECONOMY.gear.attrCap })} onBack={onBack} right={<CoinChip n={career.coins} />} />
-      <div className="myplayer-grid">
-        <div className="grid content-start gap-2">{[0, 1, 2].map(slotCard)}</div>
-        <div className="flex flex-col items-center text-center">
-          <button type="button" className="look-open" data-look-open aria-label={tr("look.edit")} onClick={() => setLook(true)}>
-          <PlayerCharacter career={career}>
-            <div className="ovr-badge player-ovr">
-              <span className="num">{overall(career.player.position, effectiveAttrs(career))}</span>
+      <TabHeader title={tr("gear.myPlayer")} sub={cname(getClub(career.clubId).name)} right={<CoinChip n={career.coins} />} />
+      <div className="gear-stage">
+        <div className="myplayer-grid">
+          {[0, 1, 2].map((i) => (
+            <div key={`l${i}`} className="gear-cell" style={{ gridColumn: 1, gridRow: i + 1 }}>
+              {slotTile(i)}
             </div>
-            <span className="look-badge" aria-hidden="true"><Paintbrush className="size-3.5" /></span>
-          </PlayerCharacter>
+          ))}
+          {[3, 4, 5].map((i) => (
+            <div key={`r${i}`} className="gear-cell" style={{ gridColumn: 3, gridRow: i - 2 }}>
+              {slotTile(i)}
+            </div>
+          ))}
+          <button type="button" className="look-open myplayer-stage" style={{ gridColumn: 2, gridRow: "1 / span 3" }} data-look-open aria-label={tr("look.edit")} onClick={() => setLook(true)}>
+            <PlayerCharacter career={career}>
+              <span className="ovr-badge player-ovr">
+                <span className="num">{overall(career.player.position, attrs)}</span>
+                <small>{tr("ovr")}</small>
+              </span>
+            </PlayerCharacter>
+            <span className="look-badge" aria-hidden="true">
+              <Paintbrush className="size-4" />
+            </span>
           </button>
-          <p className="mt-1 text-sm font-bold leading-tight">{career.player.name}</p>
-          <p className="text-xs text-muted">
-            {tr(`pos.${career.player.position}`)} · {tr("ageN", { n: career.player.age })}
-          </p>
         </div>
-        <div className="grid content-start gap-2">{[3, 4, 5].map(slotCard)}</div>
       </div>
-      <div className="mt-3 grid gap-2 rounded-md border border-line bg-surface p-3" data-myplayer-attrs>
+
+      <div className="mt-6 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="section-title">{tr("gear.head")}</h2>
+          <p className="mt-1.5 text-sm text-muted">{tr("gear.capShort", { n: ECONOMY.gear.attrCap })}</p>
+        </div>
+        {rewardAvailable(career, "try-gold", today) && !picking ? (
+          <RewardButton name="try-gold" className="h-10 shrink-0 px-4 text-sm" label={tr("gear.tryShort")} onReward={() => setPicking(true)} />
+        ) : null}
+      </div>
+      {picking ? <p className="mt-3 text-sm font-semibold text-accent">{tr("gear.tryPick")}</p> : null}
+      <div className="stat-bars mt-5" data-myplayer-attrs>
         {ATTR_KEYS.map((key) => (
-          <AttrBar key={key} attr={key} value={effectiveAttrs(career)[key]} delta={bonus[key] || undefined} />
+          <div key={key} className="stat-bar">
+            <span>{tr(`attr.${key}`)}</span>
+            <span className="bar-track">
+              <span className="bar-fill block" style={{ width: `${attrs[key]}%` }} />
+            </span>
+            <b>
+              {attrs[key]}
+              {bonus[key] ? <span className="text-good"> +{bonus[key]}</span> : null}
+            </b>
+          </div>
         ))}
       </div>
       <GearOfferCard career={career} onChange={onChange} />
-      {rewardAvailable(career, "try-gold", today) ? (
-        picking ? (
-          <p className="mt-3 text-sm text-accent">{tr("gear.tryPick")}</p>
-        ) : (
-          <div className="mt-3">
-            <RewardButton name="try-gold" className="btn-ghost h-12 w-full text-sm" label={tr("gear.tryGold")} onReward={() => setPicking(true)} />
-          </div>
-        )
-      ) : null}
-      {goldLocked && !allGold ? <p className="mt-3 text-xs text-muted">{tr("gear.goldLocked")}</p> : null}
+      {goldLocked && !allGold ? <p className="mt-4 text-sm text-muted">{tr("gear.goldLocked")}</p> : null}
       {look ? <LookSheet career={career} onChange={onChange} onClose={() => setLook(false)} /> : null}
     </Shell>
   );
