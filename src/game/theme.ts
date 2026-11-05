@@ -1,36 +1,46 @@
-// Source: star-art/ui-A-final/tokens.ts (Direction A "Night Stadium"). CSS variables in styles.css mirror these values.
-// STAR — Direction A "Night Stadium" design tokens. Numbers are px (dp).
-// Shadows/gradients are CSS strings; map to RN/Expo styles as needed.
+// Source: star-art/ui-v2/gen.py Direction 2 "Matchday Paper".
+// STAR — Matchday Paper design tokens. Numbers are px (dp).
+// CSS variables in styles.css mirror these values.
 export const tokens = {
   "colors": {
-    "bg": "#0B1433",
-    "surface": "#16244F",
-    "surfaceAlt": "#1E3166",
-    "navBg": "#0A1230",
-    "primary": "#2BFF88",
-    "primaryLight": "#5CFFA6",
-    "primaryDark": "#0FB85C",
-    "accent": "#36D6FF",
-    "accentDark": "#1B7FA3",
-    "gold": "#FFC83D",
-    "goldLight": "#FFE08A",
-    "goldDark": "#C98F12",
-    "onGold": "#3A2600",
-    "text": "#F2F6FF",
-    "textMuted": "#8C9CC4",
-    "onPrimary": "#0B1433",
-    "success": "#3DDC6E",
-    "danger": "#FF4D5E",
-    "draw": "#8C9CC4",
-    "divider": "rgba(140,156,196,0.2)",
-    "tierBronze": "#C27A3A",
-    "tierSilver": "#C9D3DC",
-    "tierGold": "#F5C542"
+    "bg": "#F3F1EC",
+    "bgAlt": "#ECE9E1",
+    "surface": "#FFFFFF",
+    "surfaceAlt": "#F3F1EC",
+    "navBg": "#FFFFFF",
+    "primary": "#0B6B3A",
+    "primaryLight": "#0B6B3A",
+    "primaryDark": "#08522C",
+    "accent": "#111418",
+    "accentDark": "#111418",
+    "ad": "#FFB020",
+    "onAd": "#1A1200",
+    "gold": "#B07A0C",
+    "goldLight": "#FFD27A",
+    "goldDark": "#E09A12",
+    "onGold": "#1A1200",
+    "text": "#111418",
+    "textMuted": "#6B6F76",
+    "textDim": "#9A9EA5",
+    "onPrimary": "#FFFFFF",
+    "success": "#0B6B3A",
+    "danger": "#C8323C",
+    "draw": "#9A9EA5",
+    "divider": "#E2DFD7",
+    "tierBronze": "#A8662C",
+    "tierSilver": "#8F99A3",
+    "tierGold": "#D9A21B",
+    "bandLow": "#9A9EA5",
+    "bandMid": "#B07A0C",
+    "bandGood": "#5C8A1A",
+    "bandHigh": "#0B6B3A",
+    "bandElite": "#1F5FBF"
   },
   "fonts": {
-    "headline": "'Secular One', sans-serif",
-    "body": "'Rubik', sans-serif",
-    "googleFontsUrl": "https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=Secular+One&display=swap"
+    "headline": "'Oswald', 'Assistant', sans-serif",
+    "body": "'Inter', 'Assistant', sans-serif",
+    "hebrew": "'Assistant', 'Inter', sans-serif",
+    "googleFontsUrl": "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Oswald:wght@500;600;700&family=Assistant:wght@400;500;600;700;800&display=swap"
   },
   "fontSizes": {
     "caption": 10.5,
@@ -42,15 +52,15 @@ export const tokens = {
     "h3": 20,
     "h2": 22,
     "h1": 28,
-    "cta": 26,
-    "coinTotal": 30
+    "cta": 17,
+    "coinTotal": 15
   },
   "fontWeights": {
     "regular": 400,
     "medium": 500,
     "semibold": 600,
     "bold": 700,
-    "headline": 400
+    "headline": 700
   },
   "radii": {
     "sm": 6,
@@ -58,6 +68,7 @@ export const tokens = {
     "lg": 12,
     "slot": 14,
     "card": 16,
+    "shop": 18,
     "pill": 999
   },
   "spacing": {
@@ -68,138 +79,60 @@ export const tokens = {
     "lg": 14,
     "xl": 16,
     "xxl": 22,
-    "screenX": 16,
-    "navHeight": 78
+    "screenX": 20,
+    "navHeight": 84
   },
   "shadows": {
-    "card": "inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 24px rgba(0,0,0,0.4)",
-    "primaryGlow": "0 0 18px rgba(43,255,136,0.45)",
-    "goldGlow": "0 0 18px rgba(255,200,61,0.45)",
-    "coinChip": "0 0 12px rgba(255,200,61,0.25)",
-    "tierGoldGlow": "0 0 14px rgba(245,197,66,0.35)",
-    "nav": "0 -8px 24px rgba(0,0,0,0.5)"
-  },
-  "buttons": {
-    "primary": {
-      "height": 60,
-      "radius": 999,
-      "font": "headline",
-      "fontSize": 22,
-      "default": {
-        "background": "linear-gradient(#5CFFA6,#2BFF88)",
-        "color": "#0B1433",
-        "border": "2px solid #0FB85C",
-        "boxShadow": "0 5px 0 #0FB85C, 0 0 18px rgba(43,255,136,0.45)",
-        "transform": "none"
-      },
-      "pressed": {
-        "background": "linear-gradient(#2BFF88,#22E57A)",
-        "color": "#0B1433",
-        "border": "2px solid #0FB85C",
-        "boxShadow": "0 1px 0 #0FB85C, 0 0 8px rgba(43,255,136,0.3)",
-        "transform": "translateY(4px)"
-      },
-      "disabled": {
-        "background": "#1E3166",
-        "color": "#8C9CC4",
-        "border": "2px solid #2A3D73",
-        "boxShadow": "0 5px 0 #121E45",
-        "opacity": 0.7
-      }
-    },
-    "secondary": {
-      "height": 48,
-      "radius": 999,
-      "font": "headline",
-      "fontSize": 17,
-      "default": {
-        "background": "#1E3166",
-        "color": "#F2F6FF",
-        "border": "2px solid #36D6FF",
-        "boxShadow": "0 4px 0 #1B7FA3",
-        "transform": "none"
-      },
-      "pressed": {
-        "background": "#16244F",
-        "color": "#F2F6FF",
-        "border": "2px solid #36D6FF",
-        "boxShadow": "0 1px 0 #1B7FA3",
-        "transform": "translateY(3px)"
-      },
-      "disabled": {
-        "background": "#16244F",
-        "color": "#8C9CC4",
-        "border": "2px solid #2A3D73",
-        "boxShadow": "0 4px 0 #121E45",
-        "opacity": 0.7
-      }
-    },
-    "rewardedAd": {
-      "height": 56,
-      "radius": 999,
-      "font": "headline",
-      "fontSize": 17,
-      "tag": {
-        "background": "#3A2600",
-        "color": "#FFC83D",
-        "radius": 6
-      },
-      "default": {
-        "background": "linear-gradient(#FFE08A,#FFC83D)",
-        "color": "#3A2600",
-        "border": "2px solid #C98F12",
-        "boxShadow": "0 5px 0 #C98F12, 0 0 18px rgba(255,200,61,0.45)",
-        "transform": "none"
-      },
-      "pressed": {
-        "background": "linear-gradient(#FFC83D,#F2B52A)",
-        "color": "#3A2600",
-        "border": "2px solid #C98F12",
-        "boxShadow": "0 1px 0 #C98F12, 0 0 8px rgba(255,200,61,0.3)",
-        "transform": "translateY(4px)"
-      },
-      "disabled": {
-        "background": "#1E3166",
-        "color": "#8C9CC4",
-        "border": "2px solid #5A4A1E",
-        "boxShadow": "0 5px 0 #121E45",
-        "opacity": 0.7
-      }
-    }
+    "card": "none",
+    "primaryGlow": "none",
+    "goldGlow": "none",
+    "coinChip": "0 1px 2px rgba(17,20,24,0.06)",
+    "tierGoldGlow": "none",
+    "nav": "none",
+    "shop": "0 6px 16px rgba(11,107,58,0.3)"
   },
   "cards": {
     "default": {
-      "background": "#16244F",
-      "border": "1.5px solid rgba(43,255,136,0.35)",
+      "background": "#FFFFFF",
+      "border": "1px solid #E2DFD7",
       "radius": 16,
-      "padding": 16,
-      "boxShadow": "inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 24px rgba(0,0,0,0.4)"
+      "padding": 18,
+      "boxShadow": "none"
     },
     "alt": {
-      "background": "#1E3166",
-      "border": "1.5px solid rgba(54,214,255,0.3)",
+      "background": "#FFFFFF",
+      "border": "1px solid #E2DFD7",
       "radius": 16,
-      "padding": 16,
-      "boxShadow": "inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 24px rgba(0,0,0,0.4)"
+      "padding": 18,
+      "boxShadow": "none"
+    },
+    "fixture": {
+      "background": "#111418",
+      "color": "#FFFFFF",
+      "radius": 20,
+      "padding": 22
     },
     "gearSlot": {
-      "background": "#16244F",
-      "border": "2px solid <tierColor>",
+      "background": "#FFFFFF",
+      "border": "1px solid #E2DFD7",
       "radius": 14,
-      "iconWell": "radial-gradient(#1E3166,#101C42)",
-      "goldBoxShadow": "0 0 14px rgba(245,197,66,0.35)"
+      "iconWell": "#F7F5F0",
+      "equippedBorder": "2px solid #0B6B3A",
+      "goldBoxShadow": "none"
     },
     "coinChip": {
-      "background": "#16244F",
-      "border": "1.5px solid rgba(255,200,61,0.5)",
+      "background": "#FFFFFF",
+      "border": "0",
       "radius": 999,
-      "color": "#FFC83D"
+      "color": "#111418",
+      "boxShadow": "0 1px 2px rgba(17,20,24,0.06)"
     }
   },
   "background": {
-    "screen": "radial-gradient(120% 60% at 50% 0%, #1E3166 0%, #0B1433 60%)",
-    "tile": "bg-tile.png @ 256px, opacity 0.10",
-    "floodlights": "linear-gradient(120deg, rgba(54,214,255,0.16), transparent 35%) + mirrored 240deg"
+    "screen": "#F3F1EC",
+    "myPlayerStage": "linear-gradient(#E9E5DB, #F3F1EC)",
+    "tile": "none",
+    "floodlights": "none"
   }
 } as const;
 

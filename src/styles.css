@@ -6,48 +6,48 @@
  * attribute numbers coloured by band. No gradients, no glows.
  */
 @theme {
-  /* Direction A "Night Stadium" — values from src/game/theme.ts (tokens). */
-  --font-sans: "Rubik", "Segoe UI", system-ui, sans-serif;
-  --font-display: "Secular One", "Rubik", "Segoe UI", system-ui, sans-serif;
-  --font-num: "Rubik", "Segoe UI", system-ui, sans-serif;
+  /* Direction 2 "Matchday Paper" — light editorial programme. Values from star-art/ui-v2/gen.py (D2). */
+  --font-sans: "Inter", "Assistant", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Oswald", "Assistant", "Inter", system-ui, sans-serif;
+  --font-num: "Inter", "Segoe UI", system-ui, sans-serif;
 
-  --color-bg: #0b1433;
-  --color-bg-2: #0a1230;
-  --color-surface: #16244f;
-  --color-surface-2: #1e3166;
-  --color-line: rgba(140, 156, 196, 0.2);
-  --color-fg: #f2f6ff;
-  --color-muted: #8c9cc4;
-  --color-dim: #6b7aa3;
+  --color-bg: #f3f1ec;
+  --color-bg-2: #ece9e1;
+  --color-surface: #ffffff;
+  --color-surface-2: #f3f1ec;
+  --color-line: #e2dfd7;
+  --color-fg: #111418;
+  --color-muted: #6b6f76;
+  --color-dim: #9a9ea5;
 
-  --color-accent: #2bff88;
-  --color-accent-2: #5cffa6;
-  --color-accent-deep: #0fb85c;
-  --color-ink: #0b1433;
-  --color-cyan: #36d6ff;
-  --color-cyan-deep: #1b7fa3;
-  --color-gold: #ffc83d;
-  --color-gold-light: #ffe08a;
-  --color-gold-deep: #c98f12;
-  --color-on-gold: #3a2600;
+  --color-accent: #0b6b3a;
+  --color-accent-2: #0b6b3a;
+  --color-accent-deep: #08522c;
+  --color-ink: #ffffff;
+  --color-cyan: #111418;
+  --color-cyan-deep: #111418;
+  --color-gold: #b07a0c;
+  --color-gold-light: #ffd27a;
+  --color-gold-deep: #e09a12;
+  --color-on-gold: #1a1200;
 
-  --color-good: #3ddc6e;
-  --color-bad: #ff4d5e;
-  --color-trophy: #ffc83d;
-  --color-tier-bronze: #c27a3a;
-  --color-tier-silver: #c9d3dc;
-  --color-tier-gold: #f5c542;
+  --color-good: #0b6b3a;
+  --color-bad: #c8323c;
+  --color-trophy: #b07a0c;
+  --color-tier-bronze: #a8662c;
+  --color-tier-silver: #8f99a3;
+  --color-tier-gold: #d9a21b;
 
-  --color-band-low: #8c9cc4;
-  --color-band-mid: #ffc83d;
-  --color-band-good: #b5e86b;
-  --color-band-high: #3ddc6e;
-  --color-band-elite: #36d6ff;
+  --color-band-low: #9a9ea5;
+  --color-band-mid: #b07a0c;
+  --color-band-good: #5c8a1a;
+  --color-band-high: #0b6b3a;
+  --color-band-elite: #1f5fbf;
 }
 
 @layer base {
   html {
-    color-scheme: dark;
+    color-scheme: light;
     font-family: var(--font-sans);
     background: var(--color-bg);
     -webkit-font-smoothing: antialiased;
@@ -58,11 +58,7 @@
     margin: 0;
     min-height: 100dvh;
     color: var(--color-fg);
-    background:
-      linear-gradient(120deg, rgba(54, 214, 255, 0.16), transparent 35%) fixed,
-      linear-gradient(240deg, rgba(54, 214, 255, 0.16), transparent 35%) fixed,
-      radial-gradient(120% 60% at 50% 0%, #1e3166 0%, #0b1433 60%) fixed,
-      var(--color-bg);
+    background: var(--color-bg);
     overflow-x: hidden;
   }
 
@@ -551,7 +547,7 @@
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     background: var(--color-surface-2);
-    color: #c9d1dc;
+    color: var(--color-fg);
   }
   .rate.hot { background: color-mix(in oklab, var(--color-good) 20%, transparent); color: var(--color-good); }
   .rate.cold { background: color-mix(in oklab, var(--color-bad) 18%, transparent); color: #ff8a8a; }
@@ -786,7 +782,7 @@
     padding: 0.2rem 0.55rem;
     border-radius: 4px;
     background: color-mix(in oklab, var(--color-bad) 18%, transparent);
-    color: #ff9a9a;
+    color: var(--color-bad);
     font-size: 0.75rem;
     font-weight: 700;
   }
@@ -982,3 +978,97 @@
 .skin-swatch[aria-checked="true"] { border-color: #2bff88; box-shadow: 0 0 0 3px rgba(43, 255, 136, 0.35); }
 .look-chip { min-height: 44px; border-radius: 0.75rem; border: 1px solid rgba(140, 156, 196, 0.4); font-size: 0.8rem; font-weight: 600; }
 .look-chip[aria-checked="true"] { border-color: #2bff88; color: #2bff88; }
+
+
+/* ================= Matchday Paper overrides (visual only) ================= */
+:root { --paper-ad: #ffb020; --paper-onad: #1a1200; --paper-ink: #111418; }
+[dir="rtl"] body, [dir="rtl"] .font-display, [dir="rtl"] .topbar h1 { font-family: "Assistant", "Inter", system-ui, sans-serif; }
+h1, h2, h3, .font-display { font-family: var(--font-display); }
+:where(h1, h2, h3).font-display, .topbar h1, h2.font-display { text-transform: uppercase; letter-spacing: 0.01em; font-weight: 700; }
+[dir="rtl"] .topbar h1, [dir="rtl"] h2.font-display { font-weight: 800; text-transform: none; }
+.topbar { background: color-mix(in oklab, var(--color-bg) 94%, transparent); border-bottom: 0; }
+.topbar h1 { font-weight: 700; font-size: 1.3rem; line-height: 1.1; }
+.wordmark { font-family: "Oswald", sans-serif; font-weight: 700; letter-spacing: 0.14em; font-size: 1.35rem; }
+.lang-switch, .lang-select { background: #fff; border: 1px solid var(--color-line); }
+.lang-switch button.is-on { background: var(--paper-ink); color: #fff; }
+.card, .panel, .list { background: #fff; border: 1px solid var(--color-line); border-radius: 16px; box-shadow: none; }
+.card-alt { background: #fff; border-color: var(--color-line); }
+.list-row:hover, .result-row > button:hover { background: #f8f6f1; }
+.list-icon { background: var(--color-bg); color: var(--color-fg); }
+.btn-primary { border: 0; border-radius: 12px; background: var(--color-accent); color: #fff; font-family: var(--font-sans); font-weight: 700; box-shadow: none; margin-bottom: 0; }
+.btn-primary:not(:disabled):active { background: var(--color-accent-deep); box-shadow: none; transform: translateY(1px); }
+.btn-primary:disabled { background: #e6e3dc; color: var(--color-dim); border: 0; box-shadow: none; opacity: 1; }
+.btn-ghost { border: 1.5px solid var(--paper-ink); border-radius: 12px; background: #fff; color: var(--paper-ink); font-family: var(--font-sans); font-weight: 700; box-shadow: none; margin-bottom: 0; }
+.btn-ghost:not(:disabled):active { background: var(--color-bg); box-shadow: none; transform: translateY(1px); }
+.btn-ghost:disabled { background: #fff; color: var(--color-dim); border-color: var(--color-line); box-shadow: none; opacity: 1; }
+[data-ad-slot="rewarded"] { border: 0; border-radius: 12px; background: var(--paper-ad); color: var(--paper-onad); font-family: var(--font-sans); font-weight: 700; box-shadow: none; }
+[data-ad-slot="rewarded"]:not(:disabled):active { background: #f0a010; box-shadow: none; transform: translateY(1px); }
+[data-ad-slot="rewarded"]:disabled { background: #e6e3dc; color: var(--color-dim); border: 0; box-shadow: none; opacity: 1; }
+.btn-danger { border-radius: 12px; color: #fff; }
+/* tab bar */
+.bottom-nav { background: #fff; border-top: 1px solid var(--color-line); box-shadow: none; min-height: 84px; }
+.bottom-nav button { color: var(--color-muted); font-weight: 600; font-family: var(--font-sans); }
+.bottom-nav button[aria-current="page"] { color: var(--color-accent); background: transparent; }
+.nav-dot { background: #ff4d4f; box-shadow: 0 0 0 2.5px #fff; }
+.bottom-nav .nav-store { margin-top: -26px; color: var(--paper-ink); }
+.bottom-nav .nav-store .nav-icon-wrap { width: 56px; height: 56px; border-radius: 18px; background: var(--color-accent); color: #fff; border: 0; box-shadow: 0 6px 16px rgba(11, 107, 58, 0.3); }
+.bottom-nav .nav-store .nav-icon, .bottom-nav .nav-store svg { width: 26px; height: 26px; }
+.bottom-nav .nav-store .nav-dot { top: -3px; inset-inline-end: -3px; width: 14px; height: 14px; }
+.bottom-nav .nav-store[aria-current="page"] { color: var(--color-accent); }
+.text-accent { color: var(--color-accent); }
+/* chips, meters, misc */
+.chip-trophy { background: #fff; border: 1px solid var(--color-line); color: var(--color-gold); box-shadow: none; }
+.chip-bad, .rate.cold, .event.bad .min { color: var(--color-bad); }
+.chip-accent { background: var(--color-accent); color: #fff; }
+.event.goal { background: color-mix(in oklab, var(--color-accent) 9%, transparent); }
+.event.goal .min { color: var(--color-accent); }
+.seg { background: #e9e6de; }
+.seg button[aria-pressed="true"] { background: #fff; color: var(--color-fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.wdl-l { background: var(--color-bad); color: #fff; }
+.wdl-d { background: #e9e6de; }
+.ltable-row.is-me { background: color-mix(in oklab, var(--color-accent) 10%, transparent); }
+.toast { background: var(--paper-ink); color: #fff; border-color: transparent; }
+[data-gear-slot] { border-radius: 14px; border-width: 1px; background: #fff; }
+[data-gear-slot][data-gear-tier] { border-width: 2px; }
+[data-gear-slot][data-gear-tier="gold"] { box-shadow: none; }
+.gear-well { background: #f7f5f0; }
+.player-figure { background: none; }
+.look-badge { background: #fff; border: 1px solid var(--color-line); color: var(--paper-ink); }
+.look-backdrop { background: rgba(17, 20, 24, 0.45); }
+.look-sheet { background: #fff; border-top: 1px solid var(--color-line); color: var(--color-fg); }
+.look-handle { background: var(--color-line); }
+.skin-swatch { border-color: rgba(0, 0, 0, 0.12); }
+.skin-swatch[aria-checked="true"] { border-color: var(--color-accent); box-shadow: 0 0 0 3px rgba(11, 107, 58, 0.25); }
+.look-chip { border-color: var(--color-line); background: #fff; }
+.look-chip[aria-checked="true"] { border-color: var(--color-accent); color: var(--color-accent); }
+.look-open:focus-visible { outline-color: var(--color-accent); }
+.chip-trophy.num { gap: 7px; padding: 6px 12px 6px 7px; font-size: 15px; font-weight: 700; color: var(--color-fg); background: #fff; border: 0; box-shadow: 0 1px 2px rgba(17,20,24,.06); }
+.coin-dot { width: 18px; height: 18px; flex: none; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ffe7a0, #e0a526 60%, #9a6b10); box-shadow: inset 0 0 0 1.5px rgba(0,0,0,.15); }
+.ovr-badge { background: #111418; color: #fff !important; border-radius: 8px; font-family: "Oswald", var(--font-sans); font-weight: 700; }
+.ovr-badge.player-ovr { width: auto; height: auto; padding: 4px 14px; font-size: 1.6rem; }
+.attr-row dt { color: var(--color-muted); }
+.bar-track { background: var(--color-line); }
+
+/* Matchday Paper — remaining screen polish */
+.scorebox { border-radius: 16px; background: #fff; }
+.has-bottom-nav .app-shell { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px) + 1rem); }
+.has-bottom-nav .toast { bottom: calc(env(safe-area-inset-bottom, 0px) + 92px); }
+.chip-bad, .rate.cold, .event.bad .min { color: var(--color-bad) !important; }
+.chip-accent { color: #fff; }
+.loading-screen { background: var(--color-bg); color: var(--paper-ink); }
+.loading-logo { font-family: "Oswald", var(--font-sans); font-style: normal; letter-spacing: 0.14em; text-shadow: none; color: var(--paper-ink); }
+.loading-sub { font-family: var(--font-sans); color: var(--color-accent); }
+.loading-tip { text-shadow: none; color: var(--color-muted); }
+.loading-bar { background: var(--color-line); }
+.loading-fill { background: var(--color-accent); }
+.loading-star { color: var(--color-gold); text-shadow: none; }
+.player-figure { background: linear-gradient(#e9e5db, #f3f1ec); border-radius: 0; }
+.myplayer-grid .player-figure { background: linear-gradient(#e9e5db, #f3f1ec); }
+.character-aura { background: radial-gradient(ellipse at 50% 45%, rgba(176, 122, 12, 0.35), rgba(176, 122, 12, 0.12) 45%, transparent 70%); }
+.icon-btn { background: #fff; border: 1px solid var(--color-line); color: var(--paper-ink); border-radius: 12px; }
+.topbar-back { background: #fff; border: 1px solid var(--color-line); color: var(--paper-ink); border-radius: 12px; }
+.award-card { background: #fff; border: 1px solid var(--color-line); border-radius: 16px; }
+.moment-card { border-radius: 16px; }
+.app-shell { background: transparent; }
+.results-list .result-row { border-color: var(--color-line); }
+.wdl-w { background: var(--color-accent); color: #fff; }

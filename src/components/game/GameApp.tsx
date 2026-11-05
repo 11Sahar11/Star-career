@@ -2765,7 +2765,8 @@ function CoinChip({ n }: { n: number }) {
   const { tr } = useTx();
   return (
     <span className="chip chip-trophy num shrink-0" aria-label={tr("coinsN", { n: formatCoins(n) })}>
-      ● {formatCoins(n)}
+      <span className="coin-dot" aria-hidden="true" />
+      {formatCoins(n)}
     </span>
   );
 }
