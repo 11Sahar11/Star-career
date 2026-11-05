@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Moment } from "@/game/types";
+import { ACTION_MS, TENSION_MS, RESULT_HOLD_MS, pitchFrame } from "./pitch-timing";
 
 /*
  * Pitch board: a top-down tactics board that plays a decisive moment, then a result card.
@@ -12,9 +13,6 @@ type Side = "us" | "them";
 type ActorSpec = { id: string; side: Side; num: number; at: Pt; me?: boolean; gk?: boolean };
 export type Outcome = "goal" | "miss" | "stop" | "beaten" | "close";
 type Scene = { actors: (ActorSpec & { segs: Seg[] })[]; ball: { at: Pt; segs: Seg[] }; net?: number; burst?: { at: Pt; t: number; good: boolean } };
-
-const DURATION = 2300;
-const HOLD = 650;
 
 /* ---------- geometry ---------- */
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -213,7 +211,7 @@ function usePrefersReducedMotion() {
 }
 
 function Chip({ a, p, t, active }: { a: ActorSpec; p: Pt; t: number; active: boolean }) {
-  const r = a.me ? 12 : 9.5;
+  const r = a.me ? 14 : a.gk ? 12 : 11;
   const fill = a.gk ? (a.side === "us" ? "#e3efe7" : "#f3f1ec") : a.side === "us" ? "#0b6b3a" : "#1b1f25";
   const ink = a.gk ? (a.side === "us" ? "#0b6b3a" : "#111418") : "#ffffff";
   return (
@@ -221,8 +219,10 @@ function Chip({ a, p, t, active }: { a: ActorSpec; p: Pt; t: number; active: boo
       <ellipse cx="1.2" cy={r * 0.75} rx={r * 0.95} ry={r * 0.42} fill="#0a2a18" opacity="0.28" />
       {a.me && active ? <circle r={r + 4} className="pb-halo" fill="none" stroke="#ffffff" strokeWidth="1.6" /> : null}
       {a.me && !active && t > 0 ? <circle r={r + 3} fill="none" stroke="#ffffff" strokeOpacity="0.55" strokeWidth="1.2" /> : null}
+      {a.me ? <path d={`M-4 ${r + 7} L0 ${r + 2} L4 ${r + 7} Z`} fill="#ffffff" /> : null}
+      {a.gk ? <><rect x={-r - 5} y="-4" width="5" height="8" rx="2" fill="#ffdc78" /><rect x={r} y="-4" width="5" height="8" rx="2" fill="#ffdc78" /></> : null}
       <circle r={r} fill={fill} stroke={a.me ? "#ffffff" : a.side === "us" ? "#ffffff" : a.gk ? "#111418" : "#ffffff"} strokeWidth={a.me ? 2.2 : 1.3} />
-      <text y="0.5" textAnchor="middle" dominantBaseline="central" fontFamily="var(--font-display)" fontWeight="700" fontSize={a.me ? 12.5 : 9.4} fill={ink}>
+      <text y="0.5" textAnchor="middle" dominantBaseline="central" fontFamily="var(--font-display)" fontWeight="700" fontSize={a.me ? 14 : 11} fill={ink}>
         {a.num}
       </text>
     </g>
@@ -275,38 +275,57 @@ function Net({ t, at, bx }: { t: number; at?: number; bx: number }) {
   );
 }
 
-export function PitchBoard({ moment, picked, outcome, num, play, onDone, label }: { moment: Moment; picked?: string; outcome: Outcome | null; num: number; play: boolean; onDone: () => void; label: string }) {
+export function PitchBoard({ moment, picked, outcome, num, play, onDone, label, playerLabel, opponentLabel, keeperLabel, skipLabel }: { moment: Moment; picked?: string; outcome: Outcome | null; num: number; play: boolean; onDone: () => void; label: string; playerLabel: string; opponentLabel: string; keeperLabel: string; skipLabel: string }) {
   const reduce = usePrefersReducedMotion();
-  const [t, setT] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
   const done = useRef(onDone);
+  const completed = useRef(false);
   done.current = onDone;
+  const frame = pitchFrame(elapsed, play && reduce);
+  const t = play ? frame.progress : 0;
   const scene = sceneFor(moment, picked, play ? outcome : null, num);
 
   useEffect(() => {
+    completed.current = false;
     if (!play) {
-      setT(0);
+      setElapsed(0);
       return;
     }
-    if (reduce) {
-      setT(1);
-      const id = window.setTimeout(() => done.current(), 700);
-      return () => window.clearTimeout(id);
-    }
     let raf = 0;
-    let finished = 0;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const s = Math.min(1, (now - start) / DURATION);
-      setT(s);
-      if (s < 1) raf = requestAnimationFrame(tick);
-      else finished = window.setTimeout(() => done.current(), HOLD);
+    let hold = 0;
+    const finish = () => {
+      if (completed.current) return;
+      completed.current = true;
+      done.current();
     };
-    raf = requestAnimationFrame(tick);
+    if (reduce) {
+      // No camera, trails or movement; keep the final frame briefly, skippable.
+      setElapsed(TENSION_MS + ACTION_MS);
+      hold = window.setTimeout(finish, 350);
+    } else {
+      const start = performance.now();
+      const tick = (now: number) => {
+        if (completed.current) return;
+        const ms = Math.min(TENSION_MS + ACTION_MS, now - start);
+        setElapsed(ms);
+        if (ms < TENSION_MS + ACTION_MS) raf = requestAnimationFrame(tick);
+        else hold = window.setTimeout(finish, RESULT_HOLD_MS);
+      };
+      raf = requestAnimationFrame(tick);
+    }
     return () => {
       cancelAnimationFrame(raf);
-      window.clearTimeout(finished);
+      window.clearTimeout(hold);
     };
   }, [play, reduce]);
+
+  function skip() {
+    if (!play || completed.current) return;
+    // Stop the RAF as well as jumping to the last frame: it must never rewind.
+    completed.current = true;
+    setElapsed(TENSION_MS + ACTION_MS);
+    done.current();
+  }
 
   const ball = along(scene.ball.at, scene.ball.segs, t, easeOut);
   const trail = play && !reduce ? [1, 2, 3, 4, 5, 6, 7, 8].map((k) => along(scene.ball.at, scene.ball.segs, Math.max(0, t - k * 0.011), easeOut)) : [];
@@ -314,36 +333,55 @@ export function PitchBoard({ moment, picked, outcome, num, play, onDone, label }
   const lifted = (q: { p: Pt; lift: number }): Pt => [q.p[0], q.p[1] - q.lift * 16];
   const burst = scene.burst && t >= scene.burst.t ? Math.min(1, (t - scene.burst.t) / 0.18) : 0;
   const goalFlash = scene.net !== undefined && t >= scene.net ? Math.min(1, (t - scene.net) / 0.25) : 0;
+  const cameraX = Math.max(140, Math.min(200, scene.ball.at[0]));
+  const previewTarget: Pt = moment.kind === "defend" ? (scene.actors.find((a) => a.me)?.at ?? [170, 44]) : [170, 44];
 
   return (
-    <div className="pb-board" dir="ltr" onClick={() => play && t < 1 && setT(1)} role="img" aria-label={label}>
-      <svg viewBox="0 6 340 234" width="100%" style={{ display: "block" }}>
-        <Pitch />
-        <Net t={t} at={scene.net} bx={ball.p[0]} />
-        {goalFlash > 0 ? <rect x="0" y="6" width="340" height="234" fill="#ffffff" opacity={(1 - goalFlash) * 0.28} /> : null}
-        {scene.actors.map((a) => {
-          const q = along(a.at, a.segs, t, ease);
-          return <Chip key={a.id} a={a} p={q.p} t={t} active={!play} />;
-        })}
-        {trail.length && moving ? (
-          <g>
-            {trail.map((q, i) => {
-              const p = lifted(q);
-              return <circle key={i} cx={p[0]} cy={p[1]} r={3.2 - i * 0.3} fill="#ffffff" opacity={0.5 - i * 0.06} />;
-            })}
+    <div className="pb-stage">
+      <div className={`pb-board ${play && frame.tension && !reduce ? "is-tension" : ""}`} dir="ltr">
+        <svg viewBox="0 0 340 240" width="100%" style={{ display: "block" }} role="img" aria-label={label}>
+          <g transform={`translate(${cameraX} 95) scale(${play ? frame.zoom : 1}) translate(${-cameraX} -95)`}>
+          <Pitch />
+          {!play ? <>
+            <circle cx={scene.ball.at[0]} cy={scene.ball.at[1]} r="22" fill="#fff4c2" opacity="0.12" />
+            <path d={`M${scene.ball.at[0]} ${scene.ball.at[1] - 8} Q170 110 ${previewTarget[0]} ${previewTarget[1]}`} fill="none" stroke="#ffffff" strokeWidth="1.6" strokeDasharray="4 6" opacity="0.42" />
+          </> : null}
+          <Net t={t} at={scene.net} bx={ball.p[0]} />
+          {goalFlash > 0 ? <rect x="0" y="6" width="340" height="234" fill="#ffffff" opacity={(1 - goalFlash) * 0.28} /> : null}
+          {scene.actors.map((a) => {
+            const q = along(a.at, a.segs, t, ease);
+            return <Chip key={a.id} a={a} p={q.p} t={t} active={!play} />;
+          })}
+          {trail.length && moving ? (
+            <g>
+              {trail.map((q, i) => {
+                const p = lifted(q);
+                return <circle key={i} cx={p[0]} cy={p[1]} r={3.2 - i * 0.3} fill="#ffffff" opacity={0.5 - i * 0.06} />;
+              })}
+            </g>
+          ) : null}
+          {burst > 0 && scene.burst ? (
+            <circle cx={scene.burst.at[0]} cy={scene.burst.at[1]} r={4 + burst * 14} fill="none" stroke={scene.burst.good ? "#ffffff" : "#ffd5d8"} strokeWidth={2.2 * (1 - burst) + 0.2} opacity={1 - burst} />
+          ) : null}
+          {ball.p[1] > -6 ? (
+            <g>
+              <ellipse cx={ball.p[0] + 1} cy={ball.p[1] + 3} rx={3.4 - ball.lift} ry={1.5} fill="#0a2a18" opacity={0.35 - ball.lift * 0.15} />
+              <circle cx={ball.p[0]} cy={ball.p[1] - ball.lift * 16} r={4.6 + ball.lift * 1.8} fill="#ffffff" stroke="#111418" strokeWidth="1.1" />
+              <circle cx={ball.p[0] - 0.8} cy={ball.p[1] - ball.lift * 16 - 0.6} r={1.6} fill="#111418" />
+            </g>
+          ) : null}
           </g>
-        ) : null}
-        {burst > 0 && scene.burst ? (
-          <circle cx={scene.burst.at[0]} cy={scene.burst.at[1]} r={4 + burst * 14} fill="none" stroke={scene.burst.good ? "#ffffff" : "#ffd5d8"} strokeWidth={2.2 * (1 - burst) + 0.2} opacity={1 - burst} />
-        ) : null}
-        {ball.p[1] > -6 ? (
-          <g>
-            <ellipse cx={ball.p[0] + 1} cy={ball.p[1] + 3} rx={3.4 - ball.lift} ry={1.5} fill="#0a2a18" opacity={0.35 - ball.lift * 0.15} />
-            <circle cx={ball.p[0]} cy={ball.p[1] - ball.lift * 16} r={4.6 + ball.lift * 1.8} fill="#ffffff" stroke="#111418" strokeWidth="1.1" />
-            <circle cx={ball.p[0] - 0.8} cy={ball.p[1] - ball.lift * 16 - 0.6} r={1.6} fill="#111418" />
-          </g>
-        ) : null}
-      </svg>
+        </svg>
+        {play ? <button type="button" className="pb-skip" onClick={skip} aria-label={skipLabel}>
+          <span>{skipLabel}<span aria-hidden="true"> ▸▸</span></span>
+        </button> : null}
+        {play && frame.tension && !reduce ? <span className="pb-tension" aria-hidden="true"><i /><i /><i /></span> : null}
+      </div>
+      <div className="pb-legend">
+        <span><i className="pb-key-player" aria-hidden="true" /><bdi>{playerLabel}</bdi></span>
+        <span><i className="pb-key-opponent" aria-hidden="true" /><bdi>{opponentLabel}</bdi></span>
+        <span><i className="pb-key-keeper" aria-hidden="true" /><bdi>{keeperLabel}</bdi></span>
+      </div>
     </div>
   );
 }

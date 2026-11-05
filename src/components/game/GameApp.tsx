@@ -1726,11 +1726,17 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
     playWhistle();
   }, []);
 
+  // Do not leak a successful outcome through audio before the board reveals it.
+  const soundedMoment = useRef<string | null>(null);
+  useEffect(() => {
+    if (!showCard || !focusMoment?.success || soundedMoment.current === momentKey) return;
+    soundedMoment.current = momentKey;
+    const option = focusMoment.options.find((item) => item.id === focusMoment.picked);
+    if (option && option.reward !== "stop") playGoal();
+  }, [showCard, momentKey, focusMoment]);
+
   function choose(index: number, optionId: string) {
     const next = resolveMoment(career, index, optionId);
-    const moment = next.pending?.moments[index];
-    const option = moment?.options.find((item) => item.id === optionId);
-    if (moment?.success && option && option.reward !== "stop") playGoal();
     setReveal(index);
     const following = pending.moments[index + 1];
     // Halftime slot: off behind HALFTIME_INTERSTITIAL until the owner approves it.
@@ -1829,10 +1835,14 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
               num={shirtNumber(career.player.position)}
               play={Boolean(focusMoment.picked && outcome)}
               onDone={() => momentKey && setCardFor(momentKey)}
-              label={tr("mo.title")}
+              label={tr(focusMoment.situation ? `mo.sit.${focusMoment.situation}` : `mo.${focusMoment.kind}`, { min: focusMoment.minute })}
+              playerLabel={tr("nav.player")}
+              opponentLabel={cname(theirs)}
+              keeperLabel={tr("pos.GK")}
+              skipLabel={tr("pb.skip")}
             />
             {(
-              <div className="list rounded-none border-x-0 border-b-0">
+              <div className="pb-options">
                 {focusMoment.options.map((option) => (
                   <button
                     key={option.id}
@@ -1843,23 +1853,26 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
                     onClick={() => choose(focus, option.id)}
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block font-semibold">{tr(`mo.opt.${option.id}`)}</span>
-                      <span className="block text-xs text-muted">
-                        {tr(`attr.${option.attr}`)} {career.player.attrs[option.attr]}
+                      <span className="pb-option-name">{tr(`mo.opt.${option.id}`)}</span>
+                      <span className="pb-option-attr">
+                        {tr(`attr.${option.attr}`)} <bdi dir="ltr">{career.player.attrs[option.attr]}</bdi>
                       </span>
                     </span>
-                    <span className="flex shrink-0 items-baseline gap-1.5">
-                      {option.gear && option.gearItem ? (
-                        <span className="text-xs font-bold text-accent">
-                          <bdi dir="ltr">(+{option.gear}%</bdi> {tr(`gear.short.${option.gearItem}`)})
-                        </span>
-                      ) : null}
-                      {option.odds >= 92 ? (
-                        <span className="text-xs font-bold text-good">{tr("mo.max")}</span>
-                      ) : option.gain ? (
-                        <span className="num text-sm font-bold text-good">+{option.gain}%</span>
-                      ) : null}
-                      <span className={`num text-lg font-bold band-${option.odds >= 65 ? "high" : option.odds >= 45 ? "good" : option.odds >= 30 ? "mid" : "low"}`}>{option.odds}%</span>
+                    <span className="pb-option-value">
+                      <span className="pb-option-bonuses">
+                        {focusMoment.picked === option.id ? <span aria-hidden="true">✓</span> : null}
+                        {option.gear && option.gearItem ? (
+                          <span className="text-xs font-bold text-accent">
+                            <bdi dir="ltr">(+{option.gear}%</bdi> {tr(`gear.short.${option.gearItem}`)})
+                          </span>
+                        ) : null}
+                        {option.odds >= 92 ? (
+                          <span className="text-xs font-bold text-good">{tr("mo.max")}</span>
+                        ) : option.gain ? (
+                          <span className="num text-sm font-bold text-good">+{option.gain}%</span>
+                        ) : null}
+                      </span>
+                      <bdi dir="ltr" className={`pb-option-odds num band-${option.odds >= 65 ? "high" : option.odds >= 45 ? "good" : option.odds >= 30 ? "mid" : "low"}`}>{option.odds}%</bdi>
                     </span>
                   </button>
                 ))}
