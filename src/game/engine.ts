@@ -1408,6 +1408,39 @@ export function composeReport(pending: PendingMatch): MatchReport {
   return report;
 }
 
+/**
+ * Skip the live key match and finish it as a full match the player took part in.
+ *
+ * There is no separate "remainder of the clock" sim: openBigMatch already
+ * played the ninety minutes (a little tighter, because the moments carry the
+ * player's own chances) and left those moments unresolved. A skip keeps every
+ * moment already chosen. Each moment still open is taken on its highest-odds
+ * option and rolled with that option's odds — the same roll resolveMoment
+ * uses — and finishBigMatch applies the report. Table, form, coins, fitness
+ * and key-match wins follow the usual key-match rules. The player is not
+ * marked missed, benched, or out injured.
+ *
+ * Skipping before the first moment is that same path with every moment
+ * auto-played. Skipping halfway does not throw away a goal or a stop already
+ * banked.
+ */
+export function skipBigMatch(career: Career): Career {
+  const pending = career.pending;
+  if (career.screen !== "bigmatch" || !pending) return career;
+  const moments = pending.moments.map((moment, index) => {
+    if (moment.picked) return moment;
+    let option: MomentOption | undefined;
+    for (const candidate of moment.options) {
+      if (!option || candidate.odds > option.odds) option = candidate;
+    }
+    if (!option) return moment;
+    const roll = makeRng(hashString(`${pending.seed}|${index}|${option.id}`)).next();
+    return { ...moment, picked: option.id, success: roll * 100 < option.odds };
+  });
+  if (moments.some((moment) => !moment.picked)) return career;
+  return finishBigMatch({ ...career, pending: { ...pending, moments } });
+}
+
 /** Applies the finished big match to the season and opens its report. */
 export function finishBigMatch(career: Career): Career {
   const pending = career.pending;
