@@ -61,6 +61,7 @@ import {
   statCap,
   rewardedBoost,
   runToStop,
+  skipBigMatch,
   seasonLabel,
   shirtNumber,
   sortTable,
@@ -1793,6 +1794,20 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
           </span>
         </div>
       </div>
+
+      {active >= 0 ? (
+        <button
+          type="button"
+          className="btn-ghost mt-3 h-12 w-full text-base"
+          onClick={() => {
+            unlockAudio();
+            playWhistle();
+            onChange(skipBigMatch(career));
+          }}
+        >
+          {tr("skipMatch")}
+        </button>
+      ) : null}
 
       {focusMoment && focus !== null ? (() => {
         const line = report.events.find((event) => event.minute === focusMoment.minute && event.text.startsWith("@mo."))?.text;
