@@ -1609,6 +1609,17 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
   const apps = career.season.apps;
   const avg = apps ? career.season.sumRating / apps : 0;
   const { tr } = useTx();
+  const rows = ATTR_KEYS.map((key) => {
+    const odds = trainOdds(career, key);
+    const chance = odds.big
+      ? tr("trainChance", { big: odds.big, up: odds.up, down: odds.down })
+      : odds.up
+        ? tr("trainRise", { up: odds.up, down: odds.down })
+        : tr("ceiling");
+    return { key, odds, chance };
+  });
+  // Odds depend on age and difficulty, so every card shows the same line until a stat is near its ceiling.
+  const sharedChance = rows.length > 0 && rows.every((row) => row.chance === rows[0].chance) ? rows[0].chance : null;
   return (
     <Shell>
       <ScreenHeader title={tr("coach")} sub={`${camp ? tr("preseason") : tr("winter")} · ${cname(club.name)}`} onBack={onMenu} right={career.race ? <span className="chip chip-trophy">{tr("raceTag")}</span> : undefined} />
@@ -1616,35 +1627,28 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
         {camp ? tr("campAsk") : tr("breakAsk", { avg: avg ? tr("avgBit", { n: avg.toFixed(1) }) : "" })}
       </p>
       {career.premiumCamp ? <p className="mt-2 text-sm font-semibold text-accent">{tr("eco.premiumPick")}</p> : null}
-      <div className="mt-4 grid gap-2">
-        {ATTR_KEYS.map((key) => {
-          const odds = trainOdds(career, key);
-          const chance = odds.big
-            ? tr("trainChance", { big: odds.big, up: odds.up, down: odds.down })
-            : odds.up
-              ? tr("trainRise", { up: odds.up, down: odds.down })
-              : tr("ceiling");
-          return (
-            <button
-              key={key}
-              type="button"
-              className="flex items-center justify-between rounded-md border border-line bg-surface px-3 py-3 text-start"
-              onClick={() => {
-                unlockAudio();
-                onChange(camp ? answerCamp(career, key) : answerBreak(career, key));
-              }}
-            >
-              <span>
-                <span className="block font-semibold">{tr(`drill.${key}`)}</span>
-                <span className="block text-xs text-muted">
-                  {tr(`attr.${key}`)} {career.player.attrs[key]}
-                  {` · ${chance}`}
-                </span>
+      {sharedChance ? <p className="mt-3 text-xs leading-5 text-muted">{sharedChance}</p> : null}
+      <div className={`${sharedChance ? "mt-2" : "mt-4"} grid gap-2`}>
+        {rows.map(({ key, odds, chance }) => (
+          <button
+            key={key}
+            type="button"
+            className="flex items-center justify-between rounded-md border border-line bg-surface px-3 py-3 text-start"
+            onClick={() => {
+              unlockAudio();
+              onChange(camp ? answerCamp(career, key) : answerBreak(career, key));
+            }}
+          >
+            <span>
+              <span className="block font-semibold">{tr(`drill.${key}`)}</span>
+              <span className="block text-xs text-muted">
+                {tr(`attr.${key}`)} {career.player.attrs[key]}
+                {sharedChance ? null : ` · ${chance}`}
               </span>
-              <span className="num text-lg font-semibold text-accent">{odds.big ? "+3" : odds.up ? "+1" : "—"}</span>
-            </button>
-          );
-        })}
+            </span>
+            <span className="num text-lg font-semibold text-accent">{odds.big ? "+3" : odds.up ? "+1" : "—"}</span>
+          </button>
+        ))}
       </div>
     </Shell>
   );
@@ -2322,7 +2326,10 @@ function SeasonScreen({
           {tr("eco.store")} · <span className="num text-trophy">{formatCoins(career.coins)}</span>
         </button>
       ) : null}
-      <p className="mt-4 text-xs leading-5 text-muted">{tr("keyBonusNote", { n: career.season.keyWins ?? 0 })}</p>
+      <p className="mt-4 text-xs leading-5 text-muted">
+        {tr("keyBonusLegend")}
+        <span className="mt-1 block">{tr("keyBonusNote", { n: career.season.keyWins ?? 0 })}</span>
+      </p>
       {keyLogs.length ? (
         <div className="results-list results-key mt-3">
           {keyLogs.map((log, index) => (
@@ -3079,7 +3086,7 @@ function StoreScreen({ career, onChange, onBack, onPlayer }: { career: Career; o
   const [device, setDevice] = useState(() => loadDevice());
   const [discountPick, setDiscountPick] = useState(false);
   const nextLocked = COUNTRIES.find((item) => !countryOpen(device, item.id, admin));
-  const reasonText: Record<string, string> = { coins: tr("eco.short"), owned: tr("eco.owned"), full: tr("eco.full"), notNeeded: tr("eco.notNeeded"), daily: tr("eco.short") };
+  const reasonText: Record<string, string> = { owned: tr("eco.owned"), full: tr("eco.full"), notNeeded: tr("eco.notNeeded") };
   const purchase = (id: StoreItemId) => {
     const next = buy(career, id, today, { admin });
     if (next === career) return;
@@ -3090,6 +3097,7 @@ function StoreScreen({ career, onChange, onBack, onPlayer }: { career: Career; o
   return (
     <Shell>
       <ScreenHeader title={tr("eco.store")} sub={admin ? tr("eco.adminFree") : tr("eco.storeSub")} onBack={onBack} right={<CoinChip n={career.coins} />} />
+      <p className="mt-3 text-sm leading-6 text-muted">{tr("eco.storeEarn")}</p>
       <GearOfferCard career={career} onChange={onChange} />
       {/* One rewarded clip at a time: the free camp first, then the discount once the camp is taken. */}
       {discountPick ? (
@@ -3136,7 +3144,7 @@ function StoreScreen({ career, onChange, onBack, onPlayer }: { career: Career; o
                   <PriceButton price={price} was={item.price} label={label} disabled={check !== "ok"} onClick={() => purchase(item.id)} />
                 )}
               </div>
-              {check !== "ok" && !discountPick ? <p className="mt-1 text-xs text-muted">{reasonText[check] ?? ""}</p> : null}
+              {reasonText[check] && !discountPick ? <p className="mt-1 text-xs text-muted">{reasonText[check]}</p> : null}
             </div>
           );
         })}
