@@ -44,10 +44,11 @@ export function storyById(id: string): Story | undefined {
   return STORIES.find((story) => story.id === id);
 }
 
-/** About three a season: every seventh match from the fourth, three times in five, a story not seen recently. */
+/** About three a season: every seventh match from the fourth, three times in five, a story not seen recently. Never before the first match (no sponsor or clip event on a brand-new career). */
 export function rollStory(career: Career, roll: () => number): PendingStory | null {
   if (career.story || career.retired) return null;
   const played = career.season.fixturesPlayed.length;
+  if (played < 1) return null;
   if (played < 4 || played % 7 !== 4) return null;
   if (roll() > 0.6) return null;
   const seen = career.storiesSeen ?? [];

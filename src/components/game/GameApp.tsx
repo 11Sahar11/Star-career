@@ -55,7 +55,6 @@ import {
   playSummer,
   potentialLabel,
   previewPlayer,
-  primaryKeys,
   resolveMoment,
   retireCareer,
   statCap,
@@ -148,6 +147,9 @@ export function GameApp() {
   const [toasts, setToasts] = useState<string[]>([]);
   const [admin, setAdmin] = useState(false);
   const [storeOpen, setStoreOpen] = useState<boolean | "player">(false);
+  /** Store opened from Build the player, before a career exists. Not saved. */
+  const [createStore, setCreateStore] = useState<Career | null>(null);
+  const [deviceStamp, setDeviceStamp] = useState(0);
   /** Set while the season-end interstitial is running, so a second tap cannot replay an old state. */
   const summerLock = useRef(false);
 
@@ -312,17 +314,27 @@ export function GameApp() {
     );
   } else if (view === "create") {
     screen = (
-      <Create
-        admin={admin}
-        onBack={() => setView("home")}
-        onStart={(name, position, countryId, nationId, salt, difficulty) => {
-          setPlaying("main");
-          unlockAudio();
-          const fresh = withDeviceCosmetics(applyPerks(createCareer(name, position, countryId, salt, difficulty, nationId), loadLegacy().perks));
-          setCareer(fresh); // coins are per career and start from zero
-          setView("game");
-        }}
-      />
+      <>
+        <div hidden={createStore != null}>
+          <Create
+            admin={admin}
+            deviceStamp={deviceStamp}
+            onBack={() => setView("home")}
+            onStore={() => setCreateStore((current) => current ?? createCareer("Alex", "ST", "eng", 1))}
+            onStart={(name, position, countryId, nationId, salt, difficulty) => {
+              setPlaying("main");
+              unlockAudio();
+              const fresh = withDeviceCosmetics(applyPerks(createCareer(name, position, countryId, salt, difficulty, nationId), loadLegacy().perks));
+              setCareer(fresh); // coins are per career and start from zero
+              setCreateStore(null);
+              setView("game");
+            }}
+          />
+        </div>
+        {createStore ? (
+          <StoreScreen career={createStore} onChange={setCreateStore} onBack={() => { setCreateStore(null); setDeviceStamp((n) => n + 1); }} />
+        ) : null}
+      </>
     );
   } else if (view === "collection") {
     screen = (
@@ -1266,24 +1278,32 @@ function DailyChest({ career, onChange }: { career: Career; onChange: (c: Career
 
 function Create({
   admin,
+  deviceStamp,
   onBack,
+  onStore,
   onStart,
 }: {
   admin: boolean;
+  deviceStamp: number;
   onBack: () => void;
+  onStore: () => void;
   onStart: (name: string, position: Career["player"]["position"], countryId: string, nationId: string, salt: number, difficulty: Difficulty) => void;
 }) {
   const [name, setName] = useState("Alex");
   const [countryId, setCountryId] = useState<string | null>(null);
   const [nationId, setNationId] = useState<string | null>(null);
+  const [nationOpen, setNationOpen] = useState(false);
   const [position, setPosition] = useState<Career["player"]["position"] | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [salt, setSalt] = useState(1);
   const preview = useMemo(() => (position ? previewPlayer(name || "Player", position, salt) : null), [name, position, salt]);
-  const country = COUNTRIES.find((item) => item.id === countryId);
-  const ready = name.trim().length >= 2 && position && countryId && nationId;
+  const ready = name.trim().length >= 2 && !!position && !!countryId && !!nationId;
   const { tr } = useTx();
-  const [device] = useState(() => loadDevice());
+  const [device, setDevice] = useState(() => loadDevice());
+  useEffect(() => setDevice(loadDevice()), [deviceStamp]);
+  const openCountries = COUNTRIES.filter((item) => countryOpen(device, item.id, admin));
+  const locked = COUNTRIES.length - openCountries.length;
+  const nationShown = nationId ?? countryId;
 
   return (
     <Shell>
@@ -1298,126 +1318,134 @@ function Create({
         enterKeyHint="done"
         autoComplete="name"
         onChange={(event) => setName(event.target.value)}
-        className="mt-2 h-12 w-full rounded-md border border-line bg-surface px-4 text-base text-fg"
-        placeholder={tr("namePh")}
+        className="mt-1 h-11 w-full rounded-md border border-line bg-surface px-4 text-base text-fg"
       />
 
-      <h2 className="section-title mt-6">{tr("startCountry")}</h2>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        {COUNTRIES.map((item) => {
+      <h2 className="mt-3 text-xs font-bold tracking-wide text-muted">{tr("startCountry")}</h2>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {openCountries.map((item) => {
           const selected = countryId === item.id;
-          const open = countryOpen(device, item.id, admin);
           return (
             <button
               key={item.id}
               type="button"
-              disabled={!open}
-              aria-disabled={!open}
               onClick={() => {
-                if (!open) return;
                 setCountryId(item.id);
-                setNationId((current) => current ?? item.id);
+                setNationId(item.id);
+                setNationOpen(false);
               }}
-              className={`min-h-12 rounded-md border px-3 py-3 text-start ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"} ${open ? "" : "opacity-60"}`}
+              className={`min-h-11 rounded-md border px-3 py-2 text-start ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
             >
-              <span className="block font-semibold">{tr(`country.${item.id}`)}</span>
-              <span className="mt-1 block text-xs text-muted">{open ? leagueLabel(tr, entryLeague(item.id).name) : tr("eco.lockedCountry", { n: formatCoins(ECONOMY.prices["unlock-country"]) })}</span>
+              <span className="block font-semibold leading-tight">{tr(`country.${item.id}`)}</span>
+              <span className="mt-0.5 block text-xs text-muted">{leagueLabel(tr, entryLeague(item.id).name)}</span>
             </button>
           );
         })}
       </div>
+      {locked > 0 ? (
+        <button type="button" className="mt-2 flex min-h-11 w-full items-center justify-between gap-3 rounded-md border border-line bg-surface px-3 text-start" onClick={onStore}>
+          <span className="font-semibold">{locked === 1 ? tr("lockedLeague") : tr("lockedLeagues", { n: locked })}</span>
+          <ChevronLeft className="size-5 shrink-0 -scale-x-100 text-muted rtl:scale-x-100" aria-hidden="true" />
+        </button>
+      ) : null}
 
-      <h2 className="section-title mt-6">{tr("nation")}</h2>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        {NATIONS.map((item) => {
-          const selected = nationId === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setNationId(item.id)}
-              className={`rounded-md border px-3 py-3 text-start ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
-            >
-              <span className="block font-semibold">{tr(`country.${item.id}`)}</span>
-            </button>
-          );
-        })}
-      </div>
+      {nationShown ? (
+        <div className="mt-3 flex min-h-11 items-center justify-between gap-3">
+          <p className="min-w-0 text-sm">
+            <span className="text-muted">{tr("nation")}</span>
+            {" · "}
+            <span className="font-semibold">{tr(`country.${nationShown}`)}</span>
+          </p>
+          <button type="button" className="shrink-0 px-1 text-sm font-semibold text-accent" aria-expanded={nationOpen} onClick={() => setNationOpen((open) => !open)}>
+            {tr("change")}
+          </button>
+        </div>
+      ) : null}
+      {nationOpen ? (
+        <div className="grid grid-cols-2 gap-2">
+          {NATIONS.map((item) => {
+            const selected = nationId === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setNationId(item.id);
+                  setNationOpen(false);
+                }}
+                className={`min-h-11 rounded-md border px-3 py-2 text-start font-semibold ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
+              >
+                {tr(`country.${item.id}`)}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
-      <div className="mt-5 flex items-center justify-between">
-        <h2 className="section-title">{tr("position")}</h2>
-        <button type="button" className="flex min-h-12 items-center gap-1 text-sm text-accent" onClick={() => setSalt((value) => value + 1)}>
+      <div className="mt-2 flex items-center justify-between">
+        <h2 className="text-xs font-bold tracking-wide text-muted">{tr("position")}</h2>
+        <button type="button" className="flex min-h-11 items-center gap-1 text-sm text-accent" onClick={() => setSalt((value) => value + 1)}>
           <RotateCcw className="size-4" />
           {tr("reroll")}
         </button>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="mt-2 grid grid-cols-2 gap-2">
         {POSITIONS.map((item) => {
           const selected = position === item.id;
           return (
             <button
               key={item.id}
               type="button"
+              aria-pressed={selected}
               onClick={() => setPosition(item.id)}
-              className={`rounded-md border px-3 py-3 text-start ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
+              className={`rounded-md border px-3 py-2 text-start ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
             >
-              <span className="flex items-center justify-between">
-                <span className="font-semibold">{tr(`pos.${item.id}`)}</span>
-                <span className="num text-xs text-muted">{item.shirt}</span>
+              <span className="flex items-center gap-2">
+                <span className="num w-5 text-sm font-bold text-muted">{item.shirt}</span>
+                <span className="font-semibold leading-tight">{tr(`pos.${item.id}`)}</span>
               </span>
-              <span className="mt-1 block text-xs leading-5 text-muted">{tr(`posblurb.${item.id}`)}</span>
+              {selected ? <span className="mt-1 block text-xs leading-5 text-muted">{tr(`posblurb.${item.id}`)}</span> : null}
             </button>
           );
         })}
       </div>
 
-      <h2 className="section-title mt-6">{tr("difficulty")}</h2>
-      <div className="mt-3 grid gap-2">
+      <h2 className="mt-2 text-xs font-bold tracking-wide text-muted">{tr("difficulty")}</h2>
+      <div className="mt-2 grid grid-cols-3 gap-2">
         {(
           [
             ["easy", "diff.easy", "diffblurb.easy"],
             ["normal", "diff.normal", "diffblurb.normal"],
             ["hard", "diff.hard", "diffblurb.hard"],
           ] as const
-        ).map(([id, label, blurb]) => (
+        ).map(([id, label]) => (
           <button
             key={id}
             type="button"
+            aria-pressed={difficulty === id}
             onClick={() => setDifficulty(id)}
-            className={`rounded-md border px-3 py-3 text-start ${difficulty === id ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
+            className={`min-h-11 rounded-md border px-2 text-sm font-semibold ${difficulty === id ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
           >
-            <span className="block font-semibold">{tr(label)}</span>
-            <span className="mt-1 block text-xs leading-5 text-muted">{tr(blurb)}</span>
+            {tr(label)}
           </button>
         ))}
       </div>
+      <p className="mt-1 text-xs leading-5 text-muted">{tr(difficulty === "easy" ? "diffblurb.easy" : difficulty === "hard" ? "diffblurb.hard" : "diffblurb.normal")}</p>
 
       {preview && position ? (
-        <div className="panel mt-4 px-4 py-4">
-          <div className="flex items-end justify-between">
-            <div>
-              <p className="text-sm text-muted">{country ? country.name : tr("starting")}</p>
-              <p className="text-sm">{tr("potential", { n: tr(`pot.${potentialLabel(preview.potential)}`) })}</p>
-            </div>
-            <p className="num text-4xl font-semibold text-accent">{preview.ovr}</p>
-          </div>
-          <div className="mt-3 grid gap-2">
-            {ATTR_KEYS.map((key) => (
-              <AttrBar key={key} attr={key} value={preview.attrs[key]} hot={primaryKeys(position).includes(key)} />
-            ))}
-          </div>
-        </div>
-      ) : (
-        <p className="mt-4 text-sm text-muted">{tr("pickBoth")}</p>
-      )}
+        <p className="mt-1 flex items-baseline justify-between gap-3 text-sm">
+          <span className="text-muted">{tr("potential", { n: tr(`pot.${potentialLabel(preview.potential)}`) })}</span>
+          <span className="num text-2xl font-semibold text-accent">{preview.ovr}</span>
+        </p>
+      ) : null}
 
       <button
         type="button"
-        className="btn-primary mt-5 h-13 w-full text-base"
-        disabled={!ready || !position || !countryId || !nationId}
+        className="btn-primary mt-2 h-12 w-full text-base"
+        disabled={!ready}
         onClick={() => position && countryId && nationId && onStart(name.trim(), position, countryId, nationId, salt, difficulty)}
       >
-        {tr("startSeason")}
+        {ready ? tr("startSeason") : tr("pickPosition")}
       </button>
     </Shell>
   );
@@ -1604,52 +1632,94 @@ function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onCh
   );
 }
 
+/** One odds line for the session. Stats share a rate until one is against its ceiling; show the rate that covers the most of them. */
+function sessionOdds(career: Career) {
+  const rows = ATTR_KEYS.map((key) => trainOdds(career, key));
+  const counts = new Map<string, { n: number; odds: (typeof rows)[number] }>();
+  for (const odds of rows) {
+    const id = `${odds.big}|${odds.up}|${odds.down}`;
+    const prev = counts.get(id);
+    counts.set(id, { n: (prev?.n ?? 0) + 1, odds });
+  }
+  let best = rows[0];
+  let bestN = 0;
+  for (const entry of counts.values()) {
+    if (entry.n > bestN) {
+      best = entry.odds;
+      bestN = entry.n;
+    }
+  }
+  return best;
+}
+
 function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange: (c: Career) => void; onMenu: () => void }) {
   const club = getClub(career.clubId);
   const camp = career.screen === "camp";
   const apps = career.season.apps;
   const avg = apps ? career.season.sumRating / apps : 0;
   const { tr } = useTx();
-  const rows = ATTR_KEYS.map((key) => {
-    const odds = trainOdds(career, key);
-    const chance = odds.big
-      ? tr("trainChance", { big: odds.big, up: odds.up, down: odds.down })
-      : odds.up
-        ? tr("trainRise", { up: odds.up, down: odds.down })
-        : tr("ceiling");
-    return { key, odds, chance };
-  });
-  // Odds depend on age and difficulty, so every card shows the same line until a stat is near its ceiling.
-  const sharedChance = rows.length > 0 && rows.every((row) => row.chance === rows[0].chance) ? rows[0].chance : null;
+  const odds = sessionOdds(career);
+  const chance = odds.big
+    ? tr("trainChance", { big: odds.big, up: odds.up, down: odds.down })
+    : odds.up
+      ? tr("trainRise", { up: odds.up, down: odds.down })
+      : tr("ceiling");
+  const [result, setResult] = useState<Career | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  // A second premium-camp pick stays on this screen; clear the reveal once that career arrives.
+  useEffect(() => setResult(null), [career]);
+  useEffect(() => {
+    if (!result) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const id = window.setTimeout(() => onChangeRef.current(result), reduce ? 350 : 1100);
+    return () => window.clearTimeout(id);
+  }, [result]);
+  const train = result?.lastTrain;
   return (
     <Shell>
-      <ScreenHeader title={tr("coach")} sub={`${camp ? tr("preseason") : tr("winter")} · ${cname(club.name)}`} onBack={onMenu} right={career.race ? <span className="chip chip-trophy">{tr("raceTag")}</span> : undefined} />
+      <ScreenHeader title={camp ? tr("preseason") : tr("winter")} sub={cname(club.name)} onBack={onMenu} right={career.race ? <span className="chip chip-trophy">{tr("raceTag")}</span> : undefined} />
       <p className="text-sm leading-6 text-muted">
         {camp ? tr("campAsk") : tr("breakAsk", { avg: avg ? tr("avgBit", { n: avg.toFixed(1) }) : "" })}
       </p>
       {career.premiumCamp ? <p className="mt-2 text-sm font-semibold text-accent">{tr("eco.premiumPick")}</p> : null}
-      {sharedChance ? <p className="mt-3 text-xs leading-5 text-muted">{sharedChance}</p> : null}
-      <div className={`${sharedChance ? "mt-2" : "mt-4"} grid gap-2`}>
-        {rows.map(({ key, odds, chance }) => (
-          <button
-            key={key}
-            type="button"
-            className="flex items-center justify-between rounded-md border border-line bg-surface px-3 py-3 text-start"
-            onClick={() => {
-              unlockAudio();
-              onChange(camp ? answerCamp(career, key) : answerBreak(career, key));
-            }}
-          >
-            <span>
-              <span className="block font-semibold">{tr(`drill.${key}`)}</span>
-              <span className="block text-xs text-muted">
-                {tr(`attr.${key}`)} {career.player.attrs[key]}
-                {sharedChance ? null : ` · ${chance}`}
+      <p className="mt-3 text-sm font-semibold">{chance}</p>
+      <div className="mt-2 grid gap-2">
+        {ATTR_KEYS.map((key) => {
+          const picked = train?.key === key;
+          const value = picked && result ? result.player.attrs[key] : career.player.attrs[key];
+          const tone = !train || !picked ? "" : train.outFor > 0 || train.delta < 0 ? "text-bad" : train.delta > 0 ? "text-good" : "text-muted";
+          const line = !train || !picked
+            ? ""
+            : train.outFor > 0
+              ? tr("trainHurt", { attr: tr(`attr.${key}`), n: train.delta, m: train.outFor })
+              : train.delta > 0
+                ? tr("trainUp", { attr: tr(`attr.${key}`), n: train.delta })
+                : tr("trainFlat", { attr: tr(`attr.${key}`) });
+          return (
+            <button
+              key={key}
+              type="button"
+              disabled={result !== null}
+              className={`rounded-md border px-3 py-3 text-start ${picked ? "border-accent bg-surface-2" : "border-line bg-surface"} ${result && !picked ? "opacity-45" : ""}`}
+              onClick={() => {
+                if (result) return;
+                unlockAudio();
+                setResult(camp ? answerCamp(career, key) : answerBreak(career, key));
+              }}
+            >
+              <span className="flex items-baseline justify-between gap-3">
+                <span className="font-semibold">{tr(`attr.${key}`)}</span>
+                <span className={`num text-lg font-bold ${picked ? "train-reveal" : ""}`}>{value}</span>
               </span>
-            </span>
-            <span className="num text-lg font-semibold text-accent">{odds.big ? "+3" : odds.up ? "+1" : "—"}</span>
-          </button>
-        ))}
+              {picked ? (
+                <span className={`train-reveal mt-1 block text-sm font-semibold ${tone}`} aria-live="polite">
+                  {line}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
       </div>
     </Shell>
   );
