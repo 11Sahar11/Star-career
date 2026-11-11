@@ -1076,10 +1076,38 @@ export function playNext(career: Career): Career {
   return applied;
 }
 
+/** A career that has not kicked a ball yet. The daily race is its own start and is left alone. */
+export function isBrandNewCareer(career: Career) {
+  return !career.race && !career.retired && career.totals.seasons === 0 && career.totals.apps === 0 && career.history.length === 0 && career.season.cursor === 0 && career.season.fixturesPlayed.length === 0;
+}
+
+/**
+ * The first fixture of a brand-new career, opened live on its first decision.
+ * No earlier match is simulated, and no between-match story is attached.
+ * Odds already include this pre-season's training; the gain is then cleared, same as any key match.
+ */
+function openOpeningMatch(career: Career): Career {
+  if (!isBrandNewCareer(career)) return career;
+  const fixture = nextFixture(career);
+  if (!fixture) return career;
+  const rng = makeRng(career.rng);
+  const roll = () => rng.next();
+  const opened = openBigMatch({ ...career, story: null }, fixture, roll, rng);
+  if (!opened.pending) return opened;
+  const scheduledKey = keyFixtureIds(career.season, career.clubId).includes(fixture.id);
+  return {
+    ...opened,
+    story: null,
+    lastTrain: career.lastTrain ?? null,
+    pending: scheduledKey ? opened.pending : { ...opened.pending, opening: true },
+  };
+}
+
 export function playStep(career: Career): Career {
   if (career.retired || career.screen === "camp" || career.screen === "break" || career.screen === "season" || career.screen === "summer" || career.screen === "offers") return career;
   const fixture = nextFixture(career);
   if (!fixture) return openSeason(career);
+  if (isBrandNewCareer(career)) return openOpeningMatch(career);
   const rng = makeRng(career.rng);
   const roll = () => rng.next();
   let playing = true;
@@ -1441,10 +1469,31 @@ export function skipBigMatch(career: Career): Career {
   return finishBigMatch({ ...career, pending: { ...pending, moments } });
 }
 
+/**
+ * The opening match was not a scheduled key fixture. Decisions still rewrite the score,
+ * then the report lands with ordinary match coins and ordinary table points.
+ * A training injury keeps the matches it still has to cost.
+ */
+function finishOpeningMatch(career: Career, pending: PendingMatch): Career {
+  const report = composeReport(pending);
+  const rng = makeRng(pending.rngState);
+  const roll = () => rng.next();
+  const spell = career.season.outFor;
+  const applied = applyReport({ ...career, pending: null, story: null }, report, roll, "report");
+  if (spell > 0 && !report.injured && applied.season.outFor === 0) {
+    applied.season = { ...applied.season, outFor: Math.max(0, spell - 1) };
+  }
+  applied.story = rollStory(applied, roll);
+  applied.rng = rng.state();
+  applied.lastTrain = null;
+  return applied;
+}
+
 /** Applies the finished big match to the season and opens its report. */
 export function finishBigMatch(career: Career): Career {
   const pending = career.pending;
   if (!pending || pending.moments.some((moment) => !moment.picked)) return career;
+  if (pending.opening) return finishOpeningMatch(career, pending);
   const report = composeReport(pending);
   const rng = makeRng(pending.rngState);
   const roll = () => rng.next();
@@ -1538,7 +1587,7 @@ function applyTrain(career: Career, key: AttrKey, which: "camp" | "break"): Care
     : real > 0
       ? `The session landed. ${ATTR_LABEL[key]} +${real}, now ${nextVal}.`
       : `The session did nothing. ${ATTR_LABEL[key]} stays ${nextVal}.`;
-  return {
+  const trained: Career = {
     ...career,
     rng: rng.state(),
     player: {
@@ -1562,6 +1611,8 @@ function applyTrain(career: Career, key: AttrKey, which: "camp" | "break"): Care
     // Premium camp: a second pick before play resumes.
     ...(career.premiumCamp ? { premiumCamp: false, screen: which === "camp" ? ("camp" as const) : ("break" as const) } : {}),
   };
+  if (!career.premiumCamp && which === "camp" && isBrandNewCareer(trained)) return openOpeningMatch(trained);
+  return trained;
 }
 
 export function answerCamp(career: Career, key: AttrKey): Career {

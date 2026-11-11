@@ -356,6 +356,11 @@ export type PendingMatch = {
   moments: Moment[];
   seed: number;
   rngState: number;
+  /**
+   * First match of a brand-new career, and that fixture is not a scheduled key game.
+   * The player still decides the moments. Table points and coins stay on the normal-match rules.
+   */
+  opening?: boolean;
 };
 
 export type StoryEffect = Partial<Record<"morale" | "form" | "fitness" | "reputation", number>> & { attr?: AttrKey; attrDelta?: number };

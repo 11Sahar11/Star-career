@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process";
 
 const suites = [
-  ["moment-odds", ["--experimental-strip-types", "--import", "./scripts/game-test-loader.mjs", "--test", "src/game/moment-odds.test.ts", "src/game/big-match-skip.test.ts"]],
+  ["moment-odds", ["--experimental-strip-types", "--import", "./scripts/game-test-loader.mjs", "--test", "src/game/moment-odds.test.ts", "src/game/big-match-skip.test.ts", "src/game/opening-match.test.ts"]],
   ["scripts", ["--test", "scripts/**/*.test.mjs"]],
   [
     "app-data/auth",
