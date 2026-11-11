@@ -1286,6 +1286,42 @@ function openBigMatch(career: Career, fixture: Fixture, roll: () => number, rng:
   return { ...career, pending, screen: "bigmatch", recentDeltas: null, lastTrain: null, keyGain: null, keyCampBonus: 0, gearTrial: null };
 }
 
+/** Puts the earliest decision in minute 1 and keeps every other minute unique. */
+function pinOpeningMoment(moments: Moment[]): Moment[] {
+  if (!moments.length) return moments;
+  const sorted = [...moments].sort((a, b) => a.minute - b.minute);
+  const used = new Set<number>([1]);
+  const rest = sorted.slice(1).map((moment) => {
+    let minute = Math.max(2, moment.minute);
+    while (used.has(minute) && minute < 89) minute += 1;
+    used.add(minute);
+    return { ...moment, minute };
+  });
+  return [{ ...sorted[0], minute: 1 }, ...rest];
+}
+
+/**
+ * The first match of a new career. Skips the pre-season screen and any
+ * between-match story, opens the opener as a live decision, and pauses on
+ * the first one (minute 1). Pre-season waits until that match is finished.
+ */
+export function openDebutMatch(career: Career): Career {
+  if (career.race || career.retired || career.screen !== "camp") return career;
+  if (career.season.fixturesPlayed.length > 0 || career.totals.seasons > 0 || career.season.cursor !== 0) return career;
+  const fixture = career.season.fixtures[0];
+  if (!fixture) return career;
+  const rng = makeRng(career.rng);
+  const roll = () => rng.next();
+  const opened = openBigMatch(career, fixture, roll, rng);
+  if (!opened.pending) return opened;
+  return {
+    ...opened,
+    story: null,
+    campPending: true,
+    pending: { ...opened.pending, moments: pinOpeningMoment(opened.pending.moments), debut: true },
+  };
+}
+
 /** Plays one moment. Deterministic for a given career, moment and choice, so the daily race stays fair. */
 export function resolveMoment(career: Career, index: number, optionId: string): Career {
   const pending = career.pending;
@@ -1448,17 +1484,19 @@ export function finishBigMatch(career: Career): Career {
   const report = composeReport(pending);
   const rng = makeRng(pending.rngState);
   const roll = () => rng.next();
+  const debut = pending.debut === true;
   const applied = applyReport({ ...career, pending: null }, report, roll, "report");
   // Key matches weigh double in the table and lift the cup run.
-  if (!applied.race) {
+  // The opening decision is a normal league match: applyReport already paid it.
+  if (!debut && !applied.race) {
     const earned = Math.round(earnForReport(report, true, pending.moments) * coinMultiplier(career));
     applied.seasonCoins = earnSeasonCoins(applied, "matches", earned - (applied.coinsEarnedLast ?? 0));
     applied.coins = applied.coins - (applied.coinsEarnedLast ?? 0) + earned;
     applied.coinsEarnedLast = earned;
   }
   const log = applied.season.fixturesPlayed[applied.season.fixturesPlayed.length - 1];
-  if (log) applied.season.fixturesPlayed[applied.season.fixturesPlayed.length - 1] = { ...log, key: true };
-  if (report.competition === "league") {
+  if (log && !debut) applied.season.fixturesPlayed[applied.season.fixturesPlayed.length - 1] = { ...log, key: true };
+  if (!debut && report.competition === "league") {
     const bonus = report.us > report.them ? 3 : report.us === report.them ? 1 : 0;
     applied.season = {
       ...applied.season,
@@ -1466,7 +1504,7 @@ export function finishBigMatch(career: Career): Career {
       keyWins: (applied.season.keyWins ?? 0) + (report.us > report.them ? 1 : 0),
     };
   }
-  applied.story = rollStory(applied, roll);
+  applied.story = debut ? null : rollStory(applied, roll);
   applied.rng = rng.state();
   applied.lastTrain = null;
   return applied;
@@ -1474,7 +1512,8 @@ export function finishBigMatch(career: Career): Career {
 
 /** Where the game goes after a match report: the winter break, the next match, or the season review. */
 export function afterReport(career: Career): Career {
-  const cleared: Career = { ...career, activeReport: null };
+  const cleared: Career = { ...career, activeReport: null, campPending: false };
+  if (career.campPending) return { ...cleared, screen: "camp", story: null };
   if (!cleared.season.breakDone && cleared.season.cursor >= cleared.season.breakAt) {
     return { ...cleared, screen: "break", season: { ...cleared.season, phase: "first" } };
   }
@@ -1508,6 +1547,16 @@ export function trainOdds(career: Career, key: AttrKey) {
   down = clamp(down, 4, 35);
   if (up + big + down > 97) up = Math.max(0, 97 - big - down);
   return { up, big, down };
+}
+
+/** One odds line for the training list: the best live chance among the six stats. */
+export function sessionTrainOdds(career: Career) {
+  let best = trainOdds(career, ATTR_KEYS[0]);
+  for (const key of ATTR_KEYS) {
+    const odds = trainOdds(career, key);
+    if (odds.big > best.big || (odds.big === best.big && odds.up > best.up)) best = odds;
+  }
+  return best;
 }
 
 function applyTrain(career: Career, key: AttrKey, which: "camp" | "break"): Career {

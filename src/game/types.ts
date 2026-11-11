@@ -292,6 +292,8 @@ export type Career = {
   adState: AdState;
   /** Big-club trial in this transfer window: visible signing chance; one ad boost doubles it (max 90%). */
   bigTrial?: BigTrial | null;
+  /** After the opening match, pre-season is still waiting. Cleared once that screen opens. */
+  campPending?: boolean;
 };
 
 export type BigTrial = { year: number; clubId: string; chance: number; boosted: boolean; result: "open" | "won" | "lost" };
@@ -350,12 +352,17 @@ export type Moment = {
   success?: boolean;
 };
 
-/** A big match paused at its decisive moments; the base report is not applied until every moment is played. */
+  /** A big match paused at its decisive moments; the base report is not applied until every moment is played. */
 export type PendingMatch = {
   base: MatchReport;
   moments: Moment[];
   seed: number;
   rngState: number;
+  /**
+   * Opening match of a new career. The first decision is in minute 1 and the
+   * result is a normal league match: no key-match points, coins, or flag.
+   */
+  debut?: boolean;
 };
 
 export type StoryEffect = Partial<Record<"morale" | "form" | "fitness" | "reputation", number>> & { attr?: AttrKey; attrDelta?: number };

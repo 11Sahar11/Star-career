@@ -49,13 +49,13 @@ import {
   finishBigMatch,
   money,
   nextFixture,
+  openDebutMatch,
   openSeason,
   overall,
   playStep,
   playSummer,
   potentialLabel,
   previewPlayer,
-  primaryKeys,
   resolveMoment,
   retireCareer,
   statCap,
@@ -63,12 +63,12 @@ import {
   runToStop,
   skipBigMatch,
   seasonLabel,
+  sessionTrainOdds,
   shirtNumber,
   sortTable,
   startSummer,
   tablePosition,
   todayKey,
-  trainOdds,
 } from "@/game/engine";
 import { loadCareer, loadDailyAttempt, loadSound, markStreakPlayed, readStreak, saveCareer, saveDailyAttempt, saveSound, type DailyAttempt, type StreakState } from "@/game/save";
 import { setAnalyticsSuppressed, track, trackDailyOpen } from "@/game/analytics";
@@ -347,7 +347,7 @@ export function GameApp() {
           setPlaying("main");
           unlockAudio();
           const fresh = withDeviceCosmetics(applyPerks(createCareer(name, position, countryId, salt, difficulty, nationId), loadLegacy().perks));
-          setCareer(fresh); // coins are per career and start from zero
+          setCareer(openDebutMatch(fresh)); // coins are per career and start from zero
           setView("game");
           track("career_start", { country: countryId, position, difficulty });
         }}
@@ -1303,17 +1303,26 @@ function Create({
   const [name, setName] = useState("Alex");
   const [countryId, setCountryId] = useState<string | null>(null);
   const [nationId, setNationId] = useState<string | null>(null);
+  const [nationOpen, setNationOpen] = useState(false);
   const [position, setPosition] = useState<Career["player"]["position"] | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [salt, setSalt] = useState(1);
   const preview = useMemo(() => (position ? previewPlayer(name || "Player", position, salt) : null), [name, position, salt]);
-  const country = COUNTRIES.find((item) => item.id === countryId);
   const ready = name.trim().length >= 2 && position && countryId && nationId;
   const { tr } = useTx();
   const [device] = useState(() => loadDevice());
+  const openCountries = COUNTRIES.filter((item) => countryOpen(device, item.id, admin));
+  const lockedCount = COUNTRIES.length - openCountries.length;
+  const difficulties = [
+    ["easy", "diff.easy", "diffblurb.easy"],
+    ["normal", "diff.normal", "diffblurb.normal"],
+    ["hard", "diff.hard", "diffblurb.hard"],
+  ] as const;
+  const diffBlurb = difficulties.find(([id]) => id === difficulty)?.[2] ?? "diffblurb.normal";
 
   return (
     <Shell>
+      <div className="flex flex-1 flex-col">
       <ScreenHeader title={tr("build")} sub={tr("age16")} onBack={onBack} backLabel={tr("back")} />
       <label className="block text-sm font-semibold" htmlFor="player-name">
         {tr("name")}
@@ -1325,60 +1334,81 @@ function Create({
         enterKeyHint="done"
         autoComplete="name"
         onChange={(event) => setName(event.target.value)}
-        className="mt-2 h-12 w-full rounded-md border border-line bg-surface px-4 text-base text-fg"
+        className="mt-1 h-11 w-full rounded-md border border-line bg-surface px-3 text-base text-fg"
         placeholder={tr("namePh")}
       />
 
-      <h2 className="section-title mt-6">{tr("startCountry")}</h2>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        {COUNTRIES.map((item) => {
+      <h2 className="font-display mt-3 text-base">{tr("startCountry")}</h2>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {openCountries.map((item) => {
           const selected = countryId === item.id;
-          const open = countryOpen(device, item.id, admin);
           return (
             <button
               key={item.id}
               type="button"
-              disabled={!open}
-              aria-disabled={!open}
               onClick={() => {
-                if (!open) return;
                 setCountryId(item.id);
-                setNationId((current) => current ?? item.id);
+                setNationId(item.id);
+                setNationOpen(false);
               }}
-              className={`min-h-12 rounded-md border px-3 py-3 text-start ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"} ${open ? "" : "opacity-60"}`}
+              className={`rounded-md border px-3 py-2 text-start ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
             >
               <span className="block font-semibold">{tr(`country.${item.id}`)}</span>
-              <span className="mt-1 block text-xs text-muted">{open ? leagueLabel(tr, entryLeague(item.id).name) : tr("eco.lockedCountry", { n: formatCoins(ECONOMY.prices["unlock-country"]) })}</span>
+              <span className="mt-0.5 block text-xs text-muted">{leagueLabel(tr, entryLeague(item.id).name)}</span>
             </button>
           );
         })}
       </div>
+      {lockedCount > 0 ? (
+        <p className="mt-2 flex min-h-11 items-center rounded-md border border-line bg-surface px-3 text-sm font-semibold text-muted">
+          {tr("lockedLeagues", { n: lockedCount })}
+        </p>
+      ) : null}
 
-      <h2 className="section-title mt-6">{tr("nation")}</h2>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        {NATIONS.map((item) => {
-          const selected = nationId === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setNationId(item.id)}
-              className={`rounded-md border px-3 py-3 text-start ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
-            >
-              <span className="block font-semibold">{tr(`country.${item.id}`)}</span>
-            </button>
-          );
-        })}
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <p className="min-w-0">
+          <span className="text-xs font-semibold text-muted">{tr("nation")}</span>
+          <span className="mt-0.5 block truncate font-semibold">{nationId ? tr(`country.${nationId}`) : "—"}</span>
+        </p>
+        <button
+          type="button"
+          className="shrink-0 text-sm font-semibold text-accent disabled:opacity-40"
+          disabled={!countryId}
+          aria-expanded={nationOpen}
+          onClick={() => setNationOpen((open) => !open)}
+        >
+          {tr("change")}
+        </button>
       </div>
+      {nationOpen ? (
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {NATIONS.map((item) => {
+            const selected = nationId === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setNationId(item.id);
+                  setNationOpen(false);
+                }}
+                className={`rounded-md border px-3 py-2 text-start ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
+              >
+                <span className="block font-semibold">{tr(`country.${item.id}`)}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
-      <div className="mt-5 flex items-center justify-between">
-        <h2 className="section-title">{tr("position")}</h2>
-        <button type="button" className="flex min-h-12 items-center gap-1 text-sm text-accent" onClick={() => setSalt((value) => value + 1)}>
+      <div className="mt-3 flex items-center justify-between">
+        <h2 className="font-display text-base">{tr("position")}</h2>
+        <button type="button" className="flex min-h-11 items-center gap-1 text-sm text-accent" onClick={() => setSalt((value) => value + 1)}>
           <RotateCcw className="size-4" />
           {tr("reroll")}
         </button>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="mt-2 grid grid-cols-2 gap-2">
         {POSITIONS.map((item) => {
           const selected = position === item.id;
           return (
@@ -1386,66 +1416,48 @@ function Create({
               key={item.id}
               type="button"
               onClick={() => setPosition(item.id)}
-              className={`rounded-md border px-3 py-3 text-start ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
+              aria-pressed={selected}
+              className={`flex items-center gap-2 rounded-md border px-3 py-1.5 text-start ${selected ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
             >
-              <span className="flex items-center justify-between">
-                <span className="font-semibold">{tr(`pos.${item.id}`)}</span>
-                <span className="num text-xs text-muted">{item.shirt}</span>
-              </span>
-              <span className="mt-1 block text-xs leading-5 text-muted">{tr(`posblurb.${item.id}`)}</span>
+              <span className="num w-5 text-sm font-bold text-muted">{item.shirt}</span>
+              <span className="font-semibold">{tr(`pos.${item.id}`)}</span>
             </button>
           );
         })}
       </div>
+      {position ? <p className="mt-2 text-xs leading-5 text-muted">{tr(`posblurb.${position}`)}</p> : null}
 
-      <h2 className="section-title mt-6">{tr("difficulty")}</h2>
-      <div className="mt-3 grid gap-2">
-        {(
-          [
-            ["easy", "diff.easy", "diffblurb.easy"],
-            ["normal", "diff.normal", "diffblurb.normal"],
-            ["hard", "diff.hard", "diffblurb.hard"],
-          ] as const
-        ).map(([id, label, blurb]) => (
+      <h2 className="font-display mt-2 text-base">{tr("difficulty")}</h2>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        {difficulties.map(([id, label]) => (
           <button
             key={id}
             type="button"
             onClick={() => setDifficulty(id)}
-            className={`rounded-md border px-3 py-3 text-start ${difficulty === id ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
+            aria-pressed={difficulty === id}
+            className={`rounded-md border px-2 py-2 text-sm font-semibold ${difficulty === id ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
           >
-            <span className="block font-semibold">{tr(label)}</span>
-            <span className="mt-1 block text-xs leading-5 text-muted">{tr(blurb)}</span>
+            {tr(label)}
           </button>
         ))}
       </div>
-
+      <p className="mt-2 text-xs leading-5 text-muted">{tr(diffBlurb)}</p>
       {preview && position ? (
-        <div className="panel mt-4 px-4 py-4">
-          <div className="flex items-end justify-between">
-            <div>
-              <p className="text-sm text-muted">{country ? country.name : tr("starting")}</p>
-              <p className="text-sm">{tr("potential", { n: tr(`pot.${potentialLabel(preview.potential)}`) })}</p>
-            </div>
-            <p className="num text-4xl font-semibold text-accent">{preview.ovr}</p>
-          </div>
-          <div className="mt-3 grid gap-2">
-            {ATTR_KEYS.map((key) => (
-              <AttrBar key={key} attr={key} value={preview.attrs[key]} hot={primaryKeys(position).includes(key)} />
-            ))}
-          </div>
-        </div>
-      ) : (
-        <p className="mt-4 text-sm text-muted">{tr("pickBoth")}</p>
-      )}
+        <p className="mt-2 text-sm">
+          <span className="text-muted">{tr("potential", { n: tr(`pot.${potentialLabel(preview.potential)}`) })}</span>
+          <span className="num ms-2 font-bold text-accent">{preview.ovr}</span>
+        </p>
+      ) : null}
 
       <button
         type="button"
-        className="btn-primary mt-5 h-13 w-full text-base"
+        className="btn-primary mt-auto h-13 w-full text-base"
         disabled={!ready || !position || !countryId || !nationId}
         onClick={() => position && countryId && nationId && onStart(name.trim(), position, countryId, nationId, salt, difficulty)}
       >
-        {tr("startSeason")}
+        {position ? tr("startSeason") : tr("pickPosition")}
       </button>
+      </div>
     </Shell>
   );
 }
@@ -1637,46 +1649,65 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
   const apps = career.season.apps;
   const avg = apps ? career.season.sumRating / apps : 0;
   const { tr } = useTx();
-  const rows = ATTR_KEYS.map((key) => {
-    const odds = trainOdds(career, key);
-    const chance = odds.big
-      ? tr("trainChance", { big: odds.big, up: odds.up, down: odds.down })
-      : odds.up
-        ? tr("trainRise", { up: odds.up, down: odds.down })
-        : tr("ceiling");
-    return { key, odds, chance };
-  });
-  // Odds depend on age and difficulty, so every card shows the same line until a stat is near its ceiling.
-  const sharedChance = rows.length > 0 && rows.every((row) => row.chance === rows[0].chance) ? rows[0].chance : null;
+  const odds = sessionTrainOdds(career);
+  const oddsLine = odds.big
+    ? tr("trainChance", { big: odds.big, up: odds.up, down: odds.down })
+    : odds.up
+      ? tr("trainRise", { up: odds.up, down: odds.down })
+      : tr("ceiling");
+  const [reveal, setReveal] = useState<{ key: AttrKey; next: Career } | null>(null);
+  const timer = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (timer.current) window.clearTimeout(timer.current);
+  }, []);
+  function pick(key: AttrKey) {
+    if (reveal) return;
+    unlockAudio();
+    const next = camp ? answerCamp(career, key) : answerBreak(career, key);
+    setReveal({ key, next });
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    timer.current = window.setTimeout(() => onChange(next), reduced ? 280 : 780);
+  }
+  const train = reveal?.next.lastTrain;
+  const outcome = reveal && train && train.key === reveal.key
+    ? train.outFor > 0
+      ? tr("trainHurt", { attr: tr(`attr.${train.key}`), n: train.delta, m: train.outFor })
+      : train.delta > 0
+        ? tr("trainUp", { attr: tr(`attr.${train.key}`), n: train.delta })
+        : tr("trainFlat", { attr: tr(`attr.${train.key}`) })
+    : null;
   return (
     <Shell>
-      <ScreenHeader title={tr("coach")} sub={`${camp ? tr("preseason") : tr("winter")} · ${cname(club.name)}`} onBack={onMenu} right={career.race ? <span className="chip chip-trophy">{tr("raceTag")}</span> : undefined} />
+      <ScreenHeader title={camp ? tr("preseason") : tr("winter")} sub={cname(club.name)} onBack={onMenu} right={career.race ? <span className="chip chip-trophy">{tr("raceTag")}</span> : undefined} />
       <p className="text-sm leading-6 text-muted">
         {camp ? tr("campAsk") : tr("breakAsk", { avg: avg ? tr("avgBit", { n: avg.toFixed(1) }) : "" })}
       </p>
       {career.premiumCamp ? <p className="mt-2 text-sm font-semibold text-accent">{tr("eco.premiumPick")}</p> : null}
-      {sharedChance ? <p className="mt-3 text-xs leading-5 text-muted">{sharedChance}</p> : null}
-      <div className={`${sharedChance ? "mt-2" : "mt-4"} grid gap-2`}>
-        {rows.map(({ key, odds, chance }) => (
-          <button
-            key={key}
-            type="button"
-            className="flex items-center justify-between rounded-md border border-line bg-surface px-3 py-3 text-start"
-            onClick={() => {
-              unlockAudio();
-              onChange(camp ? answerCamp(career, key) : answerBreak(career, key));
-            }}
-          >
-            <span>
-              <span className="block font-semibold">{tr(`drill.${key}`)}</span>
-              <span className="block text-xs text-muted">
-                {tr(`attr.${key}`)} {career.player.attrs[key]}
-                {sharedChance ? null : ` · ${chance}`}
-              </span>
-            </span>
-            <span className="num text-lg font-semibold text-accent">{odds.big ? "+3" : odds.up ? "+1" : "—"}</span>
-          </button>
-        ))}
+      <p className="mt-3 text-sm font-semibold leading-5 text-muted">{oddsLine}</p>
+      <div className="mt-2 grid gap-2">
+        {ATTR_KEYS.map((key) => {
+          const picked = reveal?.key === key;
+          const value = picked ? reveal.next.player.attrs[key] : career.player.attrs[key];
+          const delta = picked && train ? train.delta : 0;
+          return (
+            <div key={key}>
+              <button
+                type="button"
+                className={`flex w-full items-center justify-between rounded-md border px-3 py-3 text-start ${picked ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
+                aria-disabled={Boolean(reveal)}
+                onClick={() => {
+                  if (!reveal) pick(key);
+                }}
+              >
+                <span className="font-semibold">{tr(`attr.${key}`)}</span>
+                <span className={`num text-lg font-bold ${picked ? (delta > 0 ? "text-good" : delta < 0 ? "text-bad" : "text-muted") : ""} ${picked ? "train-value" : ""}`}>
+                  {value}
+                </span>
+              </button>
+              {picked && outcome ? <p className={`train-reveal mt-1 text-sm font-semibold ${train && train.outFor > 0 ? "text-bad" : delta > 0 ? "text-good" : "text-muted"}`}>{outcome}</p> : null}
+            </div>
+          );
+        })}
       </div>
     </Shell>
   );
@@ -1753,6 +1784,20 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
   const leftGoals = pending.base.home ? us : them;
   const rightGoals = pending.base.home ? them : us;
   const done = active < 0 && reveal === null;
+  const debutPause = Boolean(pending.debut) && (reveal === 0 || (active === 0 && reveal === null));
+  const skipButton = active >= 0 ? (
+    <button
+      type="button"
+      className="btn-ghost mt-3 h-12 w-full text-base"
+      onClick={() => {
+        unlockAudio();
+        playWhistle();
+        onChange(skipBigMatch(career));
+      }}
+    >
+      {tr("skipMatch")}
+    </button>
+  ) : null;
 
   useEffect(() => {
     playWhistle();
@@ -1822,19 +1867,7 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
         </div>
       </div>
 
-      {active >= 0 ? (
-        <button
-          type="button"
-          className="btn-ghost mt-3 h-12 w-full text-base"
-          onClick={() => {
-            unlockAudio();
-            playWhistle();
-            onChange(skipBigMatch(career));
-          }}
-        >
-          {tr("skipMatch")}
-        </button>
-      ) : null}
+      {debutPause ? null : skipButton}
 
       {focusMoment && focus !== null ? (() => {
         const line = report.events.find((event) => event.minute === focusMoment.minute && event.text.startsWith("@mo."))?.text;
@@ -1914,7 +1947,7 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
                         ) : null}
                         {option.odds >= 92 ? (
                           <span className="text-xs font-bold text-good">{tr("mo.max")}</span>
-                        ) : option.gain ? (
+                        ) : option.gain && !pending.debut ? (
                           <span className="num text-sm font-bold text-good">+{option.gain}%</span>
                         ) : null}
                       </span>
@@ -1928,6 +1961,9 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
         );
       })() : null}
 
+      {debutPause ? skipButton : null}
+
+      {debutPause ? null : (
       <ol className="card mt-3 flex flex-col">
         {[...shown].reverse().map((event, index) => (
           <li key={`${event.minute}-${event.text}-${index}`} className={`event ${event.tone === "neutral" ? "" : event.tone}`}>
@@ -1936,6 +1972,7 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
           </li>
         ))}
       </ol>
+      )}
 
       {done ? (
         <div className="dock">
