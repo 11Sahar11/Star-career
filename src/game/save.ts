@@ -11,8 +11,36 @@ const DAILY_KEY = "kochav-daily-v2";
 export type DailyAttempt = {
   date: string;
   career: Career | null;
+  /** Fewest seasons to the Golden Star Award today, over all tries. */
   seasons: number | null;
+  /** Tries started today. Missing in saves before tries were counted. */
+  tries?: number;
+  /** The try that set `seasons` (1 = first try). */
+  bestTry?: number;
 };
+
+const DEVICE_KEY = "star-device";
+
+/** A random id for this device, used only to keep one leaderboard row per device per day. */
+export function deviceId(): string | undefined {
+  try {
+    let id = localStorage.getItem(DEVICE_KEY);
+    if (!id) {
+      id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `d-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+      localStorage.setItem(DEVICE_KEY, id);
+    }
+    return id;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Tries started today; an older save with any progress counts as one. */
+export function dailyTries(attempt: DailyAttempt | null): number {
+  if (!attempt) return 0;
+  if (typeof attempt.tries === "number") return attempt.tries;
+  return attempt.career || attempt.seasons != null ? 1 : 0;
+}
 
 function isCareer(value: unknown): value is Career {
   if (!value || typeof value !== "object") return false;

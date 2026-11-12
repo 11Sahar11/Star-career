@@ -5,7 +5,7 @@ export type ViewerAccess = { signedIn: boolean; email: string | null; verified: 
 const SIGNED_OUT: ViewerAccess = { signedIn: false, email: null, verified: false, admin: false };
 
 // Forwards the live-preview bearer token (partitioned iframe cookies), like authMiddleware does.
-const sessionMiddleware = createMiddleware({ type: "function" })
+export const sessionMiddleware = createMiddleware({ type: "function" })
   .client(async ({ next }) => {
     const { getBearerToken } = await import("./auth/client");
     return next({ sendContext: { bearerToken: getBearerToken() ?? undefined } });
@@ -33,8 +33,8 @@ export const getViewerAccess = createServerFn({ method: "POST" })
 
 /**
  * Deletes the signed-in account and everything stored for it on the server
- * (Google Play requires in-app account deletion). The career itself lives on
- * the device and is not touched.
+ * (Google Play requires in-app account deletion). The cloud backup goes with it
+ * (career_saves cascades on the user row); the career on the device is not touched.
  */
 export const deleteMyAccount = createServerFn({ method: "POST" })
   .middleware([sessionMiddleware])
