@@ -16,6 +16,8 @@
  * - suppressed (admin, or remove-ads owners): no interstitial, rewards granted without a clip.
  */
 
+import { track } from "./analytics";
+
 type AdBreakPlacement = {
   type: "start" | "pause" | "next" | "browse" | "reward";
   name: string;
@@ -101,6 +103,7 @@ export function showInterstitial(name: string, done: () => void, shown?: () => v
   }
   lastInterstitial = now;
   shown?.();
+  track("interstitial_shown", { placement: name });
   let finished = false;
   const finish = () => {
     if (finished) return;
@@ -144,6 +147,7 @@ export function showRewarded(name: string, onReward: () => void, onUnavailable?:
     },
     adViewed: () => {
       lastRewardedAt = Date.now();
+      track("rewarded_watched", { placement: name });
       settle(onReward);
     },
     adDismissed: () => {

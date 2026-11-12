@@ -20,7 +20,9 @@ The daily race: every player starts the same day from the same position, club an
 - One-handed play in short sessions; a season runs in minutes, matches auto-simulate with optional live viewing.
 - Four languages: Hebrew (right-to-left), English, Spanish, French. Hebrew is a first-class language, not a translation afterthought.
 - Career saves on the device (localStorage). Accounts are optional.
-- Ad-funded: a menu banner, a skippable break after a season, and optional rewarded clips. No ad during a match, no clips in the daily race.
+- Ad-funded: a skippable break after a season and optional rewarded clips (no banners, as in `src/game/ads.ts`). No ad during a match, no clips in the daily race.
+- Streak: grows on each day the player finishes at least one daily-race season; one freeze to start, +1 every 7 days, at most 2, never sold (`src/game/save.ts`).
+- Analytics: Vercel Web Analytics, cookieless, production only; events in `src/game/analytics.ts` (custom events need them enabled on the Vercel project). D1/D7 come from `app_open` with `day`.
 
 ## Capabilities and Constraints
 - 8 countries, 24 leagues; club, league, competition and award names are fictional (switched before the store release).

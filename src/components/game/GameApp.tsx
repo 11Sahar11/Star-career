@@ -70,7 +70,8 @@ import {
   todayKey,
   trainOdds,
 } from "@/game/engine";
-import { loadCareer, loadDailyAttempt, loadSound, saveCareer, saveDailyAttempt, saveSound, touchStreak, type DailyAttempt } from "@/game/save";
+import { loadCareer, loadDailyAttempt, loadSound, markStreakPlayed, readStreak, saveCareer, saveDailyAttempt, saveSound, type DailyAttempt, type StreakState } from "@/game/save";
+import { setAnalyticsSuppressed, track, trackDailyOpen } from "@/game/analytics";
 import { cname, loadLang, setLang, show, t, type Lang } from "@/game/i18n";
 import { authEnabled } from "@/lib/auth/client";
 import { STORIES, answerStory, storyAttr } from "@/game/stories";
@@ -139,7 +140,7 @@ export function GameApp() {
   const [daily, setDaily] = useState<DailyAttempt | null>(null);
   const [playing, setPlaying] = useState<"main" | "daily">("main");
   const [view, setView] = useState<View>("home");
-  const [streak, setStreak] = useState(1);
+  const [streak, setStreak] = useState<StreakState | null>(null);
   const [sound, setSound] = useState(true);
   // Starts as "en" to match the server render (no hydration mismatch); the saved language is applied right after
   // hydration, while the loading screen keeps its text hidden (see LoadingScreen `ready`).
@@ -163,8 +164,13 @@ export function GameApp() {
       .then((res) => {
         setAdmin(res.isAdmin);
         setAdsSuppressed(res.isAdmin);
+        setAnalyticsSuppressed(res.isAdmin);
+        trackDailyOpen();
       })
-      .catch(() => setAdmin(false));
+      .catch(() => {
+        setAdmin(false);
+        trackDailyOpen();
+      });
     getViewerAccess()
       .then(setAccess)
       .catch(() => setAccess(null));
@@ -183,8 +189,12 @@ export function GameApp() {
     document.documentElement.lang = chosen;
     document.documentElement.dir = chosen === "he" ? "rtl" : "ltr";
     setBooted(true);
-    setStreak(touchStreak());
+    const settled = readStreak();
+    setStreak(settled);
+    if (settled.freezesUsed) track("streak_freeze_used", { used: settled.freezesUsed, streak: settled.n });
     initAds();
+    // With accounts on, the open is counted once the admin check settles (admin play is not counted).
+    if (!authEnabled) trackDailyOpen();
   }, []);
 
   function chooseLang(next: Lang) {
@@ -212,8 +222,20 @@ export function GameApp() {
     setCareer((prev) => (prev ? fn(prev) : prev));
   }
 
+  /** A finished daily-race season keeps the streak alive (once per day). */
+  function onDailySeason(next: Career) {
+    const marked = markStreakPlayed();
+    setStreak(marked);
+    track("daily_season", { season: next.year - 2026 + 1 });
+    if (marked.milestone) {
+      track("streak_milestone", { days: marked.milestone });
+      setToasts((list) => [...list, `streak:${marked.milestone}`]);
+    }
+  }
+
   function update(next: Career | null) {
     if (playing === "daily") {
+      if (next?.screen === "season" && daily?.career?.screen !== "season") onDailySeason(next);
       setDaily((prev) => {
         const attempt: DailyAttempt = {
           date: todayKey(),
@@ -224,6 +246,10 @@ export function GameApp() {
         return attempt;
       });
       return;
+    }
+    if (next && career) {
+      if (next.screen === "season" && career.screen !== "season") track("season_end", { season: next.year - 2026 + 1 });
+      if (next.retired && !career.retired) track("career_end", { seasons: next.year - 2026 + 1, trophies: next.trophies.length });
     }
     setCareer(next);
     if (next) {
@@ -243,12 +269,14 @@ export function GameApp() {
     setPlaying("daily");
     setView("game");
     unlockAudio();
+    track("daily_start", { retry: daily?.date === todayKey() && daily.seasons != null });
   }
 
   function finishDaily(done: Career) {
     const taken = done.year - 2026 + 1;
     const best = daily?.date === todayKey() && daily.seasons != null ? Math.min(daily.seasons, taken) : taken;
     const attempt: DailyAttempt = { date: todayKey(), career: null, seasons: best };
+    track("daily_finish", { seasons: taken, best });
     setDaily(attempt);
     saveDailyAttempt(attempt);
     setPlaying("main");
@@ -321,6 +349,7 @@ export function GameApp() {
           const fresh = withDeviceCosmetics(applyPerks(createCareer(name, position, countryId, salt, difficulty, nationId), loadLegacy().perks));
           setCareer(fresh); // coins are per career and start from zero
           setView("game");
+          track("career_start", { country: countryId, position, difficulty });
         }}
       />
     );
@@ -503,7 +532,7 @@ export function GameApp() {
             }}
           />
         ) : null}
-        {toasts.length ? <AchievementToast id={toasts[0]} /> : null}
+        {toasts.length ? toasts[0].startsWith("streak:") ? <StreakToast days={Number(toasts[0].slice(7))} /> : <AchievementToast id={toasts[0]} /> : null}
         </div>
         {!booted || !minShown ? <LoadingScreen ready={booted} /> : null}
       </AdminContext.Provider>
@@ -980,6 +1009,7 @@ function Privacy({ onBack }: { onBack: () => void }) {
         <p>{tr("privacyData")}</p>
         <p>{tr("privacyAds")}</p>
         <p>{tr("privacyAdsData")}</p>
+        <p>{tr("privacyStats")}</p>
         <p>{tr("privacyContact", { email: PRIVACY_EMAIL })}</p>
       </div>
     </Shell>
@@ -1061,7 +1091,7 @@ function Home({
   onNew: () => void;
   onChange: (c: Career) => void;
   dailyBest: number | null;
-  streak: number;
+  streak: StreakState | null;
 }) {
   const { tr, text } = useTx();
   const [confirm, setConfirm] = useState(false);
@@ -1188,10 +1218,7 @@ function Home({
         ) : null}
       </nav>
 
-      <p className="mt-4 flex items-center gap-1.5 text-sm font-semibold text-muted">
-        <Flame className="size-4 text-accent" aria-hidden="true" />
-        {streak === 1 ? tr("streakOne") : tr("streak", { n: streak })}
-      </p>
+      <StreakLine streak={streak} onDaily={onDaily} />
 
       <div className="mt-6 grid gap-1 border-t border-line pt-3 text-sm">
         <div className="flex min-h-12 items-center justify-between gap-3">
@@ -2645,6 +2672,7 @@ function ShareResult({ seasons, date, pos, club }: { seasons: number; date: stri
   });
 
   async function share() {
+    track("daily_share", { seasons });
     try {
       if (typeof navigator.share === "function") {
         await navigator.share({ text: message });
@@ -2773,6 +2801,43 @@ function AdminScreen({
         </p>
       ) : null}
     </Shell>
+  );
+}
+
+function StreakLine({ streak, onDaily }: { streak: StreakState | null; onDaily: () => void }) {
+  const { tr } = useTx();
+  if (!streak) return null;
+  const count = streak.n === 0 ? tr("streakNone") : streak.n === 1 ? tr("streakOne") : tr("streak", { n: streak.n });
+  return (
+    <div className="mt-4 grid gap-1 text-sm">
+      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 font-semibold text-muted">
+        <Flame className={`size-4 ${streak.playedToday ? "text-accent" : "text-muted"}`} aria-hidden="true" />
+        <span>{count}</span>
+        <span aria-hidden="true">·</span>
+        <span>{tr("streakFreezes", { n: streak.freezes })}</span>
+      </p>
+      {streak.freezesUsed ? <p className="text-xs text-muted">{tr("streakFreezeUsed")}</p> : null}
+      {!streak.playedToday ? (
+        <button type="button" className="text-start text-xs font-semibold text-accent underline-offset-4 hover:underline" onClick={onDaily}>
+          {streak.n > 0 ? tr("streakKeep") : tr("streakStart")}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function StreakToast({ days }: { days: number }) {
+  const { tr } = useTx();
+  return (
+    <div className="toast" role="status" key={`streak-${days}`}>
+      <span className="list-icon text-accent">
+        <Flame className="size-5" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xs text-muted">{tr("streakMilestone")}</span>
+        <span dir="auto" className="block line-clamp-2 font-semibold">{tr("streak", { n: days })}</span>
+      </span>
+    </div>
   );
 }
 

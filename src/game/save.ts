@@ -125,21 +125,109 @@ function dayKey(date = new Date()) {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
 
-export function touchStreak(): number {
-  const today = dayKey();
-  const prevDate = new Date();
-  prevDate.setDate(prevDate.getDate() - 1);
-  const yesterday = dayKey(prevDate);
+/**
+ * Daily-race streak. It grows by one on each day the player finishes at least
+ * one season of the daily race (opening the app is not enough).
+ * A freeze covers one missed day; a new player gets one, every 7-day milestone
+ * adds one, and at most two are held. Freezes are never sold.
+ */
+export type StreakState = {
+  /** Current streak in days; 0 when there is none. */
+  n: number;
+  freezes: number;
+  best: number;
+  playedToday: boolean;
+  /** Freezes spent on missed days since the last check (for a one-time notice). */
+  freezesUsed: number;
+  /** Set when this update reached a milestone (7, 30, 100, ...). */
+  milestone: number | null;
+};
+
+const STREAK_START_FREEZES = 1;
+const STREAK_MAX_FREEZES = 2;
+const STREAK_FREEZE_EVERY = 7;
+const STREAK_MILESTONES = [7, 30, 100, 365];
+
+type StoredStreak = { v: 2; date: string; n: number; freezes: number; best: number };
+
+function daysSince(key: string, now = new Date()) {
+  const [y, m, d] = key.split("-").map(Number);
+  if (!y || !m || !d) return Infinity;
+  const from = new Date(y, m - 1, d);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((today.getTime() - from.getTime()) / 86400000);
+}
+
+function shiftDay(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return dayKey(date);
+}
+
+/** Reads the stored streak; the v1 format ({ date, n }, counted on app open) keeps its count. */
+function loadStreak(): StoredStreak | null {
   try {
     const raw = localStorage.getItem(STREAK_KEY);
-    const prev = raw ? (JSON.parse(raw) as { date?: string; n?: number }) : null;
-    if (prev?.date === today && typeof prev.n === "number") return prev.n;
-    const n = prev?.date === yesterday && typeof prev.n === "number" ? prev.n + 1 : 1;
-    localStorage.setItem(STREAK_KEY, JSON.stringify({ date: today, n }));
-    return n;
+    if (!raw) return null;
+    const data = JSON.parse(raw) as Partial<StoredStreak> & { date?: string; n?: number };
+    if (typeof data?.date !== "string" || typeof data.n !== "number") return null;
+    if (data.v === 2) return data as StoredStreak;
+    // v1 counted app opens; an open today is not a race today, so today stays to play.
+    const date = data.date === dayKey() ? shiftDay(-1) : data.date;
+    return { v: 2, date, n: data.n, freezes: STREAK_START_FREEZES, best: data.n };
   } catch {
-    return 1;
+    return null;
   }
+}
+
+function storeStreak(state: StoredStreak) {
+  try {
+    localStorage.setItem(STREAK_KEY, JSON.stringify(state));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Applies missed days: spends freezes for them, or ends the streak. Saves any change. */
+function settleStreak(): { state: StoredStreak | null; freezesUsed: number } {
+  const stored = loadStreak();
+  if (!stored || stored.n <= 0) return { state: stored, freezesUsed: 0 };
+  const missed = daysSince(stored.date) - 1;
+  if (missed <= 0) return { state: stored, freezesUsed: 0 };
+  if (missed <= stored.freezes) {
+    // Covered: the missed days count as kept (not added), and the last kept day is yesterday.
+    const kept = { ...stored, freezes: stored.freezes - missed, date: shiftDay(-1) };
+    storeStreak(kept);
+    return { state: kept, freezesUsed: missed };
+  }
+  const broken = { ...stored, n: 0 };
+  storeStreak(broken);
+  return { state: broken, freezesUsed: 0 };
+}
+
+function view(state: StoredStreak | null, freezesUsed: number, milestone: number | null): StreakState {
+  if (!state) return { n: 0, freezes: STREAK_START_FREEZES, best: 0, playedToday: false, freezesUsed, milestone };
+  return { n: state.n, freezes: state.freezes, best: state.best, playedToday: state.date === dayKey() && state.n > 0, freezesUsed, milestone };
+}
+
+/** On boot: the current streak, after spending freezes on any missed days. Does not add a day. */
+export function readStreak(): StreakState {
+  const { state, freezesUsed } = settleStreak();
+  return view(state, freezesUsed, null);
+}
+
+/** Called when a daily-race season is finished. Adds today once. */
+export function markStreakPlayed(): StreakState {
+  const { state } = settleStreak();
+  const today = dayKey();
+  if (state && state.n > 0 && state.date === today) return view(state, 0, null);
+  const continuing = state && state.n > 0 && daysSince(state.date) === 1;
+  const n = continuing ? state.n + 1 : 1;
+  let freezes = state ? state.freezes : STREAK_START_FREEZES;
+  if (n % STREAK_FREEZE_EVERY === 0) freezes = Math.min(STREAK_MAX_FREEZES, freezes + 1);
+  const next: StoredStreak = { v: 2, date: today, n, freezes, best: Math.max(state?.best ?? 0, n) };
+  storeStreak(next);
+  return view(next, 0, STREAK_MILESTONES.includes(n) ? n : null);
 }
 
 export function boostId(name: string, year: number) {
