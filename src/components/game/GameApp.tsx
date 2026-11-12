@@ -70,7 +70,7 @@ import {
   todayKey,
   trainOdds,
 } from "@/game/engine";
-import { loadCareer, loadDailyAttempt, loadSound, markStreakPlayed, readStreak, saveCareer, saveDailyAttempt, saveSound, type DailyAttempt, type StreakState } from "@/game/save";
+import { dailyTries, deviceId, loadCareer, migrateCareer, loadDailyAttempt, loadSound, markStreakPlayed, readStreak, saveCareer, saveDailyAttempt, saveSound, type DailyAttempt, type StreakState } from "@/game/save";
 import { setAnalyticsSuppressed, track, trackDailyOpen } from "@/game/analytics";
 import { cname, loadLang, setLang, show, t, type Lang } from "@/game/i18n";
 import { authEnabled } from "@/lib/auth/client";
@@ -99,6 +99,7 @@ import { chestToday, countryOpen, loadDevice, markChest, ownCosmetic, settleReti
 import { GEAR_SLOTS, GEAR_TIERS, buyGear, canBuyGear, dailyGearOffer, gearBonus, gearPrice, grantGearOfferAd, grantTryGold, slotFor, slotTier, tierInfo } from "@/game/gear";
 import { attemptBigTrial, boostBigTrial, effectiveAttrs, isTopLeague, keyFixtureIds, leagueOf, retryMoment } from "@/game/engine";
 import { getIsAdmin, getViewerAccess, type ViewerAccess } from "@/lib/access";
+import { downloadCareer, getCloudStatus, getDailyLeaderboard, submitDailyScore, uploadCareer, type CloudStatus, type DailyBoardResult } from "@/lib/cloud";
 import { PERKS, adminGrant, adminUnlockAll, applyPerks, buyPerk, canDouble, doubleLegacy, loadLegacy, payLegacy, perkState, type Legacy, type PerkId } from "@/game/legacy";
 import { ATTR_KEYS, type AttrKey, type Career, type Difficulty, type GearTierId, type MatchLog, type MatchReport, type Role } from "@/game/types";
 
@@ -146,6 +147,7 @@ export function GameApp() {
   // hydration, while the loading screen keeps its text hidden (see LoadingScreen `ready`).
   const [lang, setLangState] = useState<Lang>("en");
   const [access, setAccess] = useState<ViewerAccess | null>(null);
+  const [cloud, setCloud] = useState<CloudStatus | null>(null);
   const [toasts, setToasts] = useState<string[]>([]);
   const [admin, setAdmin] = useState(false);
   const [storeOpen, setStoreOpen] = useState<boolean | "player">(false);
@@ -174,6 +176,9 @@ export function GameApp() {
     getViewerAccess()
       .then(setAccess)
       .catch(() => setAccess(null));
+    getCloudStatus()
+      .then(setCloud)
+      .catch(() => setCloud(null));
   }, []);
 
   useEffect(() => {
@@ -237,10 +242,13 @@ export function GameApp() {
     if (playing === "daily") {
       if (next?.screen === "season" && daily?.career?.screen !== "season") onDailySeason(next);
       setDaily((prev) => {
+        const sameDay = prev?.date === todayKey();
         const attempt: DailyAttempt = {
           date: todayKey(),
           career: next,
-          seasons: prev?.date === todayKey() ? prev.seasons : null,
+          seasons: sameDay ? prev.seasons : null,
+          tries: sameDay ? dailyTries(prev) : 1,
+          bestTry: sameDay ? prev.bestTry : undefined,
         };
         saveDailyAttempt(attempt);
         return attempt;
@@ -248,7 +256,10 @@ export function GameApp() {
       return;
     }
     if (next && career) {
-      if (next.screen === "season" && career.screen !== "season") track("season_end", { season: next.year - 2026 + 1 });
+      if (next.screen === "season" && career.screen !== "season") {
+        track("season_end", { season: next.year - 2026 + 1 });
+        if (cloud?.available && cloud.signedIn) backupCareer(next);
+      }
       if (next.retired && !career.retired) track("career_end", { seasons: next.year - 2026 + 1, trophies: next.trophies.length });
     }
     setCareer(next);
@@ -258,29 +269,72 @@ export function GameApp() {
     }
   }
 
-  function beginDaily(next: Career) {
+  /** `fresh` is a new try; continuing a running career is not. */
+  function beginDaily(next: Career, fresh: boolean) {
+    const sameDay = daily?.date === todayKey();
+    const before = sameDay ? dailyTries(daily) : 0;
     const attempt: DailyAttempt = {
       date: todayKey(),
       career: next,
-      seasons: daily?.date === todayKey() ? daily.seasons : null,
+      seasons: sameDay ? daily.seasons : null,
+      tries: fresh ? before + 1 : Math.max(1, before),
+      bestTry: sameDay ? daily.bestTry : undefined,
     };
     setDaily(attempt);
     saveDailyAttempt(attempt);
     setPlaying("daily");
     setView("game");
     unlockAudio();
-    track("daily_start", { retry: daily?.date === todayKey() && daily.seasons != null });
+    if (fresh) track("daily_start", { try: attempt.tries ?? 1 });
   }
 
   function finishDaily(done: Career) {
     const taken = done.year - 2026 + 1;
-    const best = daily?.date === todayKey() && daily.seasons != null ? Math.min(daily.seasons, taken) : taken;
-    const attempt: DailyAttempt = { date: todayKey(), career: null, seasons: best };
-    track("daily_finish", { seasons: taken, best });
+    const sameDay = daily?.date === todayKey();
+    const tries = sameDay ? Math.max(1, dailyTries(daily)) : 1;
+    const improved = !sameDay || daily.seasons == null || taken < daily.seasons;
+    const best = improved ? taken : (daily.seasons as number);
+    const bestTry = improved ? tries : (daily.bestTry ?? 1);
+    const attempt: DailyAttempt = { date: todayKey(), career: null, seasons: best, tries, bestTry };
+    const device = deviceId();
+    if (device) {
+      submitDailyScore({ data: { day: attempt.date, deviceId: device, name: done.player.name, position: done.player.position, seasons: best, try: bestTry } }).catch(() => {
+        /* the board is optional; the result stays on the device */
+      });
+    }
+    track("daily_finish", { seasons: taken, best, try: tries });
     setDaily(attempt);
     saveDailyAttempt(attempt);
     setPlaying("main");
     setView("daily");
+  }
+
+  /** Uploads the main career for a signed-in player. Silent on failure; returns whether it saved. */
+  async function backupCareer(target: Career): Promise<boolean> {
+    try {
+      const res = await uploadCareer({
+        data: { data: JSON.stringify(target), saveVersion: target.version, playerName: target.player.name, seasonYear: target.year },
+      });
+      if (res.saved && res.updatedAt) {
+        setCloud((prev) => (prev ? { ...prev, save: { playerName: target.player.name, seasonYear: target.year, updatedAt: res.updatedAt as string } } : prev));
+      }
+      return res.saved;
+    } catch {
+      return false;
+    }
+  }
+
+  async function restoreCareer(): Promise<boolean> {
+    try {
+      const res = await downloadCareer();
+      const restored = res.data ? migrateCareer(JSON.parse(res.data)) : null;
+      if (!restored) return false;
+      setPlaying("main");
+      setCareer(restored);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   function leaveDaily() {
@@ -331,6 +385,9 @@ export function GameApp() {
         onAdmin={() => setView("admin")}
         onChange={update}
         streak={streak}
+        cloud={cloud}
+        onBackup={() => (career ? backupCareer(career) : Promise.resolve(false))}
+        onRestore={restoreCareer}
         onNew={() => {
           setPlaying("main");
           setCareer(null);
@@ -379,7 +436,7 @@ export function GameApp() {
         career={career}
         onCareer={setCareer}
         onResetDaily={() => {
-          const cleared: DailyAttempt = { date: todayKey(), career: null, seasons: null };
+          const cleared: DailyAttempt = { date: todayKey(), career: null, seasons: null, tries: 0 };
           saveDailyAttempt(cleared);
           setDaily(cleared);
         }}
@@ -1010,6 +1067,7 @@ function Privacy({ onBack }: { onBack: () => void }) {
         <p>{tr("privacyAds")}</p>
         <p>{tr("privacyAdsData")}</p>
         <p>{tr("privacyStats")}</p>
+        <p>{tr("privacyCloud")}</p>
         <p>{tr("privacyContact", { email: PRIVACY_EMAIL })}</p>
       </div>
     </Shell>
@@ -1073,6 +1131,9 @@ function Home({
   onChange,
   dailyBest,
   streak,
+  cloud,
+  onBackup,
+  onRestore,
 }: {
   career: Career | null;
   sound: boolean;
@@ -1092,6 +1153,9 @@ function Home({
   onChange: (c: Career) => void;
   dailyBest: number | null;
   streak: StreakState | null;
+  cloud: CloudStatus | null;
+  onBackup: () => Promise<boolean>;
+  onRestore: () => Promise<boolean>;
 }) {
   const { tr, text } = useTx();
   const [confirm, setConfirm] = useState(false);
@@ -1235,6 +1299,7 @@ function Home({
             {access?.signedIn ? tr("acct.signedInShort", { email: access.email ?? "" }) : tr("acct.cta")}
           </a>
         ) : null}
+        {cloud?.available && cloud.signedIn ? <CloudRow cloud={cloud} hasCareer={!!career} onBackup={onBackup} onRestore={onRestore} /> : null}
         {career ? (
           confirm ? (
             <div className="card px-4 py-3">
@@ -2659,12 +2724,14 @@ function shareLine(seasons: number) {
   return `${"⚽".repeat(Math.max(0, seasons - 1))}🏆`;
 }
 
-function ShareResult({ seasons, date, pos, club }: { seasons: number; date: string; pos: string; club: string }) {
+function ShareResult({ seasons, bestTry, date, pos, club }: { seasons: number; bestTry: number; date: string; pos: string; club: string }) {
   const { tr } = useTx();
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const tryLabel = bestTry <= 1 ? tr("dailyTryFirst") : tr("dailyTryN", { n: bestTry });
   const message = tr("shareText", {
     date,
     n: seasons,
+    try: tryLabel,
     pos,
     club,
     line: shareLine(seasons),
@@ -2672,7 +2739,7 @@ function ShareResult({ seasons, date, pos, club }: { seasons: number; date: stri
   });
 
   async function share() {
-    track("daily_share", { seasons });
+    track("daily_share", { seasons, try: bestTry });
     try {
       if (typeof navigator.share === "function") {
         await navigator.share({ text: message });
@@ -2689,6 +2756,7 @@ function ShareResult({ seasons, date, pos, club }: { seasons: number; date: stri
   return (
     <div className="award-card mt-4 text-center">
       <p className="text-sm font-semibold text-trophy">{tr("dailyWon", { n: seasons })}</p>
+      <p className="text-xs text-muted">{tryLabel}</p>
       <p className="text-2xl" dir="ltr" aria-hidden="true">
         {shareLine(seasons)}
       </p>
@@ -2700,7 +2768,7 @@ function ShareResult({ seasons, date, pos, club }: { seasons: number; date: stri
   );
 }
 
-function DailyLobby({ attempt, onBack, onBegin }: { attempt: DailyAttempt | null; onBack: () => void; onBegin: (career: Career) => void }) {
+function DailyLobby({ attempt, onBack, onBegin }: { attempt: DailyAttempt | null; onBack: () => void; onBegin: (career: Career, fresh: boolean) => void }) {
   const board = useMemo(() => dailyBoard(), []);
   const { tr } = useTx();
   const [name, setName] = useState("Star");
@@ -2709,11 +2777,13 @@ function DailyLobby({ attempt, onBack, onBegin }: { attempt: DailyAttempt | null
   const sameDay = attempt?.date === board.date;
   const running = sameDay ? attempt?.career : null;
   const best = sameDay ? attempt?.seasons : null;
+  const bestTry = sameDay ? (attempt?.bestTry ?? 1) : 1;
   return (
     <Shell>
       <ScreenHeader title={tr("dailyTitle")} sub={tr("dailyKicker")} onBack={onBack} />
       <p className="text-sm leading-6 text-muted">{tr("dailyCopy", { pos: tr(`pos.${board.position}`), club: cname(club.name), league: leagueLabel(tr, league.name) })}</p>
-      {best != null ? <ShareResult seasons={best} date={board.date} pos={tr(`pos.${board.position}`)} club={cname(club.name)} /> : null}
+      {best != null ? <ShareResult seasons={best} bestTry={bestTry} date={board.date} pos={tr(`pos.${board.position}`)} club={cname(club.name)} /> : null}
+      <DailyBoard day={board.date} refreshKey={`${best ?? "-"}|${bestTry}`} />
       <div className="panel mt-4 px-4 py-4">
         <p className="text-xs font-semibold text-muted">{tr("starting")}</p>
         <div className="mt-3 grid gap-2">
@@ -2723,7 +2793,7 @@ function DailyLobby({ attempt, onBack, onBegin }: { attempt: DailyAttempt | null
         </div>
       </div>
       {running ? (
-        <button type="button" className="btn-primary mt-4 h-13 w-full text-base" onClick={() => onBegin(running)}>
+        <button type="button" className="btn-primary mt-4 h-13 w-full text-base" onClick={() => onBegin(running, false)}>
           {tr("dailyContinue")}
         </button>
       ) : (
@@ -2739,13 +2809,13 @@ function DailyLobby({ attempt, onBack, onBegin }: { attempt: DailyAttempt | null
             className="mt-2 h-12 w-full rounded-md border border-line bg-surface px-4 text-base text-fg"
             placeholder={tr("namePh")}
           />
-          <button type="button" className="btn-primary mt-4 h-13 w-full text-base" onClick={() => onBegin(createDailyCareer(name, board.date))}>
+          <button type="button" className="btn-primary mt-4 h-13 w-full text-base" onClick={() => onBegin(createDailyCareer(name, board.date), true)}>
             {best != null ? tr("dailyAgain") : tr("dailyStart")}
           </button>
         </>
       )}
       {running && best == null ? (
-        <button type="button" className="btn-ghost mt-2 h-12 w-full" onClick={() => onBegin(createDailyCareer(name || running.player.name, board.date))}>
+        <button type="button" className="btn-ghost mt-2 h-12 w-full" onClick={() => onBegin(createDailyCareer(name || running.player.name, board.date), true)}>
           {tr("dailyAgain")}
         </button>
       ) : null}
@@ -2801,6 +2871,132 @@ function AdminScreen({
         </p>
       ) : null}
     </Shell>
+  );
+}
+
+function CloudRow({
+  cloud,
+  hasCareer,
+  onBackup,
+  onRestore,
+}: {
+  cloud: CloudStatus;
+  hasCareer: boolean;
+  onBackup: () => Promise<boolean>;
+  onRestore: () => Promise<boolean>;
+}) {
+  const { tr, lang } = useTx();
+  const [busy, setBusy] = useState(false);
+  const [ask, setAsk] = useState(false);
+  const [note, setNote] = useState<"saved" | "restored" | "failed" | null>(null);
+  const save = cloud.save;
+  const when = save ? new Date(save.updatedAt).toLocaleString(lang, { dateStyle: "short", timeStyle: "short" }) : "";
+
+  async function run(action: () => Promise<boolean>, ok: "saved" | "restored") {
+    setBusy(true);
+    setAsk(false);
+    const done = await action();
+    setBusy(false);
+    setNote(done ? ok : "failed");
+  }
+
+  return (
+    <div className="grid gap-2 py-2">
+      <p className="text-muted">
+        <span className="font-semibold text-fg">☁️ {tr("cloudTitle")}</span>
+        {" · "}
+        {save ? tr("cloudSaved", { name: save.playerName, year: save.seasonYear, when }) : tr("cloudNone")}
+      </p>
+      {ask ? (
+        <div className="card px-4 py-3">
+          <p>{tr("cloudRestoreAsk")}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button type="button" className="btn-ghost h-12" onClick={() => setAsk(false)}>
+              {tr("cancel")}
+            </button>
+            <button type="button" className="btn-primary h-12" disabled={busy} onClick={() => run(onRestore, "restored")}>
+              {tr("cloudRestore")}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" className="btn-ghost h-12" disabled={busy || !hasCareer} onClick={() => run(onBackup, "saved")}>
+            {tr("cloudBackup")}
+          </button>
+          <button
+            type="button"
+            className="btn-ghost h-12"
+            disabled={busy || !save}
+            onClick={() => (hasCareer ? setAsk(true) : run(onRestore, "restored"))}
+          >
+            {tr("cloudRestore")}
+          </button>
+        </div>
+      )}
+      {note ? (
+        <p role="status" className={`text-xs ${note === "failed" ? "text-bad" : "text-good"}`}>
+          {note === "saved" ? tr("cloudDone") : note === "restored" ? tr("cloudRestored") : tr("cloudFail")}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Today's leaderboard. Loaded when the screen opens and after a new result; never polled. */
+function DailyBoard({ day, refreshKey }: { day: string; refreshKey: string }) {
+  const { tr } = useTx();
+  const [board, setBoard] = useState<DailyBoardResult | null>(null);
+  useEffect(() => {
+    let live = true;
+    // A just-submitted result may land a moment later; one short delay covers it.
+    const timer = window.setTimeout(() => {
+      getDailyLeaderboard({ data: { day, deviceId: deviceId() } })
+        .then((res) => {
+          if (live) setBoard(res);
+        })
+        .catch(() => {
+          if (live) setBoard(null);
+        });
+    }, 400);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [day, refreshKey]);
+
+  if (!board?.available) return null;
+  const tryText = (n: number) => (n <= 1 ? tr("dailyTryFirst") : tr("dailyTryN", { n }));
+  const rows = board.you && !board.top.some((row) => row.you) ? [...board.top, board.you] : board.top;
+  return (
+    <section className="panel mt-4 px-4 py-4" aria-labelledby="daily-board-title">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 id="daily-board-title" className="text-sm font-bold">
+          {tr("boardTitle")}
+        </h2>
+        {board.total ? <span className="text-xs text-muted">{tr("boardTotal", { n: board.total })}</span> : null}
+      </div>
+      {rows.length === 0 ? (
+        <p className="mt-2 text-sm text-muted">{tr("boardEmpty")}</p>
+      ) : (
+        <ol className="mt-3 grid gap-1">
+          {rows.map((row) => (
+            <li
+              key={`${row.rank}-${row.name}-${row.you}`}
+              className={`flex items-center gap-3 rounded-md px-2 py-1.5 text-sm ${row.you ? "bg-accent-tint font-semibold" : ""}`}
+            >
+              <span className="num w-7 shrink-0 text-muted">{row.rank}</span>
+              <span dir="auto" className="min-w-0 flex-1 truncate">
+                {row.name}
+                {row.you ? <span className="text-muted"> · {tr("boardYou")}</span> : null}
+              </span>
+              <span className="shrink-0 text-xs text-muted">{tryText(row.try)}</span>
+              <span className="num shrink-0 font-bold">{tr("boardSeasons", { n: row.seasons })}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }
 

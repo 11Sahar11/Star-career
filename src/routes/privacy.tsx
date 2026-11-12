@@ -24,6 +24,7 @@ function PrivacyPage() {
         <p>{t("privacyAds", undefined, lang)}</p>
         <p>{t("privacyAdsData", undefined, lang)}</p>
         <p>{t("privacyStats", undefined, lang)}</p>
+        <p>{t("privacyCloud", undefined, lang)}</p>
         <p>{t("privacyContact", { email: PRIVACY_EMAIL }, lang)}</p>
       </div>
       <Link to="/" className="mt-6 inline-flex min-h-12 items-center self-start text-sm text-accent">

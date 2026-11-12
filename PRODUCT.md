@@ -22,6 +22,8 @@ The daily race: every player starts the same day from the same position, club an
 - Career saves on the device (localStorage). Accounts are optional.
 - Ad-funded: a skippable break after a season and optional rewarded clips (no banners, as in `src/game/ads.ts`). No ad during a match, no clips in the daily race.
 - Streak: grows on each day the player finishes at least one daily-race season; one freeze to start, +1 every 7 days, at most 2, never sold (`src/game/save.ts`).
+- Daily race tries are counted; the share text names the try that set the best result.
+- Cloud (needs DATABASE_URL, hidden without it): career backup for signed-in players (`career_saves`), and a public daily leaderboard, one row per device per day (`daily_scores`); both in `src/lib/cloud.ts`, loaded on demand, never polled.
 - Analytics: Vercel Web Analytics, cookieless, production only; events in `src/game/analytics.ts` (custom events need them enabled on the Vercel project). D1/D7 come from `app_open` with `day`.
 
 ## Capabilities and Constraints
