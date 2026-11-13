@@ -24,7 +24,7 @@ import {
   trainOdds,
   trainOutcomes,
 } from "./engine";
-import { debutHidesTopSkip, shouldResetTrainReveal, tabFromLockedLeaguesRow } from "./ux";
+import { debutHidesTopSkip, shouldResetTrainReveal, tabFromLockedLeaguesRow, trainingMaxLabel } from "./ux";
 import type { MomentOption } from "./types";
 
 function bestOption(options: MomentOption[]) {
@@ -197,6 +197,23 @@ test("a premium camp clears the reveal so the second pick lands", () => {
   assert.equal(shouldResetTrainReveal(first.premiumCamp, second), false);
   assert.equal(second.screen, "run");
   assert.equal(second.lastTrain?.key, "passing");
+});
+
+test("a capped training stat shows MAX and an open stat does not", () => {
+  const career = createCareer("Max", "ST", "eng", 5);
+  const paceCap = statCap(career.player.position, career.player.potential, "pace");
+  career.player.attrs.pace = paceCap;
+  const shootingCap = statCap(career.player.position, career.player.potential, "shooting");
+  career.player.attrs.shooting = shootingCap - 4;
+  const pace = trainingMaxLabel(career.player.position, career.player.potential, career.player.attrs.pace, "pace");
+  const shooting = trainingMaxLabel(career.player.position, career.player.potential, career.player.attrs.shooting, "shooting");
+  assert.equal(pace, "mo.max");
+  assert.equal(shooting, null);
+  assert.equal(t("mo.max", undefined, "en"), "MAX");
+  assert.equal(t("mo.max", undefined, "he"), "מקס");
+  assert.equal(t("mo.max", undefined, "es"), "MÁX");
+  assert.equal(t("mo.max", undefined, "fr"), "MAX");
+  assert.equal(trainingMaxLabel(career.player.position, career.player.potential, paceCap - 1, "pace"), null);
 });
 
 test("the locked-leagues row opens the store tab", () => {

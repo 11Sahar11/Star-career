@@ -1,3 +1,11 @@
+import { statCap } from "./engine";
+import type { AttrKey, PositionId } from "./types";
+
+/** The shown value is on the position cap that applyTrain uses. The row then shows `mo.max`. */
+export function trainingMaxLabel(position: PositionId, potential: number, value: number, key: AttrKey): "mo.max" | null {
+  return value >= statCap(position, potential, key) ? "mo.max" : null;
+}
+
 /** The build screen's "+N leagues · Store" row opens the Store tab. */
 export function tabFromLockedLeaguesRow(): "store" {
   return "store";

@@ -102,7 +102,7 @@ import { attemptBigTrial, boostBigTrial, effectiveAttrs, isTopLeague, keyFixture
 import { getIsAdmin, getViewerAccess, type ViewerAccess } from "@/lib/access";
 import { PERKS, adminGrant, adminUnlockAll, applyPerks, buyPerk, canDouble, doubleLegacy, loadLegacy, payLegacy, perkState, type Legacy, type PerkId } from "@/game/legacy";
 import { ATTR_KEYS, type AttrKey, type Career, type Difficulty, type GearTierId, type MatchLog, type MatchReport, type Role } from "@/game/types";
-import { debutHidesTopSkip, shouldResetTrainReveal, tabFromLockedLeaguesRow } from "@/game/ux";
+import { debutHidesTopSkip, shouldResetTrainReveal, tabFromLockedLeaguesRow, trainingMaxLabel } from "@/game/ux";
 
 type View = "boot" | "home" | "create" | "game" | "collection" | "summary" | "daily" | "privacy" | "legacy" | "admin" | "achievements";
 
@@ -1740,6 +1740,7 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
           const value = picked ? reveal.next.player.attrs[key] : career.player.attrs[key];
           const delta = picked && train ? train.delta : 0;
           const ownOdds = displayedTrainLine(career, key, lang);
+          const maxLabel = trainingMaxLabel(career.player.position, career.player.potential, value, key);
           return (
             <div key={key}>
               <button
@@ -1756,6 +1757,7 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
                 </span>
                 <span className={`num text-lg font-bold ${picked ? (delta > 0 ? "text-good" : delta < 0 ? "text-bad" : "text-muted") : ""} ${picked ? "train-value" : ""}`}>
                   {value}
+                  {maxLabel ? <span className="ms-1 text-xs font-bold text-good" data-max={key}>{tr(maxLabel)}</span> : null}
                 </span>
               </button>
               {picked && outcome ? <p className={`train-reveal mt-1 text-sm font-semibold ${train && train.outFor > 0 ? "text-bad" : delta > 0 ? "text-good" : "text-muted"}`}>{outcome}</p> : null}
