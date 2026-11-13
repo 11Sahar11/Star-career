@@ -20,6 +20,9 @@ import {
 import { renderInstallPage } from "./grok-pwa-plugin.mjs";
 
 const TEMPLATE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+// Head injection reads src/lib/og/site.json from cwd. Isolate it so assertions
+// about a fixture document are not overwritten by this app's card.
+process.chdir(mkdtempSync(join(tmpdir(), "grok-pwa-test-cwd-")));
 
 test("injects before </head>", () => {
   const out = injectGrokPwaHead("<html><head><title>x</title></head><body></body></html>");
@@ -518,10 +521,11 @@ test("renders the manifest with the per-app name", () => {
 // Tripwires: the deployed-app path only works if Nitro scans server/ — an
 // accidental edit that drops serverDir or the middleware file would otherwise
 // fail silently (published apps would just render the app for ?install=1).
-test("vite config keeps the nitro serverDir wiring", () => {
+test("vite config builds a static client and keeps the PWA plugin", () => {
   const viteConfig = readFileSync(join(TEMPLATE_ROOT, "vite.config.ts"), "utf8");
-  assert.match(viteConfig, /serverDir:\s*"\.\/server"/);
+  assert.match(viteConfig, /prerender:\s*\{[^}]*enabled:\s*true/s);
   assert.match(viteConfig, /grokPwaPlugin\(\)/);
+  assert.doesNotMatch(viteConfig, /nitro\(/);
 });
 
 test("nitro middleware and its bundled assets exist", () => {

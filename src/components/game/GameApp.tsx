@@ -72,16 +72,16 @@ import {
 } from "@/game/engine";
 import { loadCareer, loadDailyAttempt, loadSound, markStreakPlayed, readStreak, saveCareer, saveDailyAttempt, saveSound, type DailyAttempt, type StreakState } from "@/game/save";
 import { setAnalyticsSuppressed, track, trackDailyOpen } from "@/game/analytics";
+import { debugAdmin } from "@/game/debug-admin";
 import { cname, loadLang, setLang, show, t, type Lang } from "@/game/i18n";
-import { authEnabled } from "@/lib/auth/client";
+import { hydrateKv, kvGet, kvSet } from "@/game/kv";
 import { STORIES, answerStory, storyAttr } from "@/game/stories";
 import { ACHIEVEMENTS, checkAchievements, loadUnlocked } from "@/game/achievements";
-import { adsEnabled, adsSuppressed, initAds, setAdsSuppressed, showInterstitial, showRewarded } from "@/game/ads";
+import { adsEnabled, adsSuppressed, adAge, adPrivacyOptionsRequired, initAds, openAdPrivacyOptions, prepareAds, setAdAge, setAdsSuppressed, showInterstitial, showRewarded, type AdAge } from "@/game/ads";
 import {
   CATALOG,
   COSMETIC_IDS,
   ECONOMY,
-  HALFTIME_INTERSTITIAL,
   canBuy,
   canShowSeasonInterstitial,
   countInterstitial,
@@ -98,7 +98,6 @@ import {
 import { chestToday, countryOpen, loadDevice, markChest, ownCosmetic, settleRetirement, unlockCountry, withDeviceCosmetics } from "@/game/legacy";
 import { GEAR_SLOTS, GEAR_TIERS, buyGear, canBuyGear, dailyGearOffer, gearBonus, gearPrice, grantGearOfferAd, grantTryGold, slotFor, slotTier, tierInfo } from "@/game/gear";
 import { attemptBigTrial, boostBigTrial, effectiveAttrs, isTopLeague, keyFixtureIds, leagueOf, retryMoment } from "@/game/engine";
-import { getIsAdmin, getViewerAccess, type ViewerAccess } from "@/lib/access";
 import { PERKS, adminGrant, adminUnlockAll, applyPerks, buyPerk, canDouble, doubleLegacy, loadLegacy, payLegacy, perkState, type Legacy, type PerkId } from "@/game/legacy";
 import { ATTR_KEYS, type AttrKey, type Career, type Difficulty, type GearTierId, type MatchLog, type MatchReport, type Role } from "@/game/types";
 
@@ -145,9 +144,10 @@ export function GameApp() {
   // Starts as "en" to match the server render (no hydration mismatch); the saved language is applied right after
   // hydration, while the loading screen keeps its text hidden (see LoadingScreen `ready`).
   const [lang, setLangState] = useState<Lang>("en");
-  const [access, setAccess] = useState<ViewerAccess | null>(null);
   const [toasts, setToasts] = useState<string[]>([]);
-  const [admin, setAdmin] = useState(false);
+  const admin = debugAdmin;
+  const [adAgePrompt, setAdAgePrompt] = useState(false);
+  const [adPrivacy, setAdPrivacy] = useState(false);
   const [storeOpen, setStoreOpen] = useState<boolean | "player">(false);
   /** Set while the season-end interstitial is running, so a second tap cannot replay an old state. */
   const summerLock = useRef(false);
@@ -159,43 +159,47 @@ export function GameApp() {
   }, [toasts]);
 
   useEffect(() => {
-    if (!authEnabled) return;
-    getIsAdmin()
-      .then((res) => {
-        setAdmin(res.isAdmin);
-        setAdsSuppressed(res.isAdmin);
-        setAnalyticsSuppressed(res.isAdmin);
-        trackDailyOpen();
-      })
-      .catch(() => {
-        setAdmin(false);
-        trackDailyOpen();
-      });
-    getViewerAccess()
-      .then(setAccess)
-      .catch(() => setAccess(null));
-  }, []);
-
-  useEffect(() => {
-    const loaded = loadCareer();
-    const audio = loadSound();
-    const chosen = loadLang();
-    const attempt = loadDailyAttempt();
-    setCareer(loaded);
-    if (attempt?.date === todayKey()) setDaily(attempt);
-    setSound(audio);
-    setAudioEnabled(audio);
-    setLangState(chosen);
-    document.documentElement.lang = chosen;
-    document.documentElement.dir = chosen === "he" ? "rtl" : "ltr";
-    setBooted(true);
-    const settled = readStreak();
-    setStreak(settled);
-    if (settled.freezesUsed) track("streak_freeze_used", { used: settled.freezesUsed, streak: settled.n });
-    initAds();
-    // With accounts on, the open is counted once the admin check settles (admin play is not counted).
-    if (!authEnabled) trackDailyOpen();
-  }, []);
+    let cancel = false;
+    void (async () => {
+      await hydrateKv();
+      if (cancel) return;
+      setAdsSuppressed(admin);
+      setAnalyticsSuppressed(admin);
+      const loaded = loadCareer();
+      const audio = loadSound();
+      const chosen = loadLang();
+      const attempt = loadDailyAttempt();
+      setCareer(loaded);
+      if (attempt?.date === todayKey()) setDaily(attempt);
+      setSound(audio);
+      setAudioEnabled(audio);
+      setLangState(chosen);
+      document.documentElement.lang = chosen;
+      document.documentElement.dir = chosen === "he" ? "rtl" : "ltr";
+      setBooted(true);
+      const settled = readStreak();
+      setStreak(settled);
+      if (settled.freezesUsed) track("streak_freeze_used", { used: settled.freezesUsed, streak: settled.n });
+      initAds();
+      if (!admin && adsEnabled() && !loadDevice().removeAds.owned) {
+        if (adAge()) void prepareAds().then(() => setAdPrivacy(adPrivacyOptionsRequired()));
+        else setAdAgePrompt(true);
+      }
+      if (!admin) trackDailyOpen();
+      try {
+        const { Capacitor } = await import("@capacitor/core");
+        if (Capacitor.isNativePlatform()) {
+          const { SplashScreen } = await import("@capacitor/splash-screen");
+          await SplashScreen.hide();
+        }
+      } catch {
+        /* browser build has no native splash */
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [admin]);
 
   function chooseLang(next: Lang) {
     setLang(next);
@@ -327,8 +331,14 @@ export function GameApp() {
         onPrivacy={() => setView("privacy")}
         onLegacy={() => setView("legacy")}
         onAchievements={() => setView("achievements")}
-        access={access}
         onAdmin={() => setView("admin")}
+        adAgePrompt={adAgePrompt}
+        onAdAge={(value) => {
+          setAdAgePrompt(false);
+          void setAdAge(value).then(() => setAdPrivacy(adPrivacyOptionsRequired()));
+        }}
+        adPrivacy={adPrivacy}
+        onAdPrivacy={() => void openAdPrivacyOptions()}
         onChange={update}
         streak={streak}
         onNew={() => {
@@ -373,7 +383,7 @@ export function GameApp() {
   } else if (view === "privacy") screen = <Privacy onBack={() => setView("home")} />;
   else if (view === "legacy") screen = <LegacyScreen onBack={() => setView("home")} />;
   else if (view === "achievements") screen = <AchievementsScreen onBack={() => setView("home")} />;
-  else if (view === "admin" && access?.admin) {
+  else if (view === "admin" && admin) {
     screen = (
       <AdminScreen
         career={career}
@@ -424,7 +434,6 @@ export function GameApp() {
           summerLock.current = true;
           let counted = run;
           showInterstitial(
-            "season-end",
             () => {
               // Idempotent: only move on if the career is still on this season screen.
               setCareer((current) => {
@@ -587,7 +596,7 @@ function storeSignals(career: Career | null, admin: boolean): string[] {
 
 function loadStoreSeen(): string[] {
   try {
-    const raw = JSON.parse(localStorage.getItem(STORE_SEEN_KEY) ?? "[]");
+    const raw = JSON.parse(kvGet(STORE_SEEN_KEY) ?? "[]");
     return Array.isArray(raw) ? raw.filter((x) => typeof x === "string") : [];
   } catch {
     return [];
@@ -596,7 +605,7 @@ function loadStoreSeen(): string[] {
 
 function saveStoreSeen(keys: string[]) {
   try {
-    localStorage.setItem(STORE_SEEN_KEY, JSON.stringify(keys.slice(0, 200)));
+    kvSet(STORE_SEEN_KEY, JSON.stringify(keys.slice(0, 200)));
   } catch {
     /* private mode */
   }
@@ -1067,12 +1076,15 @@ function Home({
   onPrivacy,
   onLegacy,
   onAchievements,
-  access,
   onAdmin,
   onNew,
   onChange,
   dailyBest,
   streak,
+  adAgePrompt,
+  onAdAge,
+  adPrivacy,
+  onAdPrivacy,
 }: {
   career: Career | null;
   sound: boolean;
@@ -1086,12 +1098,15 @@ function Home({
   onPrivacy: () => void;
   onLegacy: () => void;
   onAchievements: () => void;
-  access: ViewerAccess | null;
   onAdmin: () => void;
   onNew: () => void;
   onChange: (c: Career) => void;
   dailyBest: number | null;
   streak: StreakState | null;
+  adAgePrompt: boolean;
+  onAdAge: (value: AdAge) => void;
+  adPrivacy: boolean;
+  onAdPrivacy: () => void;
 }) {
   const { tr, text } = useTx();
   const [confirm, setConfirm] = useState(false);
@@ -1210,7 +1225,7 @@ function Home({
           <span className="num font-bold">{career ? career.trophies.length : 0}</span>
           {chevron}
         </button>
-        {access?.admin ? (
+        {debugAdmin ? (
           <button type="button" className="list-row" onClick={onAdmin}>
             <span className="list-title min-w-0 flex-1">{tr("admin.open")}</span>
             {chevron}
@@ -1219,6 +1234,19 @@ function Home({
       </nav>
 
       <StreakLine streak={streak} onDaily={onDaily} />
+
+      {adAgePrompt ? (
+        <section className="card mt-4 grid gap-2 px-4 py-4">
+          <p className="font-semibold">{tr("ads.ageTitle")}</p>
+          <p className="text-sm leading-6 text-muted">{tr("ads.ageCopy")}</p>
+          <button type="button" className="btn-primary h-12" onClick={() => onAdAge("16plus")}>
+            {tr("ads.ageOver")}
+          </button>
+          <button type="button" className="btn-ghost h-12" onClick={() => onAdAge("under")}>
+            {tr("ads.ageUnder")}
+          </button>
+        </section>
+      ) : null}
 
       <div className="mt-6 grid gap-1 border-t border-line pt-3 text-sm">
         <div className="flex min-h-12 items-center justify-between gap-3">
@@ -1230,10 +1258,10 @@ function Home({
             </button>
           </span>
         </div>
-        {authEnabled ? (
-          <a href="/login" className="flex min-h-12 items-center text-muted underline-offset-4 hover:underline">
-            {access?.signedIn ? tr("acct.signedInShort", { email: access.email ?? "" }) : tr("acct.cta")}
-          </a>
+        {adPrivacy ? (
+          <button type="button" className="flex min-h-12 items-center text-start text-muted" onClick={onAdPrivacy}>
+            {tr("ads.privacy")}
+          </button>
         ) : null}
         {career ? (
           confirm ? (
@@ -1729,7 +1757,6 @@ function StoryCard({ career, onChange }: { career: Career; onChange: (c: Career)
 
 function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange: (c: Career) => void; onMenu: () => void }) {
   const { tr, text } = useTx();
-  const admin = useContext(AdminContext);
   const pending = career.pending!;
   const [reveal, setReveal] = useState<number | null>(null);
   const report = composeReport(pending);
@@ -1770,13 +1797,6 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
   function choose(index: number, optionId: string) {
     const next = resolveMoment(career, index, optionId);
     setReveal(index);
-    const following = pending.moments[index + 1];
-    // Halftime slot: off behind HALFTIME_INTERSTITIAL until the owner approves it.
-    if (HALFTIME_INTERSTITIAL && !admin && !career.race && following && pending.moments[index].minute <= 45 && following.minute > 45 && !career.adState.halftimeShownFixtureIds.includes(pending.base.fixtureId) && canShowSeasonInterstitial(career)) {
-      const marked = { ...countInterstitial(next), adState: { ...countInterstitial(next).adState, halftimeShownFixtureIds: [...next.adState.halftimeShownFixtureIds, pending.base.fixtureId] } };
-      showInterstitial("keymatch-half", () => onChange(marked));
-      return;
-    }
     onChange(next);
   }
 
@@ -2231,7 +2251,7 @@ function SummerScreen({
 /** True when rewarded clips can actually run: an ad client is configured, not admin, and no remove-ads entitlement. */
 function useAdsShown() {
   const [shown] = useState(() => {
-    if (!adsEnabled || adsSuppressed()) return false;
+    if (!adsEnabled() || adsSuppressed()) return false;
     try {
       return !loadDevice().removeAds.owned;
     } catch {
@@ -2254,6 +2274,10 @@ function SeasonScreen({
   onMenu: () => void;
   claimRace?: boolean;
 }) {
+  const [summaryReady, setSummaryReady] = useState(false);
+  useEffect(() => {
+    setSummaryReady(true);
+  }, []);
   const preview = career.growthPreview;
   const club = getClub(career.clubId);
   const league = getLeague(career.season.leagueId);
@@ -2461,7 +2485,7 @@ function SeasonScreen({
 
       <LeagueTable career={career} compact />
 
-      <button type="button" className="btn-primary mt-5 h-13 w-full text-base" onClick={onSummer}>
+      <button type="button" className="btn-primary mt-5 h-13 w-full text-base" disabled={!summaryReady} onClick={() => summaryReady && onSummer()}>
         {claimRace ? tr("dailyClaim") : tr("summerBtn")}
       </button>
     </Shell>

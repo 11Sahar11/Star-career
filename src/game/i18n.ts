@@ -1,11 +1,11 @@
 import { localClub } from "./clubnames";
+import { kvGet, kvSet } from "./kv";
 export type Lang = "en" | "he" | "es" | "fr";
 
 const KEY = "star-lang";
 function readLang(): Lang {
   try {
-    if (typeof localStorage === "undefined") return "en";
-    const saved = localStorage.getItem(KEY);
+    const saved = kvGet(KEY);
     return saved === "he" || saved === "es" || saved === "fr" ? saved : "en";
   } catch {
     return "en";
@@ -26,7 +26,7 @@ export function loadLang(): Lang {
 export function setLang(lang: Lang) {
   current = lang;
   try {
-    localStorage.setItem(KEY, lang);
+    kvSet(KEY, lang);
   } catch {
     /* private mode */
   }
@@ -128,13 +128,18 @@ const en: Record<string, string> = {
   form: "Form",
   streak: "{n}-day streak",
   adLabel: "Ad",
+  "ads.ageTitle": "Ads and your age",
+  "ads.ageCopy": "STAR is for ages 13 and up. In the UK and Europe, ads need to know if you are under 16.",
+  "ads.ageOver": "I am 16 or older",
+  "ads.ageUnder": "I am under 16",
+  "ads.privacy": "Ad privacy",
   adBanner: "Banner on the menu only. Never over a button.",
   adBreak: "Season break. On Google Play this is a full-screen ad you can skip.",
   adSkip: "Skip",
   adReward: "Watch a clip: +1 to one attribute. Once a season. Not in the daily race.",
   adRewardDone: "Used this season.",
   privacy: "Privacy & Play",
-  privacyLead: "STAR keeps the career on this device. An account is optional.",
+  privacyLead: "STAR keeps the career on this device. There is no account.",
   resetAsk: "Delete {name}'s career and start again?",
   cancel: "Cancel",
   newCareer: "New career",
@@ -430,9 +435,9 @@ const en: Record<string, string> = {
   appsN: "{n} apps",
   avgN: "avg {n}",
   noCareer: "No career yet. Start one and come back after the first matches.",
-  privacyAds: "Ads appear in two ways: a skippable break after a season, and optional clips you choose to watch (+1 to an attribute, an early return from injury, or double legacy points). Nothing runs during a match, and the daily race has no clips.",
-  privacyData: "Your career stays on this device. An account is optional; if you create one, we keep your email and name to sign you in, and nothing else. You can delete the account at any time on the account page.",
-  privacyAdsData: "Ads are served by Google, which may use cookies or your device's advertising ID to show and measure ads. You can reset or limit the advertising ID in your device settings.",
+  privacyAds: "On Android, one full-screen ad can play after a season. Nothing plays during a match, at halftime, or in the daily race. Optional clips you choose can add a reward. The browser build has no ads.",
+  privacyData: "Career, coins, achievements and the streak stay on this device. Nothing is sent to a STAR server, and there is no account to delete.",
+  privacyAdsData: "Android ads are for players 13 and older. They are not directed at children, and they are limited to a teen content rating. Google may use the advertising ID. You can reset or limit it in your device settings. A remove-ads flag on the device turns ads off.",
   privacyContact: "Questions or a deletion request: {email}.",
   lastResult: "Last result",
   formLast: "Form · last 5",
@@ -862,13 +867,18 @@ const he: Record<string, string> = {
   form: "כושר",
   streak: "רצף של {n} ימים",
   adLabel: "פרסומת",
+  "ads.ageTitle": "פרסומות והגיל שלך",
+  "ads.ageCopy": "STAR מגיל 13. בבריטניה ובאירופה הפרסומות צריכות לדעת אם אתה מתחת ל־16.",
+  "ads.ageOver": "אני בן 16 או יותר",
+  "ads.ageUnder": "אני מתחת ל־16",
+  "ads.privacy": "פרטיות פרסומות",
   adBanner: "באנר רק בתפריט. אף פעם לא על כפתור.",
   adBreak: "הפסקת עונה. בגוגל פליי זו מודעה במסך מלא שאפשר לדלג.",
   adSkip: "דלג",
   adReward: "צפייה בקליפ: +1 לתכונה. פעם בעונה. לא במרוץ היומי.",
   adRewardDone: "נוצל העונה.",
   privacy: "פרטיות ופליי",
-  privacyLead: "STAR שומר את הקריירה על המכשיר. חשבון הוא לא חובה.",
+  privacyLead: "STAR שומר את הקריירה על המכשיר. אין חשבון.",
   resetAsk: "למחוק את הקריירה של {name} ולהתחיל מחדש?",
   cancel: "ביטול",
   newCareer: "קריירה חדשה",
@@ -1164,9 +1174,9 @@ const he: Record<string, string> = {
   appsN: "{n} הופעות",
   avgN: "ממוצע {n}",
   noCareer: "עוד אין קריירה. מתחילים אחת וחוזרים אחרי המשחקים הראשונים.",
-  privacyAds: "פרסומות מופיעות בשתי צורות: הפסקה שאפשר לדלג עליה אחרי עונה, וקליפים שאתה בוחר לצפות בהם (+1 לתכונה, חזרה מוקדמת מפציעה, או נקודות מורשת כפולות). אין פרסומת באמצע משחק, ובמרוץ היומי אין קליפים.",
-  privacyData: "הקריירה שלך נשמרת על המכשיר. אם פותחים חשבון, שומרים את המייל והשם רק כדי להתחבר, ותו לא. אפשר למחוק את החשבון בכל רגע בעמוד החשבון.",
-  privacyAdsData: "הפרסומות מוגשות על ידי Google, שעשויה להשתמש בעוגיות או במזהה הפרסום של המכשיר כדי להציג ולמדוד פרסומות. אפשר לאפס או להגביל את מזהה הפרסום בהגדרות המכשיר.",
+  privacyAds: "באנדרואיד יכולה להופיע פרסומת אחת במסך מלא אחרי עונה. אין פרסומת באמצע משחק, בהפסקה, או במרוץ היומי. קליפים שאתה בוחר יכולים לתת פרס. בדפדפן אין פרסומות.",
+  privacyData: "קריירה, מטבעות, הישגים ורצף נשמרים על המכשיר. שום דבר לא נשלח לשרת של STAR, ואין חשבון למחיקה.",
+  privacyAdsData: "פרסומות באנדרואיד מיועדות לגיל 13 ומעלה. הן לא מכוונות לילדים, והתוכן מוגבל לדירוג נוער. Google עשויה להשתמש במזהה הפרסום. אפשר לאפס או להגביל אותו בהגדרות המכשיר. דגל הסרת פרסומות במכשיר מכבה אותן.",
   privacyContact: "שאלות או בקשה למחיקה: {email}.",
   lastResult: "תוצאה אחרונה",
   formLast: "כושר · 5 אחרונים",
@@ -1596,13 +1606,18 @@ const es: Record<string, string> = {
   form: "Forma",
   streak: "Racha de {n} días",
   adLabel: "Anuncio",
+  "ads.ageTitle": "Anuncios y tu edad",
+  "ads.ageCopy": "STAR es para mayores de 13. En el Reino Unido y Europa, los anuncios necesitan saber si tienes menos de 16.",
+  "ads.ageOver": "Tengo 16 o más",
+  "ads.ageUnder": "Tengo menos de 16",
+  "ads.privacy": "Privacidad de anuncios",
   adBanner: "Banner solo en el menú. Nunca encima de un botón.",
   adBreak: "Descanso de temporada. En Google Play es un anuncio a pantalla completa que se puede saltar.",
   adSkip: "Saltar",
   adReward: "Ver un clip: +1 a un atributo. Una vez por temporada. No en la carrera diaria.",
   adRewardDone: "Usado esta temporada.",
   privacy: "Privacidad y Play",
-  privacyLead: "STAR guarda la carrera en este dispositivo. La cuenta es opcional.",
+  privacyLead: "STAR guarda la carrera en este dispositivo. No hay cuenta.",
   resetAsk: "¿Borrar la carrera de {name} y empezar de nuevo?",
   cancel: "Cancelar",
   newCareer: "Nueva carrera",
@@ -1898,9 +1913,9 @@ const es: Record<string, string> = {
   appsN: "{n} partidos",
   avgN: "media {n}",
   noCareer: "Aún no hay carrera. Empieza una y vuelve tras los primeros partidos.",
-  privacyAds: "Los anuncios aparecen de dos formas: una pausa que puedes saltar tras una temporada y clips opcionales que eliges ver (+1 a un atributo, volver antes de una lesión o duplicar puntos de legado). Nada durante un partido, y la carrera diaria no tiene clips.",
-  privacyData: "Tu carrera se queda en este dispositivo. Si creas una cuenta, guardamos tu email y nombre solo para iniciar sesión. Puedes eliminar la cuenta cuando quieras en la página de la cuenta.",
-  privacyAdsData: "Los anuncios los sirve Google, que puede usar cookies o el ID de publicidad del dispositivo para mostrarlos y medirlos. Puedes restablecer o limitar ese ID en los ajustes del dispositivo.",
+  privacyAds: "En Android puede aparecer un anuncio a pantalla completa después de una temporada. Nada durante un partido, en el descanso, ni en la carrera diaria. Los clips que eliges pueden dar un premio. En el navegador no hay anuncios.",
+  privacyData: "La carrera, las monedas, los logros y la racha se quedan en el dispositivo. No se envía nada a un servidor de STAR, y no hay cuenta que borrar.",
+  privacyAdsData: "Los anuncios de Android son para jugadores de 13 años o más. No están dirigidos a niños y el contenido se limita a una clasificación para adolescentes. Google puede usar el ID de publicidad. Puedes restablecerlo o limitarlo en los ajustes del dispositivo. Un indicador de quitar anuncios en el dispositivo los apaga.",
   privacyContact: "Preguntas o solicitud de eliminación: {email}.",
   lastResult: "Último resultado",
   formLast: "Forma · últimos 5",
@@ -2330,13 +2345,18 @@ const fr: Record<string, string> = {
   form: "Forme",
   streak: "Série de {n} jours",
   adLabel: "Pub",
+  "ads.ageTitle": "Pubs et ton âge",
+  "ads.ageCopy": "STAR est à partir de 13 ans. Au Royaume-Uni et en Europe, les pubs doivent savoir si tu as moins de 16 ans.",
+  "ads.ageOver": "J'ai 16 ans ou plus",
+  "ads.ageUnder": "J'ai moins de 16 ans",
+  "ads.privacy": "Confidentialité des pubs",
   adBanner: "Bannière seulement au menu. Jamais sur un bouton.",
   adBreak: "Trêve. Sur Google Play, c'est une pub plein écran que l'on peut passer.",
   adSkip: "Passer",
   adReward: "Regarder un clip : +1 à une stat. Une fois par saison. Pas dans la course du jour.",
   adRewardDone: "Déjà utilisé cette saison.",
   privacy: "Confidentialité et Play",
-  privacyLead: "STAR garde la carrière sur cet appareil. Le compte est facultatif.",
+  privacyLead: "STAR garde la carrière sur cet appareil. Il n'y a pas de compte.",
   resetAsk: "Effacer la carrière de {name} et recommencer ?",
   cancel: "Annuler",
   newCareer: "Nouvelle carrière",
@@ -2632,9 +2652,9 @@ const fr: Record<string, string> = {
   appsN: "{n} matchs",
   avgN: "moyenne {n}",
   noCareer: "Pas encore de carrière. Commences-en une et reviens après les premiers matchs.",
-  privacyAds: "Les pubs apparaissent de deux façons : une pause passable après une saison, et des clips facultatifs que tu choisis (+1 à un attribut, retour anticipé de blessure, ou points d'héritage doublés). Rien pendant un match, et la course du jour n'a pas de clips.",
-  privacyData: "Ta carrière reste sur cet appareil. Si tu crées un compte, on garde ton e-mail et ton nom pour te connecter, rien d'autre. Tu peux supprimer le compte à tout moment sur la page du compte.",
-  privacyAdsData: "Les publicités sont servies par Google, qui peut utiliser des cookies ou l'identifiant publicitaire de l'appareil pour les afficher et les mesurer. Tu peux réinitialiser ou limiter cet identifiant dans les réglages de l'appareil.",
+  privacyAds: "Sur Android, une pub plein écran peut passer après une saison. Rien pendant un match, à la mi-temps, ni dans la course du jour. Les clips que tu choisis peuvent donner une récompense. Dans le navigateur, il n'y a pas de pub.",
+  privacyData: "La carrière, les pièces, les succès et la série restent sur l'appareil. Rien n'est envoyé à un serveur STAR, et il n'y a pas de compte à supprimer.",
+  privacyAdsData: "Les pubs Android s'adressent aux joueurs de 13 ans et plus. Elles ne visent pas les enfants, et le contenu est limité à un classement ado. Google peut utiliser l'identifiant publicitaire. Tu peux le réinitialiser ou le limiter dans les réglages de l'appareil. Un indicateur de suppression des pubs sur l'appareil les coupe.",
   privacyContact: "Questions ou demande de suppression : {email}.",
   lastResult: "Dernier résultat",
   formLast: "Forme · 5 derniers",
@@ -2998,7 +3018,7 @@ export function show(raw: string, lang: Lang = current): string {
   const named = (value: string) => (value.includes(".") ? t(value, undefined, lang) : localClub(value, lang));
   const name = named(a);
   const second = ["Quarter-final", "Semi-final", "Final", "Winners"].includes(b) ? t(`stage.${b}`, undefined, lang) : named(b);
-  let text = t(key, { n: b ? second : name, name, p: second, g: second, y: a }, lang);
+  const text = t(key, { n: b ? second : name, name, p: second, g: second, y: a }, lang);
   if (index >= 0 && text.includes("|")) {
     const bag = text.split("|");
     return bag[index] ?? bag[0] ?? text;
