@@ -1,93 +1,73 @@
-<div dir="rtl">
+# STAR on Google Play (Capacitor)
 
-# העלאת STAR לגוגל פליי
+STAR ships as an Android app. The APK contains the game files. It does not open a website and it does not set `server.url`.
 
-המשחק הוא אתר (PWA). לגוגל פליי עולה עטיפת אנדרואיד דקה שפותחת את האתר במסך מלא: **Trusted Web Activity (TWA)**, שנבנית עם **Bubblewrap**. כל עדכון לאתר מגיע לשחקנים מיד, בלי לשחרר גרסה חדשה בחנות.
+The application id is **`com.starcareer.game`**. It is approved. The one place to read it is [`app.config.json`](../app.config.json). `capacitor.config.ts` and `android/app/build.gradle` both read that file.
 
-## מה כבר מוכן בריפו
+## Build a debug APK
 
-| קובץ | מה הוא |
-|---|---|
-| `public/manifest.webmanifest` | המניפסט של האפליקציה: שם, צבעים, אייקונים 192/512 ואייקון maskable |
-| `public/icons/` | אייקונים לאפליקציה |
-| `store/play-icon-512.png` | האייקון לחנות (512×512) |
-| `store/feature-graphic-1024x500.png` | התמונה הראשית בדף החנות |
-| `android/twa-manifest.json` | ההגדרות ל־Bubblewrap (צריך להחליף את הדומיין) |
-| `android/assetlinks.template.json` | תבנית לקובץ שמוכיח לגוגל שהאתר והאפליקציה שלך |
-| `android/ads.txt.template` | תבנית ל־ads.txt של AdSense |
-| `src/game/ads.ts` | חיבור הפרסומות (כבוי עד שמגדירים מזהה מפרסם) |
-| `/privacy` | מדיניות הפרטיות (חובה בחנות) |
-| `/login` | הרשמה, התחברות ו**מחיקת חשבון** (חובה בחנות לאפליקציה עם הרשמה) |
-
-## שלבים
-
-### 1. דומיין קבוע
-צריך כתובת HTTPS קבועה למשחק, למשל `star-game.com`. מחליפים את `YOUR-DOMAIN.example` בכתובת הזאת בקובץ `android/twa-manifest.json`.
-
-### 2. חשבון מפתח בגוגל פליי
-נרשמים ב־Play Console. ההרשמה בתשלום חד־פעמי. לחשבון אישי חדש גוגל דורשת בדיקה סגורה עם בודקים לפני שמותר לפרסם, אז כדאי להתחיל את זה מוקדם.
-
-### 3. בניית האפליקציה (על המחשב שלך)
+```bash
+npm install
+npm run android:debug
 ```
-npm i -g @bubblewrap/cli
-cd android
-bubblewrap init --manifest=https://YOUR-DOMAIN/manifest.webmanifest
-bubblewrap build
+
+That command builds the static web app, copies it into the Android project, and runs `assembleDebug`. The APK is:
+
+`android/app/build/outputs/apk/debug/app-debug.apk`
+
+Pull requests also build this APK and upload it as an artifact (`.github/workflows/android.yml`).
+
+## Release build and the upload key
+
+The upload keystore is **not in this repo**. Do not commit `*.keystore`, `*.jks`, `local.properties`, or signing passwords.
+
+Create the upload key on the owner's machine and keep the file and passwords somewhere else (a password manager, not git):
+
+```bash
+keytool -genkeypair -v -keystore star-upload.keystore -alias star -keyalg RSA -keysize 2048 -validity 10000
 ```
-`bubblewrap build` מייצר קובץ `app-release-bundle.aab`, וזה הקובץ שמעלים לחנות. בפעם הראשונה Bubblewrap יוצר מפתח חתימה (`android.keystore`). **שמור אותו ואת הסיסמה במקום בטוח**, כי בלעדיו אי אפשר לעדכן את האפליקציה. הוא לא נכנס לגיט.
 
-### 4. אימות הדומיין (Digital Asset Links)
-1. ב־Play Console: **App integrity → App signing**, מעתיקים את ה־**SHA-256** של מפתח החתימה של גוגל.
-2. מעתיקים את `android/assetlinks.template.json` לנתיב `public/.well-known/assetlinks.json` ומדביקים את ה־SHA-256.
-3. מעלים לאתר ובודקים שהכתובת `https://YOUR-DOMAIN/.well-known/assetlinks.json` נפתחת.
+`android/app/build.gradle` only applies a release signing config when all of these are set in the environment (or in `android/keystore.properties`, which is gitignored):
 
-בלי השלב הזה האפליקציה תיפתח עם שורת כתובת של דפדפן למעלה.
+- `STAR_UPLOAD_STORE_FILE` — path to the keystore, outside the repo
+- `STAR_UPLOAD_STORE_PASSWORD`
+- `STAR_UPLOAD_KEY_ALIAS`
+- `STAR_UPLOAD_KEY_PASSWORD`
 
-### 5. פרסומות
-- נרשמים ל־AdSense ומבקשים גישה ל־**H5 Games Ads**.
-- מגדירים בסביבת ההרצה `VITE_ADSENSE_CLIENT=ca-pub-…` (ולבדיקות גם `VITE_ADSENSE_TEST=on`).
-- מעתיקים את `android/ads.txt.template` ל־`public/ads.txt` עם מזהה המפרסם שלך.
-- **חשוב:** לפי מדריך AdSense, באפליקציה שבבעלותך הדרך התקינה לפרסומות היא AdMob. ל־TWA אין SDK של AdMob. לכן לפני ההשקה כדאי לבדוק מול גוגל אם AdSense מאושר אצלך בתוך TWA. אם לא, החלופה היא לעטוף את המשחק ב־Capacitor עם AdMob. הקוד במשחק בנוי כך שמחליפים רק את `src/game/ads.ts`.
+Then:
 
-כללי הבית שכבר בקוד: אין פרסומת באמצע משחק, אין פרסומת מסך מלא בכניסה הראשונה, לכל היותר אחת כל 3 דקות, והקליפים עם הפרס תמיד לפי בחירה.
+```bash
+npm run build
+npx cap sync android
+cd android && ./gradlew bundleRelease
+```
 
-### 6. טופסי החנות
-- **קהל יעד:** מומלץ **13 ומעלה**. אם מסמנים קהל מתחת לגיל 13, המשחק נכנס לתוכנית Families, ושם מותר להשתמש רק ברשתות פרסום שמאושרות לילדים.
-- **סיווג תוכן (IARC):** אין אלימות, אין הימורים, אין צ'אט בין שחקנים. יש פרסומות.
-- **Data safety:** בלי חשבון, הנתונים נשמרים רק במכשיר. עם חשבון, נאספים מייל ושם לצורך התחברות, לא משותפים עם אחרים, ואפשר למחוק אותם. הפרסומות אוספות מזהה פרסום (Advertising ID) דרך גוגל.
-- **מחיקת חשבון:** קישור למחיקה מהאתר: `https://YOUR-DOMAIN/login`.
-- **מדיניות פרטיות:** `https://YOUR-DOMAIN/privacy`.
-- **Contains ads:** כן.
+The file to upload is `android/app/build/outputs/bundle/release/app-release.aab`.
 
-### 7. צילומי מסך
-צריך לפחות 2 צילומי מסך של טלפון. מומלץ 4–6: בית, מרכז העונה, רגע הכרעה, סיכום עונה, הצעות חוזה והישגים. צלם מהטלפון אחרי שהגרסה באוויר.
+In Play Console, turn on **Play App Signing**. Google holds the app signing key. The keystore above is only the upload key. If it is lost, Google can reset the upload key; the app signing key stays with Google.
 
-## טקסטים לדף החנות
+## Ads
 
-**שם (עד 30 תווים):** STAR – קריירת כדורגל
+Version 1 uses Google's **official test** ad units (`app.config.json`, `ads.testOnly: true`). Real AdMob ids come later: put them in that file and set `testOnly` to false.
 
-**תיאור קצר (עד 80 תווים):** בונים כוכב כדורגל מגיל 16. רגעי הכרעה, העברות, והמרוץ היומי לבלון ד'אור.
+Rules in the game:
 
-**תיאור מלא:**
-מתחילים בגיל 16 בליגה נמוכה וחולמים על גמר אירופה.
-• קריירה שלמה בדקות: עונה נמשכת כמה דקות, אפשר לשחק בהפסקה.
-• רגעי הכרעה: במשחקים הגדולים אתה מחליט – לבעוט, לעקוף את השוער או למסור.
-• החלטות בין המשחקים: ראיונות, סרט הקפטן, סוכן וקבוצה גדולה שעוקבת.
-• העברות וחוזים: משווים הצעות לפי שכר, תפקיד ודקות משחק.
-• המרוץ היומי: כולם מתחילים מאותה נקודה. מי יגיע לבלון ד'אור בפחות עונות? משתפים את התוצאה עם החברים.
-• מורשת והישגים: כל קריירה שנגמרת פותחת יתרונות לקריירה הבאה.
-• עברית, אנגלית, ספרדית וצרפתית.
+- One forced ad, after a season (`season-end`). No ad after a match, at halftime, or in the daily race.
+- Rewarded clips only when the player chooses one.
+- No banners.
+- If the device save has `removeAds.owned`, ads are skipped and rewards are granted without a clip.
+- Requests are for ages **13+**: max content rating Teen (T), and the request is not tagged `tagForChildDirectedTreatment`.
 
-**English listing**
-- Title: STAR – Football Career
-- Short description: Build a football star from 16. Big-match moments, transfers, a daily race.
-- Full description: Start at 16 in a lower league and climb to a European final. Play a full season in minutes, make the call in the big moments (shoot, take on the keeper, or square it), handle the press and your agent between matches, compare contract offers, and race everyone to the Golden Star Award in the daily challenge. Finished careers earn legacy perks for the next one.
+The browser build does not load AdMob. Rewards are granted immediately and the interstitial is skipped.
 
-## לפני ההשקה: נקודות פתוחות
+## Still needed from the owner
 
-1. **שמות:** כל שמות הקבוצות, הליגות, הגביעים, הפרסים והשחקנים במשחק בדויים. שמות המדינות אמיתיים, וזה מותר.
-2. **התווית "Created with Grok":** הפלטפורמה של Grok מזריקה תווית לאתר. באפליקציה בחנות זה ייראה לא מקצועי. מכבים אותה בהגדרות הפרויקט ב־Grok, לא בקוד.
-3. **הפעלת חשבונות:** בהגדרות הפרויקט ב־Grok צריך להפעיל התחברות (`VITE_AUTH_ENABLED`). בלי זה עמוד ההרשמה לא פעיל.
-4. **מדידה:** מומלץ לחבר Google Analytics או Firebase לפני ההשקה, כדי לדעת כמה שחקנים חוזרים אחרי יום ואחרי שבוע.
+1. **Play Console** app for `com.starcareer.game`, with Play App Signing enabled.
+2. The **upload keystore**, stored outside this repo.
+3. **Real AdMob app id and unit ids** when the owner is ready to leave test ads. The test app id in the manifest must be replaced at the same time (`app.config.json` → `ads.androidAppId`, applied by Gradle).
+4. A public **privacy policy** URL. The in-app page is `/privacy`. Host that text on a free static host (GitHub Pages is enough) and paste the URL into Play Console. The listing is **13+**, contains ads, and stores the career only on the device (no account in version 1).
+5. Store listing assets already in `store/` (icon and feature graphic), plus phone screenshots.
 
-</div>
+## Icons
+
+Android uses an adaptive icon and a splash screen generated from `public/icons/icon-512-maskable.png` and `public/icons/icon-512.png`. They live under `android/app/src/main/res/`.

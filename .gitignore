@@ -1,6 +1,7 @@
 node_modules
 .vercel
-.grok
+.grok/*
+!.grok/app-env.json
 artifacts
 screenshots
 attachments
@@ -9,5 +10,9 @@ dist
 .env
 .env.*
 *.log
+*.keystore
+*.jks
+android/keystore.properties
+android/local.properties
 .node_modules.lock
 .impeccable/review/

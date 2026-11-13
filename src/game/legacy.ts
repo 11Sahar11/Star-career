@@ -1,4 +1,5 @@
 import { isTopLeague, overall, statCap } from "./engine";
+import { kvGet, kvSet } from "./kv";
 import { ECONOMY, OPEN_COUNTRIES } from "./economy";
 import { ATTR_KEYS, type Career } from "./types";
 
@@ -27,7 +28,7 @@ const EMPTY: Legacy = { points: 0, earned: 0, perks: [], paid: [], doubled: [] }
 
 export function loadLegacy(): Legacy {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = kvGet(KEY);
     if (!raw) return { ...EMPTY };
     const data = JSON.parse(raw) as Partial<Legacy>;
     return {
@@ -44,7 +45,7 @@ export function loadLegacy(): Legacy {
 
 function saveLegacy(legacy: Legacy) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(legacy));
+    kvSet(KEY, JSON.stringify(legacy));
   } catch {
     /* private mode: legacy just will not persist */
   }
@@ -159,7 +160,7 @@ const DEVICE_KEY = "star-economy-v1";
 export function loadDevice(): DeviceEconomy {
   const empty: DeviceEconomy = { unlockedCountries: [], dailyLoginDate: null, dailyRetryDate: null, removeAds: { owned: false, checkedAt: 0 }, coinBonus: 0, careersFinished: 0, settled: [], cosmetics: [] };
   try {
-    const raw = localStorage.getItem(DEVICE_KEY);
+    const raw = kvGet(DEVICE_KEY);
     if (!raw) return empty;
     const data = JSON.parse(raw) as Partial<DeviceEconomy>;
     return {
@@ -179,7 +180,7 @@ export function loadDevice(): DeviceEconomy {
 
 export function saveDevice(device: DeviceEconomy) {
   try {
-    localStorage.setItem(DEVICE_KEY, JSON.stringify(device));
+    kvSet(DEVICE_KEY, JSON.stringify(device));
   } catch {
     /* ignore */
   }

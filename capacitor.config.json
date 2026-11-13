@@ -1,0 +1,13 @@
+{
+  "appId": "com.starcareer.game",
+  "appName": "STAR",
+  "webDir": "dist/client",
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "launchShowDuration": 400,
+      "backgroundColor": "#0b1433",
+      "showSpinner": false
+    }
+  }
+}

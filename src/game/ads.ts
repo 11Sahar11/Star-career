@@ -1,55 +1,63 @@
 /**
- * Ads through Google's H5 Games Ad Placement API (AdSense for games).
+ * Ads for the Android app, through AdMob (Capacitor). The browser build never
+ * requests an ad: a rewarded clip grants its reward at once and an interstitial
+ * is skipped.
  *
- * Off until VITE_ADSENSE_CLIENT is set (for example "ca-pub-1234567890123456").
- * While off, a rewarded clip grants its reward at once and an interstitial is
- * skipped, so the game plays the same with or without ads.
- * VITE_ADSENSE_TEST=on loads Google's test ads.
- *
- * House rules (also stated on the privacy page):
- * - interstitials only between seasons (a key-match halftime slot exists but is
- *   off behind HALFTIME_INTERSTITIAL in economy.ts until the owner approves it);
- * - at most 2 interstitials per season, counted in the save;
- * - no interstitial in a player's first session or in the daily race;
- * - at least three minutes between interstitials, and none within 120s of a rewarded clip;
- * - rewarded clips are always the player's choice; no banners anywhere.
- * - suppressed (admin, or remove-ads owners): no interstitial, rewards granted without a clip.
+ * Owner rules:
+ * - exactly one forced placement, the season-end interstitial (`season-end`);
+ * - any other name is ignored, so a match, halftime, or menu cannot force an ad;
+ * - rewarded clips only when the player asks for one;
+ * - no banners;
+ * - the device remove-ads flag and debug-admin suppression skip the interstitial
+ *   and grant rewards without a clip;
+ * - ages 13+: max content rating Teen (T / PG-13). Child-directed treatment is
+ *   not set (the request is not tagged for children);
+ * - unit ids are Google's official TEST ids while `app.config.json` says testOnly.
  */
 
+import { Capacitor } from "@capacitor/core";
+import appConfig from "../../app.config.json" with { type: "json" };
 import { track } from "./analytics";
+import { kvGet, kvSet } from "./kv";
 
-type AdBreakPlacement = {
-  type: "start" | "pause" | "next" | "browse" | "reward";
-  name: string;
-  beforeAd?: () => void;
-  afterAd?: () => void;
-  beforeReward?: (showAdFn: () => void) => void;
-  adDismissed?: () => void;
-  adViewed?: () => void;
-  adBreakDone?: (info: { breakStatus: string }) => void;
-};
-
-type AdWindow = Window & {
-  adsbygoogle?: unknown[];
-  adBreak?: (placement: AdBreakPlacement) => void;
-  adConfig?: (config: Record<string, unknown>) => void;
-};
-
-const ADMOB_INTERSTITIAL = (import.meta.env.VITE_ADMOB_INTERSTITIAL_SLOT as string | undefined)?.trim() || "";
-const ADMOB_REWARDED = (import.meta.env.VITE_ADMOB_REWARDED_SLOT as string | undefined)?.trim() || "";
-const CLIENT = (import.meta.env.VITE_ADSENSE_CLIENT as string | undefined)?.trim() || "";
-const TEST = (import.meta.env.VITE_ADSENSE_TEST as string | undefined) === "on";
-const GAP_MS = 3 * 60 * 1000;
 const SESSIONS_KEY = "star-sessions";
+const ECONOMY_KEY = "star-economy-v1";
+export const SEASON_END_PLACEMENT = "season-end";
+
+/** Google's published sample units. Used whenever testOnly is set. */
+export const GOOGLE_TEST_ADS = {
+  androidAppId: "ca-app-pub-3940256099942544~3347511713",
+  interstitial: "ca-app-pub-3940256099942544/1033173712",
+  rewarded: "ca-app-pub-3940256099942544/5224354917",
+} as const;
 
 const REWARD_COOLDOWN_MS = 120 * 1000;
-const REWARD_TIMEOUT_MS = 8000;
 
-let ready = false;
+let starting: Promise<boolean> | null = null;
 let lastRewardedAt = 0;
 let suppressed = false;
 
-/** Admin play and remove-ads owners: no ads are requested at all, so nothing counts in ad stats. */
+type AdMobModule = typeof import("@capacitor-community/admob");
+
+/** True only inside the native app, where an ad can actually play. */
+export function adsEnabled() {
+  try {
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
+}
+
+export function resolvedAdUnitIds() {
+  if (appConfig.ads.testOnly) return GOOGLE_TEST_ADS;
+  return {
+    androidAppId: appConfig.ads.androidAppId,
+    interstitial: appConfig.ads.interstitial,
+    rewarded: appConfig.ads.rewarded,
+  };
+}
+
+/** Admin play: nothing is requested, and rewards are granted without a clip. */
 export function setAdsSuppressed(value: boolean) {
   suppressed = value;
 }
@@ -57,103 +65,142 @@ export function setAdsSuppressed(value: boolean) {
 export function adsSuppressed() {
   return suppressed;
 }
-let lastInterstitial = 0;
-let firstSession = true;
 
-export const adsEnabled = Boolean(CLIENT);
+function removeAdsOwned() {
+  try {
+    const raw = kvGet(ECONOMY_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw) as { removeAds?: { owned?: boolean } };
+    return data.removeAds?.owned === true;
+  } catch {
+    return false;
+  }
+}
 
-/** Loads the ad script once. Safe to call on every boot. */
+function adsBlocked() {
+  return suppressed || removeAdsOwned();
+}
+
+/** Loads the session counter and, on Android only, initializes AdMob. */
 export function initAds() {
   if (typeof window === "undefined") return;
   try {
-    const count = Number(localStorage.getItem(SESSIONS_KEY) || "0") + 1;
-    localStorage.setItem(SESSIONS_KEY, String(count));
-    firstSession = count <= 1;
+    const count = Number(kvGet(SESSIONS_KEY) || "0") + 1;
+    kvSet(SESSIONS_KEY, String(count));
   } catch {
-    firstSession = false;
+    /* ignore */
   }
-  if (!CLIENT || ready) return;
-  ready = true;
-  const w = window as AdWindow;
-  w.adsbygoogle = w.adsbygoogle || [];
-  const push = (placement: unknown) => {
-    (w.adsbygoogle as unknown[]).push(placement);
-  };
-  w.adBreak = push as AdWindow["adBreak"];
-  w.adConfig = push as AdWindow["adConfig"];
-  const script = document.createElement("script");
-  script.async = true;
-  script.crossOrigin = "anonymous";
-  script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(CLIENT)}`;
-  script.setAttribute("data-ad-frequency-hint", "180s");
-  if (TEST) script.setAttribute("data-adbreak-test", "on");
-  if (ADMOB_INTERSTITIAL) script.setAttribute("data-admob-interstitial-slot", ADMOB_INTERSTITIAL);
-  if (ADMOB_REWARDED) script.setAttribute("data-admob-rewarded-slot", ADMOB_REWARDED);
-  document.head.appendChild(script);
-  w.adConfig?.({ preloadAdBreaks: "on", sound: "on" });
+  if (adsEnabled()) void ensureAds();
 }
 
-/** A full-screen ad at a natural break. Calls `done` whether or not an ad showed; `shown` only when one was requested. */
+async function ensureAds(): Promise<AdMobModule | null> {
+  if (!adsEnabled() || adsBlocked()) return null;
+  if (!starting) {
+    starting = (async () => {
+      const admob = await import("@capacitor-community/admob");
+      await admob.AdMob.initialize({
+        initializeForTesting: appConfig.ads.testOnly,
+        maxAdContentRating: admob.MaxAdContentRating.Teen,
+      });
+      return true;
+    })().catch(() => false);
+  }
+  const ok = await starting;
+  if (!ok) return null;
+  return import("@capacitor-community/admob");
+}
+
+function settleOnce(run: () => void) {
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    run();
+  };
+}
+
+/**
+ * The one forced ad, after a season. `done` always runs, after the ad closes
+ * when one was shown. `shown` runs only when an interstitial was presented.
+ * Any placement other than season-end is ignored.
+ */
 export function showInterstitial(name: string, done: () => void, shown?: () => void) {
-  const w = typeof window === "undefined" ? null : (window as AdWindow);
-  const now = Date.now();
-  if (suppressed || !w?.adBreak || !CLIENT || firstSession || now - lastInterstitial < GAP_MS || now - lastRewardedAt < REWARD_COOLDOWN_MS) {
-    done();
+  const finish = settleOnce(done);
+  if (name !== SEASON_END_PLACEMENT || !adsEnabled() || adsBlocked() || Date.now() - lastRewardedAt < REWARD_COOLDOWN_MS) {
+    finish();
     return;
   }
-  lastInterstitial = now;
-  shown?.();
-  track("interstitial_shown", { placement: name });
-  let finished = false;
-  const finish = () => {
-    if (finished) return;
-    finished = true;
-    done();
-  };
-  w.adBreak({ type: "next", name, adBreakDone: finish });
-  // The API calls adBreakDone even when no ad is available; this is a safety net.
-  window.setTimeout(finish, 4000);
+  void (async () => {
+    try {
+      const admob = await ensureAds();
+      if (!admob) return;
+      const ids = resolvedAdUnitIds();
+      let closed = false;
+      const untilClosed = new Promise<void>((resolve) => {
+        const end = () => {
+          if (closed) return;
+          closed = true;
+          resolve();
+        };
+        void admob.AdMob.addListener(admob.InterstitialAdPluginEvents.Dismissed, end);
+        void admob.AdMob.addListener(admob.InterstitialAdPluginEvents.FailedToShow, end);
+      });
+      await admob.AdMob.prepareInterstitial({ adId: ids.interstitial, isTesting: appConfig.ads.testOnly });
+      shown?.();
+      track("interstitial_shown", { placement: name });
+      await admob.AdMob.showInterstitial();
+      await untilClosed;
+    } catch {
+      /* no fill — the season still continues */
+    } finally {
+      finish();
+    }
+  })();
 }
 
 /**
  * A rewarded clip the player chose. `onReward` runs only when the clip was
- * watched; with ads off or suppressed it runs at once. `onUnavailable` runs when
- * no clip could be shown (also after 8s with no answer), `onDismissed` when the
- * player closed it early. Neither consumes a cap: the caller only counts on reward.
+ * watched; with ads off, suppressed, or remove-ads it runs at once.
+ * `onUnavailable` when no clip could be shown, `onDismissed` when it was closed early.
  */
 export function showRewarded(name: string, onReward: () => void, onUnavailable?: () => void, onDismissed?: () => void) {
-  const w = typeof window === "undefined" ? null : (window as AdWindow);
-  if (suppressed || !CLIENT || !w?.adBreak) {
+  if (!adsEnabled() || adsBlocked()) {
     onReward();
     return;
   }
-  let settled = false;
-  let offered = false;
-  const settle = (fn?: () => void) => {
-    if (settled) return;
-    settled = true;
-    window.clearTimeout(timer);
-    fn?.();
-  };
-  const timer = window.setTimeout(() => {
-    if (!offered) settle(onUnavailable);
-  }, REWARD_TIMEOUT_MS);
-  w.adBreak({
-    type: "reward",
-    name,
-    beforeReward: (showAdFn) => {
-      offered = true;
-      showAdFn();
-    },
-    adViewed: () => {
+  void (async () => {
+    try {
+      const admob = await ensureAds();
+      if (!admob) {
+        onUnavailable?.();
+        return;
+      }
+      const ids = resolvedAdUnitIds();
+      let rewarded = false;
+      let end = () => {};
+      const untilClosed = new Promise<void>((resolve) => {
+        let closed = false;
+        end = () => {
+          if (closed) return;
+          closed = true;
+          resolve();
+        };
+        void admob.AdMob.addListener(admob.RewardAdPluginEvents.Rewarded, () => {
+          rewarded = true;
+        });
+        void admob.AdMob.addListener(admob.RewardAdPluginEvents.Dismissed, end);
+        void admob.AdMob.addListener(admob.RewardAdPluginEvents.FailedToShow, end);
+      });
+      await admob.AdMob.prepareRewardVideoAd({ adId: ids.rewarded, isTesting: appConfig.ads.testOnly });
+      void admob.AdMob.showRewardVideoAd().catch(() => end());
+      await untilClosed;
       lastRewardedAt = Date.now();
-      track("rewarded_watched", { placement: name });
-      settle(onReward);
-    },
-    adDismissed: () => {
-      lastRewardedAt = Date.now();
-      settle(onDismissed);
-    },
-    adBreakDone: () => settle(offered ? onDismissed : onUnavailable),
-  });
+      if (rewarded) {
+        track("rewarded_watched", { placement: name });
+        onReward();
+      } else onDismissed?.();
+    } catch {
+      onUnavailable?.();
+    }
+  })();
 }
