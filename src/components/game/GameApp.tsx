@@ -1693,6 +1693,13 @@ function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onCh
   );
 }
 
+/** "+1" and "48%" stay left-to-right inside Hebrew odds. */
+function OddsText({ text }: { text: string }) {
+  return text.split(/(\+\d+|\d+%)/g).map((part, index) =>
+    /^\+\d+$|^\d+%$/.test(part) ? <bdi key={index} dir="ltr">{part}</bdi> : <span key={index}>{part}</span>,
+  );
+}
+
 function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange: (c: Career) => void; onMenu: () => void }) {
   const club = getClub(career.clubId);
   const camp = career.screen === "camp";
@@ -1733,7 +1740,7 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
         {camp ? tr("campAsk") : tr("breakAsk", { avg: avg ? tr("avgBit", { n: avg.toFixed(1) }) : "" })}
       </p>
       {career.premiumCamp ? <p className="mt-2 text-sm font-semibold text-accent">{tr("eco.premiumPick")}</p> : null}
-      {oddsLine ? <p className="mt-3 text-sm font-semibold leading-5 text-muted" data-train-odds="shared">{oddsLine}</p> : null}
+      {oddsLine ? <p className="mt-3 text-sm font-semibold leading-5 text-muted" data-train-odds="shared"><OddsText text={oddsLine} /></p> : null}
       <div className="mt-2 grid gap-2">
         {ATTR_KEYS.map((key) => {
           const picked = reveal?.key === key;
@@ -1753,7 +1760,7 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
               >
                 <span className="min-w-0">
                   <span className="block font-semibold">{tr(`attr.${key}`)}</span>
-                  {ownOdds ? <span className="mt-0.5 block text-xs font-medium leading-4 text-muted" data-train-odds={key}>{ownOdds}</span> : null}
+                  {ownOdds ? <span className="mt-0.5 block text-xs font-medium leading-4 text-muted" data-train-odds={key}><OddsText text={ownOdds} /></span> : null}
                 </span>
                 <span className={`num text-lg font-bold ${picked ? (delta > 0 ? "text-good" : delta < 0 ? "text-bad" : "text-muted") : ""} ${picked ? "train-value" : ""}`}>
                   {value}
