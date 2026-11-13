@@ -77,7 +77,7 @@ import { cname, loadLang, setLang, show, t, type Lang } from "@/game/i18n";
 import { hydrateKv, kvGet, kvSet } from "@/game/kv";
 import { STORIES, answerStory, storyAttr } from "@/game/stories";
 import { ACHIEVEMENTS, checkAchievements, loadUnlocked } from "@/game/achievements";
-import { adsEnabled, adsSuppressed, initAds, setAdsSuppressed, showInterstitial, showRewarded } from "@/game/ads";
+import { adsEnabled, adsSuppressed, adAge, adPrivacyOptionsRequired, initAds, openAdPrivacyOptions, prepareAds, setAdAge, setAdsSuppressed, showInterstitial, showRewarded, type AdAge } from "@/game/ads";
 import {
   CATALOG,
   COSMETIC_IDS,
@@ -146,6 +146,8 @@ export function GameApp() {
   const [lang, setLangState] = useState<Lang>("en");
   const [toasts, setToasts] = useState<string[]>([]);
   const admin = debugAdmin;
+  const [adAgePrompt, setAdAgePrompt] = useState(false);
+  const [adPrivacy, setAdPrivacy] = useState(false);
   const [storeOpen, setStoreOpen] = useState<boolean | "player">(false);
   /** Set while the season-end interstitial is running, so a second tap cannot replay an old state. */
   const summerLock = useRef(false);
@@ -179,6 +181,10 @@ export function GameApp() {
       setStreak(settled);
       if (settled.freezesUsed) track("streak_freeze_used", { used: settled.freezesUsed, streak: settled.n });
       initAds();
+      if (!admin && adsEnabled() && !loadDevice().removeAds.owned) {
+        if (adAge()) void prepareAds().then(() => setAdPrivacy(adPrivacyOptionsRequired()));
+        else setAdAgePrompt(true);
+      }
       if (!admin) trackDailyOpen();
       try {
         const { Capacitor } = await import("@capacitor/core");
@@ -326,6 +332,13 @@ export function GameApp() {
         onLegacy={() => setView("legacy")}
         onAchievements={() => setView("achievements")}
         onAdmin={() => setView("admin")}
+        adAgePrompt={adAgePrompt}
+        onAdAge={(value) => {
+          setAdAgePrompt(false);
+          void setAdAge(value).then(() => setAdPrivacy(adPrivacyOptionsRequired()));
+        }}
+        adPrivacy={adPrivacy}
+        onAdPrivacy={() => void openAdPrivacyOptions()}
         onChange={update}
         streak={streak}
         onNew={() => {
@@ -421,7 +434,6 @@ export function GameApp() {
           summerLock.current = true;
           let counted = run;
           showInterstitial(
-            "season-end",
             () => {
               // Idempotent: only move on if the career is still on this season screen.
               setCareer((current) => {
@@ -1069,6 +1081,10 @@ function Home({
   onChange,
   dailyBest,
   streak,
+  adAgePrompt,
+  onAdAge,
+  adPrivacy,
+  onAdPrivacy,
 }: {
   career: Career | null;
   sound: boolean;
@@ -1087,6 +1103,10 @@ function Home({
   onChange: (c: Career) => void;
   dailyBest: number | null;
   streak: StreakState | null;
+  adAgePrompt: boolean;
+  onAdAge: (value: AdAge) => void;
+  adPrivacy: boolean;
+  onAdPrivacy: () => void;
 }) {
   const { tr, text } = useTx();
   const [confirm, setConfirm] = useState(false);
@@ -1215,6 +1235,19 @@ function Home({
 
       <StreakLine streak={streak} onDaily={onDaily} />
 
+      {adAgePrompt ? (
+        <section className="card mt-4 grid gap-2 px-4 py-4">
+          <p className="font-semibold">{tr("ads.ageTitle")}</p>
+          <p className="text-sm leading-6 text-muted">{tr("ads.ageCopy")}</p>
+          <button type="button" className="btn-primary h-12" onClick={() => onAdAge("16plus")}>
+            {tr("ads.ageOver")}
+          </button>
+          <button type="button" className="btn-ghost h-12" onClick={() => onAdAge("under")}>
+            {tr("ads.ageUnder")}
+          </button>
+        </section>
+      ) : null}
+
       <div className="mt-6 grid gap-1 border-t border-line pt-3 text-sm">
         <div className="flex min-h-12 items-center justify-between gap-3">
           <span className="text-muted">{tr("settings")}</span>
@@ -1225,6 +1258,11 @@ function Home({
             </button>
           </span>
         </div>
+        {adPrivacy ? (
+          <button type="button" className="flex min-h-12 items-center text-start text-muted" onClick={onAdPrivacy}>
+            {tr("ads.privacy")}
+          </button>
+        ) : null}
         {career ? (
           confirm ? (
             <div className="card px-4 py-3">
@@ -2236,6 +2274,10 @@ function SeasonScreen({
   onMenu: () => void;
   claimRace?: boolean;
 }) {
+  const [summaryReady, setSummaryReady] = useState(false);
+  useEffect(() => {
+    setSummaryReady(true);
+  }, []);
   const preview = career.growthPreview;
   const club = getClub(career.clubId);
   const league = getLeague(career.season.leagueId);
@@ -2443,7 +2485,7 @@ function SeasonScreen({
 
       <LeagueTable career={career} compact />
 
-      <button type="button" className="btn-primary mt-5 h-13 w-full text-base" onClick={onSummer}>
+      <button type="button" className="btn-primary mt-5 h-13 w-full text-base" disabled={!summaryReady} onClick={() => summaryReady && onSummer()}>
         {claimRace ? tr("dailyClaim") : tr("summerBtn")}
       </button>
     </Shell>

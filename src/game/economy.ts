@@ -39,7 +39,7 @@ export const ECONOMY = {
   caps: {
     doubleCoinsPerSeason: 4,
     retryPerSeason: 2,
-    interstitialsPerSeason: 1,
+    interstitialsPerSeason: 2,
   },
   keyCampBonus: 6,
   /** Big-club trial: base signing chance range and the ad-boost cap. */

@@ -28,6 +28,7 @@ export const KV_KEYS = [
   "star-economy-v1",
   "star-first-open",
   "star-last-open",
+  "star-ad-age",
 ] as const;
 
 export type KvKey = (typeof KV_KEYS)[number];
