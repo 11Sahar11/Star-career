@@ -3,16 +3,15 @@
  * requests an ad: a rewarded clip grants its reward at once and an interstitial
  * is skipped.
  *
- * Owner rules:
- * - exactly one forced placement, the season-end interstitial (`season-end`);
- * - any other name is ignored, so a match, halftime, or menu cannot force an ad;
- * - rewarded clips only when the player asks for one;
- * - no banners;
- * - the device remove-ads flag and debug-admin suppression skip the interstitial
- *   and grant rewards without a clip;
- * - ages 13+: max content rating Teen (T / PG-13). Child-directed treatment is
- *   not set (the request is not tagged for children);
- * - unit ids are Google's official TEST ids while `app.config.json` says testOnly.
+ * This file loads ads. It does not decide how often a season interstitial
+ * may play. That belongs to the caller. `showInterstitial` only presents a
+ * preloaded full-screen ad and waits until AdMob's own close button dismisses it.
+ *
+ * Before the first request: Google UMP consent (EEA/UK form). Test builds
+ * force UMP debug geography to EEA so that form can be tried. Players who say
+ * they are under 16 are tagged tagForUnderAgeOfConsent. Child-directed
+ * treatment is never set. Max content rating is Teen. Unit ids are Google's
+ * official TEST ids while `app.config.json` says testOnly.
  */
 
 import { Capacitor } from "@capacitor/core";
@@ -22,7 +21,7 @@ import { kvGet, kvSet } from "./kv";
 
 const SESSIONS_KEY = "star-sessions";
 const ECONOMY_KEY = "star-economy-v1";
-export const SEASON_END_PLACEMENT = "season-end";
+const AD_AGE_KEY = "star-ad-age";
 
 /** Google's published sample units. Used whenever testOnly is set. */
 export const GOOGLE_TEST_ADS = {
@@ -31,11 +30,11 @@ export const GOOGLE_TEST_ADS = {
   rewarded: "ca-app-pub-3940256099942544/5224354917",
 } as const;
 
-const REWARD_COOLDOWN_MS = 120 * 1000;
+export type AdAge = "under" | "16plus";
 
 let starting: Promise<boolean> | null = null;
-let lastRewardedAt = 0;
 let suppressed = false;
+let privacyOptionsRequired = false;
 
 type AdMobModule = typeof import("@capacitor-community/admob");
 
@@ -66,6 +65,27 @@ export function adsSuppressed() {
   return suppressed;
 }
 
+export function adAge(): AdAge | null {
+  const raw = kvGet(AD_AGE_KEY);
+  return raw === "under" || raw === "16plus" ? raw : null;
+}
+
+/** Saves the age answer, then runs consent and preloads. No ad request happens before this. */
+export function setAdAge(value: AdAge): Promise<void> {
+  kvSet(AD_AGE_KEY, value);
+  starting = null;
+  return prepareAds();
+}
+
+export function adPrivacyOptionsRequired() {
+  return privacyOptionsRequired;
+}
+
+export function openAdPrivacyOptions(): Promise<void> {
+  if (!adsEnabled()) return Promise.resolve();
+  return import("@capacitor-community/admob").then(({ AdMob }) => AdMob.showPrivacyOptionsForm());
+}
+
 function removeAdsOwned() {
   try {
     const raw = kvGet(ECONOMY_KEY);
@@ -81,7 +101,7 @@ function adsBlocked() {
   return suppressed || removeAdsOwned();
 }
 
-/** Loads the session counter and, on Android only, initializes AdMob. */
+/** Session counter only. Consent starts once an age answer is saved. */
 export function initAds() {
   if (typeof window === "undefined") return;
   try {
@@ -90,18 +110,50 @@ export function initAds() {
   } catch {
     /* ignore */
   }
-  if (adsEnabled()) void ensureAds();
+}
+
+/** UMP consent, then AdMob init, then preload. Safe to call more than once. */
+export function prepareAds(): Promise<void> {
+  return ensureAds().then(() => undefined);
+}
+
+async function preload(admob: AdMobModule) {
+  const ids = resolvedAdUnitIds();
+  const isTesting = appConfig.ads.testOnly;
+  await Promise.allSettled([
+    admob.AdMob.prepareInterstitial({ adId: ids.interstitial, isTesting }),
+    admob.AdMob.prepareRewardVideoAd({ adId: ids.rewarded, isTesting }),
+  ]);
 }
 
 async function ensureAds(): Promise<AdMobModule | null> {
   if (!adsEnabled() || adsBlocked()) return null;
+  const age = adAge();
+  if (!age) return null;
   if (!starting) {
     starting = (async () => {
       const admob = await import("@capacitor-community/admob");
+      const underAge = age === "under";
+      const request: import("@capacitor-community/admob").AdmobConsentRequestOptions = {};
+      if (underAge) request.tagForUnderAgeOfConsent = true;
+      if (appConfig.ads.testOnly) {
+        // EEA debug geography exercises the GDPR form used for the EEA and the UK.
+        request.debugGeography = admob.AdmobConsentDebugGeography.EEA;
+        const devices = appConfig.ads.umpTestDeviceIds ?? [];
+        if (devices.length) request.testDeviceIdentifiers = devices;
+      }
+      let info = await admob.AdMob.requestConsentInfo(request);
+      if (!underAge && info.isConsentFormAvailable && info.status === admob.AdmobConsentStatus.REQUIRED) {
+        info = await admob.AdMob.showConsentForm();
+      }
+      privacyOptionsRequired = String(info.privacyOptionsRequirementStatus) === "REQUIRED";
+      if (!info.canRequestAds) return false;
       await admob.AdMob.initialize({
         initializeForTesting: appConfig.ads.testOnly,
         maxAdContentRating: admob.MaxAdContentRating.Teen,
+        ...(underAge ? { tagForUnderAgeOfConsent: true } : {}),
       });
+      await preload(admob);
       return true;
     })().catch(() => false);
   }
@@ -120,13 +172,13 @@ function settleOnce(run: () => void) {
 }
 
 /**
- * The one forced ad, after a season. `done` always runs, after the ad closes
- * when one was shown. `shown` runs only when an interstitial was presented.
- * Any placement other than season-end is ignored.
+ * Presents the preloaded interstitial. `done` runs when AdMob's close button
+ * dismisses it, or immediately when no ad can be shown. `shown` runs only when
+ * one was presented. Does not apply a frequency cap.
  */
-export function showInterstitial(name: string, done: () => void, shown?: () => void) {
+export function showInterstitial(done: () => void, shown?: () => void) {
   const finish = settleOnce(done);
-  if (name !== SEASON_END_PLACEMENT || !adsEnabled() || adsBlocked() || Date.now() - lastRewardedAt < REWARD_COOLDOWN_MS) {
+  if (!adsEnabled() || adsBlocked()) {
     finish();
     return;
   }
@@ -145,13 +197,18 @@ export function showInterstitial(name: string, done: () => void, shown?: () => v
         void admob.AdMob.addListener(admob.InterstitialAdPluginEvents.Dismissed, end);
         void admob.AdMob.addListener(admob.InterstitialAdPluginEvents.FailedToShow, end);
       });
-      await admob.AdMob.prepareInterstitial({ adId: ids.interstitial, isTesting: appConfig.ads.testOnly });
+      try {
+        await admob.AdMob.showInterstitial();
+      } catch {
+        await admob.AdMob.prepareInterstitial({ adId: ids.interstitial, isTesting: appConfig.ads.testOnly });
+        await admob.AdMob.showInterstitial();
+      }
       shown?.();
-      track("interstitial_shown", { placement: name });
-      await admob.AdMob.showInterstitial();
+      track("interstitial_shown", { placement: "interstitial" });
       await untilClosed;
+      void preload(admob);
     } catch {
-      /* no fill — the season still continues */
+      /* no fill */
     } finally {
       finish();
     }
@@ -191,10 +248,19 @@ export function showRewarded(name: string, onReward: () => void, onUnavailable?:
         void admob.AdMob.addListener(admob.RewardAdPluginEvents.Dismissed, end);
         void admob.AdMob.addListener(admob.RewardAdPluginEvents.FailedToShow, end);
       });
-      await admob.AdMob.prepareRewardVideoAd({ adId: ids.rewarded, isTesting: appConfig.ads.testOnly });
-      void admob.AdMob.showRewardVideoAd().catch(() => end());
+      const play = () => {
+        void admob.AdMob.showRewardVideoAd().catch(async () => {
+          try {
+            await admob.AdMob.prepareRewardVideoAd({ adId: ids.rewarded, isTesting: appConfig.ads.testOnly });
+            void admob.AdMob.showRewardVideoAd().catch(() => end());
+          } catch {
+            end();
+          }
+        });
+      };
+      play();
       await untilClosed;
-      lastRewardedAt = Date.now();
+      void preload(admob);
       if (rewarded) {
         track("rewarded_watched", { placement: name });
         onReward();

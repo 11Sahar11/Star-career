@@ -50,13 +50,20 @@ In Play Console, turn on **Play App Signing**. Google holds the app signing key.
 
 Version 1 uses Google's **official test** ad units (`app.config.json`, `ads.testOnly: true`). Real AdMob ids come later: put them in that file and set `testOnly` to false.
 
-Rules in the game:
+The Play Console listing must declare **Contains ads**.
 
-- One forced ad, after a season (`season-end`). No ad after a match, at halftime, or in the daily race.
+Before any ad request, the Android app runs Google's UMP consent flow. Debug and test builds set UMP debug geography to **EEA**, which is how the EEA and UK consent form is tested. Release builds leave geography unset so the device's real region is used. Hashed test-device ids, if a physical phone needs them, go in `ads.umpTestDeviceIds`.
+
+Players who say they are under 16 are tagged `tagForUnderAgeOfConsent`. The app is not tagged for child-directed treatment. The max ad content rating is Teen (T).
+
+After consent, the interstitial and the rewarded ad are preloaded. `showInterstitial` only presents that preloaded full-screen ad and waits for AdMob's close button. It does not decide how often the season ad may play. That frequency (once per season transition, not after season 1, skip if a rewarded ad played in the last 90 seconds) is not in this change.
+
+Other rules already in the game:
+
+- The season summary is on screen before its continue button can ask for the interstitial. Nothing is requested during a match or at halftime.
 - Rewarded clips only when the player chooses one.
 - No banners.
 - If the device save has `removeAds.owned`, ads are skipped and rewards are granted without a clip.
-- Requests are for ages **13+**: max content rating Teen (T), and the request is not tagged `tagForChildDirectedTreatment`.
 
 The browser build does not load AdMob. Rewards are granted immediately and the interstitial is skipped.
 
