@@ -1,4 +1,5 @@
 import { PRIVACY_EMAIL } from "@/game/contact";
+import { Link } from "@tanstack/react-router";
 import { Fragment, useContext, useEffect, useMemo, useRef, useState, createContext, type CSSProperties, type ReactNode } from "react";
 import {
   ArrowLeftRight,
@@ -1257,12 +1258,17 @@ function Home({
         <button type="button" className="flex min-h-12 items-center text-start text-muted" onClick={onPrivacy}>
           {tr("privacy")}
         </button>
+        <nav className="flex flex-wrap gap-x-5 text-muted" data-legal-links>
+          <Link to="/terms" className="inline-flex min-h-12 items-center underline-offset-4 hover:underline">{tr("legal.terms")}</Link>
+          <Link to="/licenses" className="inline-flex min-h-12 items-center underline-offset-4 hover:underline">{tr("legal.licenses")}</Link>
+          <Link to="/delete-account" className="inline-flex min-h-12 items-center underline-offset-4 hover:underline">{tr("legal.delete")}</Link>
+        </nav>
       </div>
     </Shell>
   );
 }
 
-/** The daily chest on home: the video doubles it (the one amber action), or open it plain. */
+/** The daily chest on home: open it free, or watch a video to double it. Two equal buttons; the video is never required. */
 function DailyChest({ career, onChange }: { career: Career; onChange: (c: Career) => void }) {
   const { tr } = useTx();
   const today = todayKey();
@@ -1277,16 +1283,16 @@ function DailyChest({ career, onChange }: { career: Career; onChange: (c: Career
     } else onChange({ ...grantFreeCamp(career, career.adState.freeCampDate ?? ""), keyCampBonus: ECONOMY.keyCampBonus * (double ? 2 : 1) });
   };
   return (
-    <div className="mt-3 grid">
+    <div className="mt-3 grid gap-2" data-daily-chest>
+      <button type="button" className="btn-ghost h-12 w-full text-base" data-chest-open onClick={() => open(false)}>
+        {chest.kind === "coins" ? tr("eco.openPlain", { n: formatCoins(chest.coins) }) : tr("eco.openPlainCamp")}
+      </button>
       <RewardButton
         name="daily-chest"
-        className="h-[3.25rem] w-full"
+        className="reward-quiet h-12 w-full text-base"
         label={chest.kind === "coins" ? tr("eco.videoCoins", { n: formatCoins(chest.coins * 2) }) : tr("eco.chestDouble")}
         onReward={() => open(true)}
       />
-      <button type="button" className="min-h-11 text-sm font-semibold text-muted underline-offset-4 hover:underline" onClick={() => open(false)}>
-        {chest.kind === "coins" ? tr("eco.openPlain", { n: formatCoins(chest.coins) }) : tr("eco.openPlainCamp")}
-      </button>
     </div>
   );
 }
@@ -3312,9 +3318,28 @@ function LookSheet({ career, onChange, onClose }: { career: Career; onChange: (c
   const [hair, setHair] = useState<HairStyle>(start.hair);
   const [hairColor, setHairColor] = useState<HairColor>(start.hairColor);
   const preview = { ...career, player: { ...career.player, skin, hair, hairColor } };
+  const sheet = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  // Esc closes; focus moves into the sheet and goes back to the opener on close.
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    sheet.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeRef.current();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (opener?.isConnected) opener.focus();
+    };
+  }, []);
   return (
     <div className="look-backdrop" role="presentation" onClick={onClose}>
-      <div className="look-sheet" role="dialog" aria-modal="true" aria-label={tr("look.title")} onClick={(e) => e.stopPropagation()}>
+      <div ref={sheet} tabIndex={-1} className="look-sheet" role="dialog" aria-modal="true" aria-label={tr("look.title")} onClick={(e) => e.stopPropagation()}>
         <div className="look-handle" aria-hidden="true" />
         <h2 className="text-lg font-bold">{tr("look.title")}</h2>
         <div className="mx-auto my-2 w-24">
