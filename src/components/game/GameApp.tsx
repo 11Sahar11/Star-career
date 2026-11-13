@@ -62,6 +62,7 @@ import {
   rewardedBoost,
   runToStop,
   skipBigMatch,
+  formatTrainOdds,
   seasonLabel,
   sessionTrainOdds,
   shirtNumber,
@@ -101,6 +102,7 @@ import { attemptBigTrial, boostBigTrial, effectiveAttrs, isTopLeague, keyFixture
 import { getIsAdmin, getViewerAccess, type ViewerAccess } from "@/lib/access";
 import { PERKS, adminGrant, adminUnlockAll, applyPerks, buyPerk, canDouble, doubleLegacy, loadLegacy, payLegacy, perkState, type Legacy, type PerkId } from "@/game/legacy";
 import { ATTR_KEYS, type AttrKey, type Career, type Difficulty, type GearTierId, type MatchLog, type MatchReport, type Role } from "@/game/types";
+import { debutHidesTopSkip, shouldResetTrainReveal, tabFromLockedLeaguesRow } from "@/game/ux";
 
 type View = "boot" | "home" | "create" | "game" | "collection" | "summary" | "daily" | "privacy" | "legacy" | "admin" | "achievements";
 
@@ -149,6 +151,9 @@ export function GameApp() {
   const [toasts, setToasts] = useState<string[]>([]);
   const [admin, setAdmin] = useState(false);
   const [storeOpen, setStoreOpen] = useState<boolean | "player">(false);
+  /** Store opened from Build the player, before a career exists. League unlocks live on the device. */
+  const [createStore, setCreateStore] = useState<Career | null>(null);
+  const [deviceStamp, setDeviceStamp] = useState(0);
   /** Set while the season-end interstitial is running, so a second tap cannot replay an old state. */
   const summerLock = useRef(false);
 
@@ -340,18 +345,38 @@ export function GameApp() {
     );
   } else if (view === "create") {
     screen = (
-      <Create
-        admin={admin}
-        onBack={() => setView("home")}
-        onStart={(name, position, countryId, nationId, salt, difficulty) => {
-          setPlaying("main");
-          unlockAudio();
-          const fresh = withDeviceCosmetics(applyPerks(createCareer(name, position, countryId, salt, difficulty, nationId), loadLegacy().perks));
-          setCareer(openDebutMatch(fresh)); // coins are per career and start from zero
-          setView("game");
-          track("career_start", { country: countryId, position, difficulty });
-        }}
-      />
+      <>
+        <div hidden={createStore != null}>
+          <Create
+            admin={admin}
+            deviceStamp={deviceStamp}
+            onBack={() => setView("home")}
+            onStore={() => {
+              if (tabFromLockedLeaguesRow() !== "store") return;
+              setCreateStore((current) => current ?? createCareer("Alex", "ST", "eng", 1));
+            }}
+            onStart={(name, position, countryId, nationId, salt, difficulty) => {
+              setPlaying("main");
+              unlockAudio();
+              const fresh = withDeviceCosmetics(applyPerks(createCareer(name, position, countryId, salt, difficulty, nationId), loadLegacy().perks));
+              setCreateStore(null);
+              setCareer(openDebutMatch(fresh)); // coins are per career and start from zero
+              setView("game");
+              track("career_start", { country: countryId, position, difficulty });
+            }}
+          />
+        </div>
+        {createStore ? (
+          <StoreScreen
+            career={createStore}
+            onChange={setCreateStore}
+            onBack={() => {
+              setCreateStore(null);
+              setDeviceStamp((n) => n + 1);
+            }}
+          />
+        ) : null}
+      </>
     );
   } else if (view === "collection") {
     screen = (
@@ -488,10 +513,12 @@ export function GameApp() {
     });
   }, [storeIsOpen, signals]);
   const inMatch = view === "game" && !!run && (run.screen === "match" || run.screen === "bigmatch");
-  const showNav = booted && minShown && !inMatch && ["home", "game", "collection", "summary", "achievements"].includes(view);
-  const storeDot = booted && playing === "main" && !inMatch && !storeIsOpen && signals.some((key) => !storeSeen.includes(key));
-  const navActive: NavTab | null =
-    view === "home"
+  const browsingStore = view === "create" && createStore != null;
+  const showNav = booted && minShown && !inMatch && (browsingStore || ["home", "game", "collection", "summary", "achievements"].includes(view));
+  const storeDot = booted && playing === "main" && !inMatch && !storeIsOpen && !browsingStore && signals.some((key) => !storeSeen.includes(key));
+  const navActive: NavTab | null = browsingStore
+    ? tabFromLockedLeaguesRow()
+    : view === "home"
       ? "home"
       : view === "collection" || view === "achievements"
         ? "trophies"
@@ -512,9 +539,20 @@ export function GameApp() {
         {showNav ? (
           <BottomNav
             active={navActive}
-            hasCareer={!!career && playing === "main"}
+            hasCareer={(!!career && playing === "main") || browsingStore}
             storeDot={storeDot}
             onTab={(tab) => {
+              if (browsingStore) {
+                if (tab === "store") return;
+                setCreateStore(null);
+                setDeviceStamp((n) => n + 1);
+                if (tab === "home") return setView("home");
+                if (tab === "trophies") {
+                  setPlaying("main");
+                  return setView("collection");
+                }
+                return;
+              }
               if (tab === "home") {
                 setStoreOpen(false);
                 return menu();
@@ -1293,11 +1331,15 @@ function DailyChest({ career, onChange }: { career: Career; onChange: (c: Career
 
 function Create({
   admin,
+  deviceStamp,
   onBack,
+  onStore,
   onStart,
 }: {
   admin: boolean;
+  deviceStamp: number;
   onBack: () => void;
+  onStore: () => void;
   onStart: (name: string, position: Career["player"]["position"], countryId: string, nationId: string, salt: number, difficulty: Difficulty) => void;
 }) {
   const [name, setName] = useState("Alex");
@@ -1310,7 +1352,8 @@ function Create({
   const preview = useMemo(() => (position ? previewPlayer(name || "Player", position, salt) : null), [name, position, salt]);
   const ready = name.trim().length >= 2 && position && countryId && nationId;
   const { tr } = useTx();
-  const [device] = useState(() => loadDevice());
+  const [device, setDevice] = useState(() => loadDevice());
+  useEffect(() => setDevice(loadDevice()), [deviceStamp]);
   const openCountries = COUNTRIES.filter((item) => countryOpen(device, item.id, admin));
   const lockedCount = COUNTRIES.length - openCountries.length;
   const difficulties = [
@@ -1360,9 +1403,15 @@ function Create({
         })}
       </div>
       {lockedCount > 0 ? (
-        <p className="mt-2 flex min-h-11 items-center rounded-md border border-line bg-surface px-3 text-sm font-semibold text-muted">
-          {tr("lockedLeagues", { n: lockedCount })}
-        </p>
+        <button
+          type="button"
+          data-locked-leagues
+          className="mt-2 flex min-h-11 w-full items-center justify-between gap-3 rounded-md border border-line bg-surface px-3 text-start text-sm font-semibold text-muted"
+          onClick={onStore}
+        >
+          <span>{tr("lockedLeagues", { n: lockedCount })}</span>
+          <ChevronLeft className="size-5 shrink-0 -scale-x-100 text-muted rtl:scale-x-100" aria-hidden="true" />
+        </button>
       ) : null}
 
       <div className="mt-3 flex items-center justify-between gap-3">
@@ -1648,13 +1697,8 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
   const camp = career.screen === "camp";
   const apps = career.season.apps;
   const avg = apps ? career.season.sumRating / apps : 0;
-  const { tr } = useTx();
-  const odds = sessionTrainOdds(career);
-  const oddsLine = odds.big
-    ? tr("trainChance", { big: odds.big, up: odds.up, down: odds.down })
-    : odds.up
-      ? tr("trainRise", { up: odds.up, down: odds.down })
-      : tr("ceiling");
+  const { tr, lang } = useTx();
+  const oddsLine = formatTrainOdds(sessionTrainOdds(career), lang);
   const [reveal, setReveal] = useState<{ key: AttrKey; next: Career } | null>(null);
   const timer = useRef<number | null>(null);
   useEffect(() => () => {
@@ -1666,7 +1710,12 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
     const next = camp ? answerCamp(career, key) : answerBreak(career, key);
     setReveal({ key, next });
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    timer.current = window.setTimeout(() => onChange(next), reduced ? 280 : 780);
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => {
+      onChange(next);
+      // Premium camp stays here for a second pick. Leaving the reveal set blocks that tap.
+      if (shouldResetTrainReveal(career.premiumCamp, next)) setReveal(null);
+    }, reduced ? 280 : 780);
   }
   const train = reveal?.next.lastTrain;
   const outcome = reveal && train && train.key === reveal.key
@@ -1784,7 +1833,7 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
   const leftGoals = pending.base.home ? us : them;
   const rightGoals = pending.base.home ? them : us;
   const done = active < 0 && reveal === null;
-  const debutPause = Boolean(pending.debut) && (reveal === 0 || (active === 0 && reveal === null));
+  const debutPause = debutHidesTopSkip(pending.debut, reveal, active);
   const skipButton = active >= 0 ? (
     <button
       type="button"

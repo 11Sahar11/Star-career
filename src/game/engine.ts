@@ -52,7 +52,7 @@ import {
   type RoundId,
   type TableRow,
 } from "./types";
-import { t } from "./i18n";
+import { t, type Lang } from "./i18n";
 import { rollStory } from "./stories";
 
 export function emptyAttrs(value = 0): Attrs {
@@ -1314,11 +1314,18 @@ export function openDebutMatch(career: Career): Career {
   const roll = () => rng.next();
   const opened = openBigMatch(career, fixture, roll, rng);
   if (!opened.pending) return opened;
+  // A scheduled key fixture keeps key-match points, coins, the key flag, and Skip.
+  // Any other opener is decided live and then scored as a normal league match.
+  const scheduledKey = isBigFixture(career, fixture);
   return {
     ...opened,
     story: null,
     campPending: true,
-    pending: { ...opened.pending, moments: pinOpeningMoment(opened.pending.moments), debut: true },
+    pending: {
+      ...opened.pending,
+      moments: pinOpeningMoment(opened.pending.moments),
+      ...(scheduledKey ? {} : { debut: true }),
+    },
   };
 }
 
@@ -1549,12 +1556,59 @@ export function trainOdds(career: Career, key: AttrKey) {
   return { up, big, down };
 }
 
-/** One odds line for the training list: the best live chance among the six stats. */
-export function sessionTrainOdds(career: Career) {
-  let best = trainOdds(career, ATTR_KEYS[0]);
-  for (const key of ATTR_KEYS) {
-    const odds = trainOdds(career, key);
-    if (odds.big > best.big || (odds.big === best.big && odds.up > best.up)) best = odds;
+export type TrainOdds = { up: number; big: number; down: number };
+export type TrainPartId = "up" | "flat" | "big" | "down";
+
+/**
+ * The roll applyTrain uses, in 0..99.
+ * Injury is [0, down), +3 is the next `big` rolls, +1 the next `up` rolls, and the rest change nothing.
+ */
+export function trainBucket(roll: number, odds: TrainOdds): TrainPartId {
+  if (roll < odds.down) return "down";
+  if (roll < odds.down + odds.big) return "big";
+  if (roll < odds.down + odds.big + odds.up) return "up";
+  return "flat";
+}
+
+/** Every real outcome of these odds, most likely first. The counts are the buckets trainBucket uses. */
+export function trainOutcomes(odds: TrainOdds): { id: TrainPartId; n: number }[] {
+  const parts: { id: TrainPartId; n: number }[] = [
+    { id: "up", n: odds.up },
+    { id: "flat", n: 100 - odds.big - odds.up - odds.down },
+    { id: "big", n: odds.big },
+    { id: "down", n: odds.down },
+  ];
+  const rank: Record<TrainPartId, number> = { up: 0, flat: 1, big: 2, down: 3 };
+  return parts.filter((part) => part.n > 0).sort((a, b) => b.n - a.n || rank[a.id] - rank[b.id]);
+}
+
+/** The odds line, most likely outcome first, using the same percentages applyTrain rolls. */
+export function formatTrainOdds(odds: TrainOdds, lang?: Lang) {
+  return trainOutcomes(odds)
+    .map((part) => t(`train.part.${part.id}`, { n: part.n }, lang))
+    .join(" · ");
+}
+
+/**
+ * One odds line for the training list. When a stat is against its ceiling its
+ * rates change; the line is the rate shared by the most stats, never the
+ * single best +3 on the sheet.
+ */
+export function sessionTrainOdds(career: Career): TrainOdds {
+  const rows = ATTR_KEYS.map((key) => trainOdds(career, key));
+  const counts = new Map<string, { n: number; odds: TrainOdds }>();
+  for (const odds of rows) {
+    const id = `${odds.big}|${odds.up}|${odds.down}`;
+    const prev = counts.get(id);
+    counts.set(id, { n: (prev?.n ?? 0) + 1, odds });
+  }
+  let best = rows[0];
+  let bestN = 0;
+  for (const entry of counts.values()) {
+    if (entry.n > bestN) {
+      best = entry.odds;
+      bestN = entry.n;
+    }
   }
   return best;
 }
@@ -1564,14 +1618,15 @@ function applyTrain(career: Career, key: AttrKey, which: "camp" | "break"): Care
   const room = statCap(career.player.position, career.player.potential, key) - career.player.attrs[key];
   const rng = makeRng(career.rng);
   const roll = Math.floor(rng.next() * 100);
+  const bucket = trainBucket(roll, odds);
   let delta = 0;
   let spell = 0;
-  if (roll < odds.down) {
+  if (bucket === "down") {
     delta = -1;
     spell = career.difficulty === "hard" ? 4 : career.difficulty === "easy" ? 2 : 3;
-  } else if (roll < odds.down + odds.big) {
+  } else if (bucket === "big") {
     delta = Math.min(3, room);
-  } else if (roll < odds.down + odds.big + odds.up) {
+  } else if (bucket === "up") {
     delta = Math.min(1, room);
   }
   const nextVal = clamp(career.player.attrs[key] + delta, 40, 99);

@@ -352,15 +352,16 @@ export type Moment = {
   success?: boolean;
 };
 
-  /** A big match paused at its decisive moments; the base report is not applied until every moment is played. */
+/** A big match paused at its decisive moments; the base report is not applied until every moment is played. */
 export type PendingMatch = {
   base: MatchReport;
   moments: Moment[];
   seed: number;
   rngState: number;
   /**
-   * Opening match of a new career. The first decision is in minute 1 and the
-   * result is a normal league match: no key-match points, coins, or flag.
+   * Opening match of a new career that is not already a scheduled key fixture.
+   * The first decision is in minute 1 and the result stays a normal league match.
+   * A key opener leaves this unset so points, coins, and Skip stay on the key-match rules.
    */
   debut?: boolean;
 };
