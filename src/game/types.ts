@@ -292,6 +292,8 @@ export type Career = {
   adState: AdState;
   /** Big-club trial in this transfer window: visible signing chance; one ad boost doubles it (max 90%). */
   bigTrial?: BigTrial | null;
+  /** After the opening match, pre-season is still waiting. Cleared once that screen opens. */
+  campPending?: boolean;
 };
 
 export type BigTrial = { year: number; clubId: string; chance: number; boosted: boolean; result: "open" | "won" | "lost" };
@@ -356,6 +358,12 @@ export type PendingMatch = {
   moments: Moment[];
   seed: number;
   rngState: number;
+  /**
+   * Opening match of a new career that is not already a scheduled key fixture.
+   * The first decision is in minute 1 and the result stays a normal league match.
+   * A key opener leaves this unset so points, coins, and Skip stay on the key-match rules.
+   */
+  debut?: boolean;
 };
 
 export type StoryEffect = Partial<Record<"morale" | "form" | "fitness" | "reputation", number>> & { attr?: AttrKey; attrDelta?: number };
