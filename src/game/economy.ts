@@ -39,7 +39,8 @@ export const ECONOMY = {
   caps: {
     doubleCoinsPerSeason: 4,
     retryPerSeason: 2,
-    interstitialsPerSeason: 2,
+    /** The forced season-transition ad: at most one per transition (privacy page wording). */
+    interstitialsPerSeason: 1,
   },
   keyCampBonus: 6,
   /** Big-club trial: base signing chance range and the ad-boost cap. */
@@ -326,6 +327,48 @@ export function grantFreeCamp(career: Career, today: string): Career {
 
 export function grantDiscount(career: Career, today: string, item: StoreItemId): Career {
   return { ...career, adState: { ...career.adState, discountDate: today, discountItem: item } };
+}
+
+/** Rules for the one forced ad (stated on the privacy page). */
+export const SEASON_AD = {
+  /** No ad after season 1: the first possible one is at the transition after season 2. */
+  firstAfterSeason: 2,
+  /** Skipped when the player watched (or closed) a rewarded clip this recently. */
+  rewardCooldownMs: 90 * 1000,
+} as const;
+
+/** Season number of the career being reviewed (both career kinds start in 2026). */
+export function seasonNumber(career: Career) {
+  return career.year - 2026 + 1;
+}
+
+export type SeasonAdInput = {
+  career: Career;
+  /** True only when the player tapped on from the season summary (summary, salary and bonuses are behind them). */
+  summaryClosed: boolean;
+  /** An ad can be requested right now (ads configured, SDK loaded, not admin). */
+  adAvailable: boolean;
+  /** The remove-ads entitlement on this device. */
+  removeAdsOwned: boolean;
+  /** When the last rewarded clip finished (ms epoch), 0 if none. */
+  lastRewardedAt: number;
+  /** The daily race never shows it. */
+  daily?: boolean;
+};
+
+/**
+ * Whether the forced season-transition interstitial shows. Pure: the caller
+ * passes the clock and the ad state. When false the game moves on at once.
+ */
+export function shouldShowSeasonAd(input: SeasonAdInput, now: number): boolean {
+  const { career } = input;
+  if (!input.summaryClosed || career.screen !== "season") return false;
+  if (input.daily || career.race) return false;
+  if (input.removeAdsOwned || !input.adAvailable) return false;
+  if (seasonNumber(career) < SEASON_AD.firstAfterSeason) return false;
+  if (career.adState.interstitialsThisSeason >= CAPS.interstitialsPerSeason) return false;
+  if (input.lastRewardedAt > 0 && now - input.lastRewardedAt < SEASON_AD.rewardCooldownMs) return false;
+  return true;
 }
 
 export function canShowSeasonInterstitial(career: Career) {

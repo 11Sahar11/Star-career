@@ -1,11 +1,14 @@
 /**
- * Dev/preview (Vite) half of the platform PWA chrome: serves the ?install=1
- * tutorial and the per-app manifest, and injects missing PWA head tags into
- * app documents. The deployed-app half lives in server/middleware/grok-pwa.ts;
- * both share scripts/grok-pwa-shared.mjs.
+ * Platform PWA chrome for the live dev preview ONLY: serves the ?install=1
+ * tutorial, the per-app manifest and its assets (scripts/grok-dev/__grok, kept
+ * out of public/ so they never ship), and injects the platform head tags into
+ * app documents. STAR's production build ships none of this: no grok.com
+ * extensions script, no "Created with Grok" banner, no /__grok/ files. The
+ * app's own manifest and icons live in public/manifest.webmanifest and
+ * public/icons.
  */
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   acceptsHtml,
@@ -15,12 +18,30 @@ import {
   isInstallQuery,
   renderInstallPageHtml,
   renderWebManifest,
-  snapshotOgIdentity,
 } from "./grok-pwa-shared.mjs";
 
-export const GROK_OG_IDENTITY_ID = "virtual:grok-og-identity";
+const HERE = dirname(fileURLToPath(import.meta.url));
+const INSTALL_PAGE_PATH = join(HERE, "install-page.html");
+/** Dev-only assets served at /__grok/* (moved out of public/ so the build never copies them). */
+export const GROK_DEV_ASSETS_DIR = join(HERE, "grok-dev");
 
-const INSTALL_PAGE_PATH = join(dirname(fileURLToPath(import.meta.url)), "install-page.html");
+const CONTENT_TYPES = {
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".css": "text/css; charset=utf-8",
+};
+
+/** Absolute file for a /__grok/* path, or "" when it is missing or escapes the dir. */
+export function grokDevAssetFile(pathOnly) {
+  if (!String(pathOnly).startsWith("/__grok/")) return "";
+  const file = normalize(join(GROK_DEV_ASSETS_DIR, decodeURIComponent(pathOnly)));
+  if (!file.startsWith(GROK_DEV_ASSETS_DIR + sep)) return "";
+  try {
+    return existsSync(file) && statSync(file).isFile() ? file : "";
+  } catch {
+    return "";
+  }
+}
 
 function requestHost(req) {
   const forwarded = req.headers["x-forwarded-host"];
@@ -56,6 +77,17 @@ function serveGrokPwa(middlewares) {
       const body = Buffer.from(renderWebManifest(requestHost(req)), "utf8");
       res.statusCode = 200;
       res.setHeader("content-type", "application/manifest+json; charset=utf-8");
+      res.setHeader("cache-control", "no-cache");
+      res.setHeader("content-length", String(body.byteLength));
+      res.end(body);
+      return;
+    }
+
+    const asset = grokDevAssetFile(pathOnly);
+    if (asset) {
+      const body = readFileSync(asset);
+      res.statusCode = 200;
+      res.setHeader("content-type", CONTENT_TYPES[extname(asset)] ?? "application/octet-stream");
       res.setHeader("cache-control", "no-cache");
       res.setHeader("content-length", String(body.byteLength));
       res.end(body);
@@ -151,19 +183,18 @@ function wrapHtmlResponses(middlewares, cwd) {
   });
 }
 
+/** Dev server only: `vite build` and `vite preview` never load this plugin. */
+export function isGrokPwaPluginApplied(env) {
+  return env?.command === "serve" && !env?.isPreview;
+}
+
 export function grokPwaPlugin() {
   let root = process.cwd();
   return {
     name: "app-builder:grok-pwa",
+    apply: (_config, env) => isGrokPwaPluginApplied(env),
     configResolved(config) {
       root = config.root;
-    },
-    resolveId(id) {
-      if (id === GROK_OG_IDENTITY_ID) return `\0${GROK_OG_IDENTITY_ID}`;
-    },
-    load(id) {
-      if (id !== `\0${GROK_OG_IDENTITY_ID}`) return;
-      return `export const grokOgIdentity = ${JSON.stringify(snapshotOgIdentity(root))};`;
     },
     transformIndexHtml(html) {
       return injectGrokPwaHead(html, {
@@ -176,15 +207,6 @@ export function grokPwaPlugin() {
       // TanStack Start's SSR middleware, like the auth-popup plugin.
       serveGrokPwa(server.middlewares);
       wrapHtmlResponses(server.middlewares, root);
-    },
-    configurePreviewServer(server) {
-      serveGrokPwa(server.middlewares);
-      // Post-hook: preview registers compression between the direct hooks and
-      // the post-hooks, and the injector must wrap AFTER compression so it
-      // sees plaintext HTML (compression then compresses the injected output).
-      return () => {
-        wrapHtmlResponses(server.middlewares, root);
-      };
     },
   };
 }

@@ -192,6 +192,14 @@ don't scaffold from stale priors — and keep each contract:
 
 **Hard rules for the shell:**
 
+> **STAR override (owner's pre-launch compliance work, Nov 2026):** STAR ships
+> to Google Play, so the production build carries no platform chrome: no
+> grok.com extensions script, no "Created with Grok" banner, no `/__grok/`
+> files, no `server/middleware`. `grokPwaPlugin()` and `<PreviewHostBridge />`
+> run on the dev server only, and the install-tutorial assets live in
+> `scripts/grok-dev/__grok/`. Don't restore them to production. Rules 1–4 below
+> apply to the dev preview only.
+
 1. **Never put `og:*` / `twitter:card` in `__root.tsx`** — the PWA injector
    overwrites them on every HTML response.
 2. **Keep the branding injector** — `grokPwaPlugin()` and

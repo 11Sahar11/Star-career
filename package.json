@@ -18,6 +18,7 @@
     "check:auth": "node scripts/check-auth-invariant.mjs",
     "test": "node scripts/run-tests.mjs",
     "lint": "eslint .",
+    "licenses": "node scripts/gen-licenses.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

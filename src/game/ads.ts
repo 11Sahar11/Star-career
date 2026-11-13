@@ -7,13 +7,14 @@
  * VITE_ADSENSE_TEST=on loads Google's test ads.
  *
  * House rules (also stated on the privacy page):
- * - interstitials only between seasons (a key-match halftime slot exists but is
- *   off behind HALFTIME_INTERSTITIAL in economy.ts until the owner approves it);
- * - at most 2 interstitials per season, counted in the save;
- * - no interstitial in a player's first session or in the daily race;
- * - at least three minutes between interstitials, and none within 120s of a rewarded clip;
+ * - one forced interstitial per season transition, decided by the pure
+ *   shouldShowSeasonAd() in economy.ts: after the player leaves the season
+ *   summary, never after season 1, not within 90s of a rewarded clip, never for
+ *   remove-ads owners, never in the daily race (a key-match halftime slot
+ *   exists but is off behind HALFTIME_INTERSTITIAL until the owner approves it);
+ * - no ad ready: the game moves on at once;
  * - rewarded clips are always the player's choice; no banners anywhere.
- * - suppressed (admin, or remove-ads owners): no interstitial, rewards granted without a clip.
+ * - suppressed (admin): no interstitial, rewards granted without a clip.
  */
 
 import { track } from "./analytics";
@@ -39,10 +40,8 @@ const ADMOB_INTERSTITIAL = (import.meta.env.VITE_ADMOB_INTERSTITIAL_SLOT as stri
 const ADMOB_REWARDED = (import.meta.env.VITE_ADMOB_REWARDED_SLOT as string | undefined)?.trim() || "";
 const CLIENT = (import.meta.env.VITE_ADSENSE_CLIENT as string | undefined)?.trim() || "";
 const TEST = (import.meta.env.VITE_ADSENSE_TEST as string | undefined) === "on";
-const GAP_MS = 3 * 60 * 1000;
 const SESSIONS_KEY = "star-sessions";
 
-const REWARD_COOLDOWN_MS = 120 * 1000;
 const REWARD_TIMEOUT_MS = 8000;
 
 let ready = false;
@@ -57,8 +56,6 @@ export function setAdsSuppressed(value: boolean) {
 export function adsSuppressed() {
   return suppressed;
 }
-let lastInterstitial = 0;
-let firstSession = true;
 
 export const adsEnabled = Boolean(CLIENT);
 
@@ -66,11 +63,11 @@ export const adsEnabled = Boolean(CLIENT);
 export function initAds() {
   if (typeof window === "undefined") return;
   try {
+    // Session count for analytics (no longer an ad rule).
     const count = Number(localStorage.getItem(SESSIONS_KEY) || "0") + 1;
     localStorage.setItem(SESSIONS_KEY, String(count));
-    firstSession = count <= 1;
   } catch {
-    firstSession = false;
+    /* private mode */
   }
   if (!CLIENT || ready) return;
   ready = true;
@@ -93,15 +90,32 @@ export function initAds() {
   w.adConfig?.({ preloadAdBreaks: "on", sound: "on" });
 }
 
-/** A full-screen ad at a natural break. Calls `done` whether or not an ad showed; `shown` only when one was requested. */
+/** An interstitial can be requested now: ads configured, the SDK hook is there, not suppressed. */
+export function interstitialAvailable() {
+  const w = typeof window === "undefined" ? null : (window as AdWindow);
+  return !suppressed && Boolean(CLIENT) && Boolean(w?.adBreak);
+}
+
+/**
+ * What shouldShowSeasonAd (economy.ts) needs from the ad layer. PR #11's AdMob
+ * ads.ts can provide the same shape: adAvailable = adsEnabled() && !adsBlocked(),
+ * lastRewardedAt = its module-level lastRewardedAt.
+ */
+export function seasonAdContext(): { adAvailable: boolean; lastRewardedAt: number } {
+  return { adAvailable: interstitialAvailable(), lastRewardedAt };
+}
+
+/**
+ * A full-screen ad at a natural break. Frequency rules live in the caller
+ * (shouldShowSeasonAd). Calls `done` whether or not an ad showed — at once when
+ * no ad can be requested; `shown` only when one was requested.
+ */
 export function showInterstitial(name: string, done: () => void, shown?: () => void) {
   const w = typeof window === "undefined" ? null : (window as AdWindow);
-  const now = Date.now();
-  if (suppressed || !w?.adBreak || !CLIENT || firstSession || now - lastInterstitial < GAP_MS || now - lastRewardedAt < REWARD_COOLDOWN_MS) {
+  if (!interstitialAvailable() || !w?.adBreak) {
     done();
     return;
   }
-  lastInterstitial = now;
   shown?.();
   track("interstitial_shown", { placement: name });
   let finished = false;

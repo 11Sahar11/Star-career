@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,7 +17,7 @@ import {
   snapshotOgIdentity,
   stripInstallParams,
 } from "./grok-pwa-shared.mjs";
-import { renderInstallPage } from "./grok-pwa-plugin.mjs";
+import { grokDevAssetFile, isGrokPwaPluginApplied, renderInstallPage } from "./grok-pwa-plugin.mjs";
 
 const TEMPLATE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -515,27 +515,23 @@ test("renders the manifest with the per-app name", () => {
   assert.equal(manifest.icons[0].src, "/__grok/icon-180.png");
 });
 
-// Tripwires: the deployed-app path only works if Nitro scans server/ — an
-// accidental edit that drops serverDir or the middleware file would otherwise
-// fail silently (published apps would just render the app for ?install=1).
-test("vite config keeps the nitro serverDir wiring", () => {
+// Tripwires: STAR ships to Google Play, so the platform chrome (grok.com
+// extensions script, "Created with Grok" banner, /__grok/ assets) stays in the
+// dev preview and never reaches the production build.
+test("platform chrome is dev-server only", () => {
+  assert.equal(isGrokPwaPluginApplied({ command: "serve", isPreview: false }), true);
+  assert.equal(isGrokPwaPluginApplied({ command: "serve", isPreview: true }), false);
+  assert.equal(isGrokPwaPluginApplied({ command: "build" }), false);
   const viteConfig = readFileSync(join(TEMPLATE_ROOT, "vite.config.ts"), "utf8");
-  assert.match(viteConfig, /serverDir:\s*"\.\/server"/);
-  assert.match(viteConfig, /grokPwaPlugin\(\)/);
+  assert.doesNotMatch(viteConfig, /serverDir:/);
+  assert.equal(existsSync(join(TEMPLATE_ROOT, "server/middleware/grok-pwa.ts")), false);
+  assert.equal(existsSync(join(TEMPLATE_ROOT, "public/__grok")), false);
 });
 
-test("nitro middleware and its bundled assets exist", () => {
-  const middleware = readFileSync(join(TEMPLATE_ROOT, "server/middleware/grok-pwa.ts"), "utf8");
-  assert.match(middleware, /install-page\.html\?raw/);
-  assert.match(middleware, /virtual:grok-og-identity/);
+test("dev preview still serves the install tutorial assets", () => {
   readFileSync(join(TEMPLATE_ROOT, "scripts/install-page.html"));
-  readFileSync(join(TEMPLATE_ROOT, "public/__grok/icon-180.png"));
-  readFileSync(join(TEMPLATE_ROOT, "public/__grok/install/styles.css"));
+  assert.ok(grokDevAssetFile("/__grok/icon-180.png"));
+  assert.ok(grokDevAssetFile("/__grok/install/styles.css"));
+  assert.equal(grokDevAssetFile("/__grok/../../package.json"), "");
+  assert.equal(grokDevAssetFile("/icons/icon-192.png"), "");
 });
-
-test("vite plugin bakes og identity as a virtual module", () => {
-  const plugin = readFileSync(join(TEMPLATE_ROOT, "scripts/grok-pwa-plugin.mjs"), "utf8");
-  assert.match(plugin, /virtual:grok-og-identity/);
-  assert.match(plugin, /snapshotOgIdentity/);
-});
-
