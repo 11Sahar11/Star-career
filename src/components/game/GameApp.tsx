@@ -62,9 +62,8 @@ import {
   rewardedBoost,
   runToStop,
   skipBigMatch,
-  formatTrainOdds,
+  displayedTrainLine,
   seasonLabel,
-  sessionTrainOdds,
   shirtNumber,
   sortTable,
   startSummer,
@@ -82,6 +81,7 @@ import {
   CATALOG,
   COSMETIC_IDS,
   ECONOMY,
+  storeShelf,
   HALFTIME_INTERSTITIAL,
   canBuy,
   canShowSeasonInterstitial,
@@ -369,6 +369,7 @@ export function GameApp() {
         {createStore ? (
           <StoreScreen
             career={createStore}
+            deviceOnly
             onChange={setCreateStore}
             onBack={() => {
               setCreateStore(null);
@@ -1698,7 +1699,7 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
   const apps = career.season.apps;
   const avg = apps ? career.season.sumRating / apps : 0;
   const { tr, lang } = useTx();
-  const oddsLine = formatTrainOdds(sessionTrainOdds(career), lang);
+  const oddsLine = displayedTrainLine(career, null, lang);
   const [reveal, setReveal] = useState<{ key: AttrKey; next: Career } | null>(null);
   const timer = useRef<number | null>(null);
   useEffect(() => () => {
@@ -1732,23 +1733,27 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
         {camp ? tr("campAsk") : tr("breakAsk", { avg: avg ? tr("avgBit", { n: avg.toFixed(1) }) : "" })}
       </p>
       {career.premiumCamp ? <p className="mt-2 text-sm font-semibold text-accent">{tr("eco.premiumPick")}</p> : null}
-      <p className="mt-3 text-sm font-semibold leading-5 text-muted">{oddsLine}</p>
+      {oddsLine ? <p className="mt-3 text-sm font-semibold leading-5 text-muted" data-train-odds="shared">{oddsLine}</p> : null}
       <div className="mt-2 grid gap-2">
         {ATTR_KEYS.map((key) => {
           const picked = reveal?.key === key;
           const value = picked ? reveal.next.player.attrs[key] : career.player.attrs[key];
           const delta = picked && train ? train.delta : 0;
+          const ownOdds = displayedTrainLine(career, key, lang);
           return (
             <div key={key}>
               <button
                 type="button"
-                className={`flex w-full items-center justify-between rounded-md border px-3 py-3 text-start ${picked ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
+                className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-3 text-start ${picked ? "border-accent bg-surface-2" : "border-line bg-surface"}`}
                 aria-disabled={Boolean(reveal)}
                 onClick={() => {
                   if (!reveal) pick(key);
                 }}
               >
-                <span className="font-semibold">{tr(`attr.${key}`)}</span>
+                <span className="min-w-0">
+                  <span className="block font-semibold">{tr(`attr.${key}`)}</span>
+                  {ownOdds ? <span className="mt-0.5 block text-xs font-medium leading-4 text-muted" data-train-odds={key}>{ownOdds}</span> : null}
+                </span>
                 <span className={`num text-lg font-bold ${picked ? (delta > 0 ? "text-good" : delta < 0 ? "text-bad" : "text-muted") : ""} ${picked ? "train-value" : ""}`}>
                   {value}
                 </span>
@@ -3245,15 +3250,17 @@ function BigTrialCard({ career, onChange }: { career: Career; onChange: (c: Care
   );
 }
 
-function StoreScreen({ career, onChange, onBack, onPlayer }: { career: Career; onChange: (c: Career) => void; onBack: () => void; onPlayer?: () => void }) {
+function StoreScreen({ career, onChange, onBack, onPlayer, deviceOnly = false }: { career: Career; onChange: (c: Career) => void; onBack: () => void; onPlayer?: () => void; deviceOnly?: boolean }) {
   const { tr } = useTx();
   const admin = useContext(AdminContext);
   const today = todayKey();
   const [device, setDevice] = useState(() => loadDevice());
   const [discountPick, setDiscountPick] = useState(false);
   const nextLocked = COUNTRIES.find((item) => !countryOpen(device, item.id, admin));
+  const shelf = storeShelf(deviceOnly);
   const reasonText: Record<string, string> = { owned: tr("eco.owned"), full: tr("eco.full"), notNeeded: tr("eco.notNeeded") };
   const purchase = (id: StoreItemId) => {
+    if (!shelf.items.includes(id)) return;
     const next = buy(career, id, today, { admin });
     if (next === career) return;
     if (id === "unlock-country" && nextLocked) setDevice(unlockCountry(nextLocked.id));
@@ -3262,29 +3269,30 @@ function StoreScreen({ career, onChange, onBack, onPlayer }: { career: Career; o
   };
   return (
     <Shell>
-      <ScreenHeader title={tr("eco.store")} sub={admin ? tr("eco.adminFree") : tr("eco.storeSub")} onBack={onBack} right={<CoinChip n={career.coins} />} />
-      <p className="mt-3 text-sm leading-6 text-muted">{tr("eco.storeEarn")}</p>
-      <GearOfferCard career={career} onChange={onChange} />
+      <ScreenHeader title={tr("eco.store")} sub={admin ? tr("eco.adminFree") : deviceOnly ? tr("eco.storeDevice") : tr("eco.storeSub")} onBack={onBack} right={<CoinChip n={career.coins} />} />
+      {shelf.rewards.length ? <p className="mt-3 text-sm leading-6 text-muted">{tr("eco.storeEarn")}</p> : null}
+      {shelf.rewards.includes("gear-offer") ? <GearOfferCard career={career} onChange={onChange} /> : null}
       {/* One rewarded clip at a time: the free camp first, then the discount once the camp is taken. */}
-      {discountPick ? (
+      {shelf.rewards.includes("store-discount") && discountPick ? (
         <p className="mt-3 text-sm text-accent">{tr("eco.discountPick", { n: Math.round(ECONOMY.discount * 100) })}</p>
-      ) : rewardAvailable(career, "free-camp", today) ? (
+      ) : shelf.rewards.includes("free-camp") && rewardAvailable(career, "free-camp", today) ? (
         <div className="mt-3">
           <RewardButton name="free-camp" className="h-12 w-full text-sm" label={tr("eco.freeCamp", { n: ECONOMY.keyCampBonus })} onReward={() => onChange(grantFreeCamp(career, today))} />
         </div>
-      ) : rewardAvailable(career, "store-discount", today) ? (
+      ) : shelf.rewards.includes("store-discount") && rewardAvailable(career, "store-discount", today) ? (
         <div className="mt-3">
           <RewardButton name="store-discount" className="h-12 w-full text-sm" label={tr("eco.discount", { n: Math.round(ECONOMY.discount * 100) })} onReward={() => setDiscountPick(true)} />
         </div>
       ) : null}
-      {onPlayer ? (
+      {onPlayer && !deviceOnly ? (
         <button type="button" className="btn-ghost mt-3 h-12 w-full text-sm" onClick={onPlayer}>
           {tr("gear.myPlayer")}
         </button>
       ) : null}
       <div className="mt-4 grid gap-2">
-        {CATALOG.map((item) => {
-          if (item.id === "unlock-country" && !nextLocked) return null;
+        {shelf.items.map((id) => {
+          const item = CATALOG.find((entry) => entry.id === id);
+          if (!item || (item.id === "unlock-country" && !nextLocked)) return null;
           const price = itemPrice(career, item.id, today, admin);
           const check = item.id === "unlock-country" ? (career.coins >= price ? "ok" : "coins") : canBuy(career, item.id, today, admin);
           const label = item.id === "unlock-country" && nextLocked ? tr("eco.item.unlock-country", { country: tr(`country.${nextLocked.id}`) }) : tr(`eco.item.${item.id}`);

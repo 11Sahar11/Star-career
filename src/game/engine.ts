@@ -1590,27 +1590,29 @@ export function formatTrainOdds(odds: TrainOdds, lang?: Lang) {
 }
 
 /**
- * One odds line for the training list. When a stat is against its ceiling its
- * rates change; the line is the rate shared by the most stats, never the
- * single best +3 on the sheet.
+ * The one odds line when every stat rolls the same buckets.
+ * Null when any stat differs (a ceiling, a tight room), so each row must print its own.
  */
-export function sessionTrainOdds(career: Career): TrainOdds {
-  const rows = ATTR_KEYS.map((key) => trainOdds(career, key));
-  const counts = new Map<string, { n: number; odds: TrainOdds }>();
-  for (const odds of rows) {
-    const id = `${odds.big}|${odds.up}|${odds.down}`;
-    const prev = counts.get(id);
-    counts.set(id, { n: (prev?.n ?? 0) + 1, odds });
+export function sessionTrainOdds(career: Career): TrainOdds | null {
+  const first = trainOdds(career, ATTR_KEYS[0]);
+  for (const key of ATTR_KEYS) {
+    const odds = trainOdds(career, key);
+    if (odds.up !== first.up || odds.big !== first.big || odds.down !== first.down) return null;
   }
-  let best = rows[0];
-  let bestN = 0;
-  for (const entry of counts.values()) {
-    if (entry.n > bestN) {
-      best = entry.odds;
-      bestN = entry.n;
-    }
-  }
-  return best;
+  return first;
+}
+
+/**
+ * The text the training screen shows.
+ * `key === null` is the shared line above the list (only when every stat matches).
+ * A stat key is that row's own roll, and only when the stats do not share one line.
+ * A ceiling stat has no +1 or +3 bucket, so its line has no "+" outcome.
+ */
+export function displayedTrainLine(career: Career, key: AttrKey | null, lang?: Lang): string | null {
+  const shared = sessionTrainOdds(career);
+  if (key === null) return shared ? formatTrainOdds(shared, lang) : null;
+  if (shared) return null;
+  return formatTrainOdds(trainOdds(career, key), lang);
 }
 
 function applyTrain(career: Career, key: AttrKey, which: "camp" | "break"): Career {

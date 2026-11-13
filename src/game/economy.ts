@@ -121,6 +121,23 @@ export const CATALOG: { id: StoreItemId; price: number; group: StoreGroup }[] = 
 /** Cosmetics are permanent: kept in the device profile (star-economy-v1), not in the career. */
 export const COSMETIC_IDS: StoreItemId[] = ["cos-crest", "cos-shirt", "cos-legend", "cos-armband"];
 
+/** Country unlocks and cosmetics survive a discarded career. Everything else is spent on one career. */
+export function isDeviceStoreItem(id: StoreItemId) {
+  return id === "unlock-country" || COSMETIC_IDS.includes(id);
+}
+
+export type StoreRewardId = "free-camp" | "store-discount" | "gear-offer";
+
+/**
+ * What the store may show. Before a career exists the shelf is only device
+ * unlocks and cosmetics: no rewarded clip, and no purchase that would be thrown away.
+ */
+export function storeShelf(beforeCareer: boolean): { items: StoreItemId[]; rewards: StoreRewardId[] } {
+  const items = CATALOG.map((item) => item.id);
+  if (!beforeCareer) return { items, rewards: ["free-camp", "store-discount", "gear-offer"] };
+  return { items: items.filter(isDeviceStoreItem), rewards: [] };
+}
+
 export const DISCOUNT = ECONOMY.discount;
 
 export function formatCoins(n: number) {

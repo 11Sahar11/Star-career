@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ATTR_KEYS, type Career } from "./types";
-import { earnForReport } from "./economy";
+import { earnForReport, storeShelf } from "./economy";
 import { t } from "./i18n";
 import { migrateCareer } from "./save";
 import {
@@ -11,6 +11,7 @@ import {
   createCareer,
   createDailyCareer,
   finishBigMatch,
+  displayedTrainLine,
   formatTrainOdds,
   isBigFixture,
   keyFixtureIds,
@@ -101,54 +102,87 @@ test("debut does not replace a daily race or a season already underway", () => {
   assert.equal(openDebutMatch(started), started);
 });
 
+function bucketCounts(odds: { up: number; big: number; down: number }) {
+  const counts = { up: 0, flat: 0, big: 0, down: 0 };
+  for (let roll = 0; roll < 100; roll += 1) counts[trainBucket(roll, odds)] += 1;
+  return counts;
+}
+
 test("training odds printed on the session come from trainOdds", () => {
   const career = createCareer("Alex", "ST", "eng", 4);
   const line = sessionTrainOdds(career);
+  assert.ok(line);
   assert.deepEqual(line, { up: 48, big: 16, down: 11 });
   for (const key of ATTR_KEYS) assert.deepEqual(trainOdds(career, key), line);
-  const shown = formatTrainOdds(line, "en");
+  const shown = displayedTrainLine(career, null, "en");
   assert.equal(shown, "48% +1 · 25% no change · 16% +3 · 11% injury");
-  const counts = { up: 0, flat: 0, big: 0, down: 0 };
-  for (let roll = 0; roll < 100; roll += 1) counts[trainBucket(roll, line)] += 1;
+  const counts = bucketCounts(line);
   for (const part of trainOutcomes(line)) {
     assert.equal(counts[part.id], part.n);
-    assert.ok(shown.includes(`${part.n}%`));
+    assert.ok(shown?.includes(`${part.n}%`));
   }
   assert.equal(trainOutcomes(line)[0]?.id, "up");
-  assert.equal(shown.startsWith("16%"), false);
+  for (const key of ATTR_KEYS) assert.equal(displayedTrainLine(career, key, "en"), null);
   for (const lang of ["he", "es", "fr"] as const) {
-    const text = formatTrainOdds(line, lang);
-    assert.equal(text.split(" · ")[0], t("train.part.up", { n: 48 }, lang));
+    const text = displayedTrainLine(career, null, lang);
+    assert.equal(text?.split(" · ")[0], t("train.part.up", { n: 48 }, lang));
   }
   career.difficulty = "hard";
   const hard = sessionTrainOdds(career);
+  assert.ok(hard);
   assert.deepEqual(hard, trainOdds(career, "shooting"));
   assert.notDeepEqual(hard, line);
 });
 
-test("the training line uses the most common rate, not the best +3", () => {
+test("mixed training odds are each stat's own roll, and a ceiling has no plus", () => {
   const career = createCareer("Nia", "ST", "eng", 5);
-  const capRoom = statCap(career.player.position, career.player.potential, "shooting") - 3;
-  career.player.attrs.shooting = Math.min(career.player.attrs.shooting, capRoom);
-  for (const key of ATTR_KEYS) {
-    if (key === "shooting") continue;
-    career.player.attrs[key] = statCap(career.player.position, career.player.potential, key);
-  }
+  career.player.age = 31;
+  const room = (key: (typeof ATTR_KEYS)[number], below: number) => {
+    career.player.attrs[key] = statCap(career.player.position, career.player.potential, key) - below;
+  };
+  room("shooting", 4);
+  room("physical", 4);
+  room("passing", 1);
+  for (const key of ["pace", "tackle", "dribbling"] as const) room(key, 0);
   const open = trainOdds(career, "shooting");
+  const tight = trainOdds(career, "passing");
   const capped = trainOdds(career, "pace");
-  assert.ok(open.big > capped.big);
+  assert.ok(open.big > 0 && open.up > 0);
+  assert.equal(tight.big, 0);
+  assert.ok(tight.up > 0);
   assert.equal(capped.big, 0);
-  const line = sessionTrainOdds(career);
-  assert.deepEqual(line, capped);
-  assert.notDeepEqual(line, open);
-  const outcomes = trainOutcomes(line);
-  assert.equal(outcomes[0]?.n, Math.max(...outcomes.map((part) => part.n)));
-  assert.notEqual(outcomes[0]?.id, "big");
-  const shown = formatTrainOdds(line, "en");
-  assert.equal(shown.startsWith(`${open.big}%`), false);
-  const counts = { up: 0, flat: 0, big: 0, down: 0 };
-  for (let roll = 0; roll < 100; roll += 1) counts[trainBucket(roll, line)] += 1;
-  for (const part of outcomes) assert.equal(counts[part.id], part.n);
+  assert.equal(capped.up, 0);
+  assert.equal(sessionTrainOdds(career), null);
+  assert.equal(displayedTrainLine(career, null, "en"), null);
+  for (const lang of ["en", "he", "es", "fr"] as const) {
+    for (const key of ATTR_KEYS) {
+      const odds = trainOdds(career, key);
+      const shown = displayedTrainLine(career, key, lang);
+      assert.equal(shown, formatTrainOdds(odds, lang));
+      assert.ok(shown);
+      const counts = bucketCounts(odds);
+      const parts = trainOutcomes(odds);
+      assert.deepEqual(
+        shown.split(" · "),
+        parts.map((part) => t(`train.part.${part.id}`, { n: part.n }, lang)),
+      );
+      for (const part of parts) assert.equal(counts[part.id], part.n);
+      if (odds.up === 0 && odds.big === 0) assert.equal(shown.includes("+"), false);
+    }
+  }
+});
+
+test("the store before a career lists only unlocks and cosmetics", () => {
+  const before = storeShelf(true);
+  assert.deepEqual(before.items, ["unlock-country", "cos-crest", "cos-shirt", "cos-legend", "cos-armband"]);
+  assert.deepEqual(before.rewards, []);
+  for (const id of ["trial", "camp-premium", "camp-key", "agent", "med-fast", "med-rest"] as const) {
+    assert.equal(before.items.includes(id), false);
+  }
+  const during = storeShelf(false);
+  assert.ok(during.items.includes("camp-premium"));
+  assert.ok(during.items.includes("trial"));
+  assert.deepEqual(during.rewards, ["free-camp", "store-discount", "gear-offer"]);
 });
 
 test("a premium camp clears the reveal so the second pick lands", () => {
