@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { createCareer } from "./engine";
 import { CAPS, SEASON_AD, countInterstitial, shouldShowSeasonAd, type SeasonAdInput } from "./economy";
@@ -60,4 +61,23 @@ test("season ad 6: no ad available means no ad (the caller moves on at once)", (
 
 test("season ad: never in the daily race", () => {
   assert.equal(shouldShowSeasonAd(input({ daily: true }), NOW), false);
+});
+
+// Wiring (source checks, like PR #11's ads-policy test): ads.ts can't load under Node (Vite env).
+const game = readFileSync(new URL("../components/game/GameApp.tsx", import.meta.url), "utf8");
+const ads = readFileSync(new URL("./ads.ts", import.meta.url), "utf8");
+
+test("season ad wiring: the summary button asks shouldShowSeasonAd with the remove-ads flag", () => {
+  const call = game.slice(game.indexOf("onSummer={() => {"), game.indexOf('showInterstitial(\n            "season-end"'));
+  assert.match(call, /shouldShowSeasonAd\(/);
+  assert.match(call, /\.\.\.seasonAdContext\(\)/);
+  assert.match(call, /summaryClosed: true/);
+  assert.match(call, /removeAdsOwned: loadDevice\(\)\.removeAds\.owned/);
+  assert.match(call, /if \(!showAd\) return update\(startSummer\(run\)\)/);
+});
+
+test("season ad wiring: no first-session rule or own cooldown left in ads.ts", () => {
+  assert.doesNotMatch(ads, /firstSession/);
+  assert.doesNotMatch(ads, /REWARD_COOLDOWN_MS|GAP_MS/);
+  assert.match(ads, /export function seasonAdContext\(\)/);
 });

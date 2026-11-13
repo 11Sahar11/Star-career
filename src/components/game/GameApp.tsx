@@ -77,7 +77,7 @@ import { cname, loadLang, setLang, show, t, type Lang } from "@/game/i18n";
 import { authEnabled } from "@/lib/auth/client";
 import { STORIES, answerStory, storyAttr } from "@/game/stories";
 import { ACHIEVEMENTS, checkAchievements, loadUnlocked } from "@/game/achievements";
-import { adsEnabled, adsSuppressed, initAds, interstitialAvailable, lastRewardedAtMs, setAdsSuppressed, showInterstitial, showRewarded } from "@/game/ads";
+import { adsEnabled, adsSuppressed, initAds, seasonAdContext, setAdsSuppressed, showInterstitial, showRewarded } from "@/game/ads";
 import {
   CATALOG,
   COSMETIC_IDS,
@@ -426,11 +426,10 @@ export function GameApp() {
             !admin &&
             shouldShowSeasonAd(
               {
+                ...seasonAdContext(),
                 career: run,
                 summaryClosed: true,
-                adAvailable: interstitialAvailable(),
                 removeAdsOwned: loadDevice().removeAds.owned,
-                lastRewardedAt: lastRewardedAtMs(),
                 daily: playing === "daily",
               },
               Date.now(),

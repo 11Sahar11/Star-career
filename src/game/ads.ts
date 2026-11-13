@@ -57,11 +57,6 @@ export function adsSuppressed() {
   return suppressed;
 }
 
-/** When the last rewarded clip ended (watched or closed), 0 if none this session. */
-export function lastRewardedAtMs() {
-  return lastRewardedAt;
-}
-
 export const adsEnabled = Boolean(CLIENT);
 
 /** Loads the ad script once. Safe to call on every boot. */
@@ -99,6 +94,15 @@ export function initAds() {
 export function interstitialAvailable() {
   const w = typeof window === "undefined" ? null : (window as AdWindow);
   return !suppressed && Boolean(CLIENT) && Boolean(w?.adBreak);
+}
+
+/**
+ * What shouldShowSeasonAd (economy.ts) needs from the ad layer. PR #11's AdMob
+ * ads.ts can provide the same shape: adAvailable = adsEnabled() && !adsBlocked(),
+ * lastRewardedAt = its module-level lastRewardedAt.
+ */
+export function seasonAdContext(): { adAvailable: boolean; lastRewardedAt: number } {
+  return { adAvailable: interstitialAvailable(), lastRewardedAt };
 }
 
 /**
