@@ -77,7 +77,7 @@ import { cname, loadLang, setLang, show, t, type Lang } from "@/game/i18n";
 import { authEnabled } from "@/lib/auth/client";
 import { STORIES, answerStory, storyAttr } from "@/game/stories";
 import { ACHIEVEMENTS, checkAchievements, loadUnlocked } from "@/game/achievements";
-import { adsEnabled, adsSuppressed, initAds, setAdsSuppressed, showInterstitial, showRewarded } from "@/game/ads";
+import { adsEnabled, adsSuppressed, initAds, interstitialAvailable, lastRewardedAtMs, setAdsSuppressed, showInterstitial, showRewarded } from "@/game/ads";
 import {
   CATALOG,
   COSMETIC_IDS,
@@ -85,6 +85,7 @@ import {
   HALFTIME_INTERSTITIAL,
   canBuy,
   canShowSeasonInterstitial,
+  shouldShowSeasonAd,
   countInterstitial,
   formatCoins,
   grantDiscount,
@@ -420,7 +421,21 @@ export function GameApp() {
         onStore={playing === "main" ? () => setStoreOpen(true) : undefined}
         onSummer={() => {
           if (wonRace) return finishDaily(run);
-          if (playing === "daily" || admin || !canShowSeasonInterstitial(run)) return update(startSummer(run));
+          // The player closed the summary: one forced ad at most, by the rules in shouldShowSeasonAd.
+          const showAd =
+            !admin &&
+            shouldShowSeasonAd(
+              {
+                career: run,
+                summaryClosed: true,
+                adAvailable: interstitialAvailable(),
+                removeAdsOwned: loadDevice().removeAds.owned,
+                lastRewardedAt: lastRewardedAtMs(),
+                daily: playing === "daily",
+              },
+              Date.now(),
+            );
+          if (!showAd) return update(startSummer(run));
           if (summerLock.current) return;
           summerLock.current = true;
           let counted = run;
