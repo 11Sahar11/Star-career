@@ -12,6 +12,8 @@
  * Admin play is not counted (setAnalyticsSuppressed).
  */
 
+import { kvGet, kvSet } from "./kv";
+
 type Value = string | number | boolean | null;
 type VaWindow = Window & { va?: (event: "event", payload: { name: string; data?: Record<string, Value> }) => void };
 
@@ -66,14 +68,14 @@ export function trackDailyOpen() {
   if (typeof window === "undefined") return;
   try {
     const today = localDay();
-    let first = localStorage.getItem(FIRST_OPEN_KEY);
+    let first = kvGet(FIRST_OPEN_KEY);
     if (!first) {
       first = today;
-      localStorage.setItem(FIRST_OPEN_KEY, first);
+      kvSet(FIRST_OPEN_KEY, first);
     }
-    if (localStorage.getItem(LAST_OPEN_KEY) === today) return;
-    localStorage.setItem(LAST_OPEN_KEY, today);
-    track("app_open", { day: daysBetween(first), sessions: Number(localStorage.getItem(SESSIONS_KEY) || "0") });
+    if (kvGet(LAST_OPEN_KEY) === today) return;
+    kvSet(LAST_OPEN_KEY, today);
+    track("app_open", { day: daysBetween(first), sessions: Number(kvGet(SESSIONS_KEY) || "0") });
   } catch {
     /* ignore */
   }

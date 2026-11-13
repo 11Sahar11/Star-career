@@ -20,6 +20,9 @@ import {
 import { grokDevAssetFile, isGrokPwaPluginApplied, renderInstallPage } from "./grok-pwa-plugin.mjs";
 
 const TEMPLATE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+// Head injection reads src/lib/og/site.json from cwd. Isolate it so assertions
+// about a fixture document are not overwritten by this app's card.
+process.chdir(mkdtempSync(join(tmpdir(), "grok-pwa-test-cwd-")));
 
 test("injects before </head>", () => {
   const out = injectGrokPwaHead("<html><head><title>x</title></head><body></body></html>");
@@ -515,15 +518,14 @@ test("renders the manifest with the per-app name", () => {
   assert.equal(manifest.icons[0].src, "/__grok/icon-180.png");
 });
 
-// Tripwires: STAR ships to Google Play, so the platform chrome (grok.com
-// extensions script, "Created with Grok" banner, /__grok/ assets) stays in the
-// dev preview and never reaches the production build.
-test("platform chrome is dev-server only", () => {
+test("platform chrome is dev-server only and the Play build is a static client", () => {
   assert.equal(isGrokPwaPluginApplied({ command: "serve", isPreview: false }), true);
   assert.equal(isGrokPwaPluginApplied({ command: "serve", isPreview: true }), false);
   assert.equal(isGrokPwaPluginApplied({ command: "build" }), false);
   const viteConfig = readFileSync(join(TEMPLATE_ROOT, "vite.config.ts"), "utf8");
+  assert.match(viteConfig, /prerender:\s*\{[^}]*enabled:\s*true/s);
   assert.doesNotMatch(viteConfig, /serverDir:/);
+  assert.doesNotMatch(viteConfig, /nitro\(/);
   assert.equal(existsSync(join(TEMPLATE_ROOT, "server/middleware/grok-pwa.ts")), false);
   assert.equal(existsSync(join(TEMPLATE_ROOT, "public/__grok")), false);
 });

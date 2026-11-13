@@ -1,11 +1,11 @@
 import { localClub } from "./clubnames";
+import { kvGet, kvSet } from "./kv";
 export type Lang = "en" | "he" | "es" | "fr";
 
 const KEY = "star-lang";
 function readLang(): Lang {
   try {
-    if (typeof localStorage === "undefined") return "en";
-    const saved = localStorage.getItem(KEY);
+    const saved = kvGet(KEY);
     return saved === "he" || saved === "es" || saved === "fr" ? saved : "en";
   } catch {
     return "en";
@@ -26,7 +26,7 @@ export function loadLang(): Lang {
 export function setLang(lang: Lang) {
   current = lang;
   try {
-    localStorage.setItem(KEY, lang);
+    kvSet(KEY, lang);
   } catch {
     /* private mode */
   }
@@ -3070,7 +3070,7 @@ export function show(raw: string, lang: Lang = current): string {
   const named = (value: string) => (value.includes(".") ? t(value, undefined, lang) : localClub(value, lang));
   const name = named(a);
   const second = ["Quarter-final", "Semi-final", "Final", "Winners"].includes(b) ? t(`stage.${b}`, undefined, lang) : named(b);
-  let text = t(key, { n: b ? second : name, name, p: second, g: second, y: a }, lang);
+  const text = t(key, { n: b ? second : name, name, p: second, g: second, y: a }, lang);
   if (index >= 0 && text.includes("|")) {
     const bag = text.split("|");
     return bag[index] ?? bag[0] ?? text;
