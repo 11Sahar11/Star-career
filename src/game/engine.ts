@@ -52,7 +52,7 @@ import {
   type RoundId,
   type TableRow,
 } from "./types";
-import { t } from "./i18n";
+import { t, type Lang } from "./i18n";
 import { rollStory } from "./stories";
 
 export function emptyAttrs(value = 0): Attrs {
@@ -1286,6 +1286,49 @@ function openBigMatch(career: Career, fixture: Fixture, roll: () => number, rng:
   return { ...career, pending, screen: "bigmatch", recentDeltas: null, lastTrain: null, keyGain: null, keyCampBonus: 0, gearTrial: null };
 }
 
+/** Puts the earliest decision in minute 1 and keeps every other minute unique. */
+function pinOpeningMoment(moments: Moment[]): Moment[] {
+  if (!moments.length) return moments;
+  const sorted = [...moments].sort((a, b) => a.minute - b.minute);
+  const used = new Set<number>([1]);
+  const rest = sorted.slice(1).map((moment) => {
+    let minute = Math.max(2, moment.minute);
+    while (used.has(minute) && minute < 89) minute += 1;
+    used.add(minute);
+    return { ...moment, minute };
+  });
+  return [{ ...sorted[0], minute: 1 }, ...rest];
+}
+
+/**
+ * The first match of a new career. Skips the pre-season screen and any
+ * between-match story, opens the opener as a live decision, and pauses on
+ * the first one (minute 1). Pre-season waits until that match is finished.
+ */
+export function openDebutMatch(career: Career): Career {
+  if (career.race || career.retired || career.screen !== "camp") return career;
+  if (career.season.fixturesPlayed.length > 0 || career.totals.seasons > 0 || career.season.cursor !== 0) return career;
+  const fixture = career.season.fixtures[0];
+  if (!fixture) return career;
+  const rng = makeRng(career.rng);
+  const roll = () => rng.next();
+  const opened = openBigMatch(career, fixture, roll, rng);
+  if (!opened.pending) return opened;
+  // A scheduled key fixture keeps key-match points, coins, the key flag, and Skip.
+  // Any other opener is decided live and then scored as a normal league match.
+  const scheduledKey = isBigFixture(career, fixture);
+  return {
+    ...opened,
+    story: null,
+    campPending: true,
+    pending: {
+      ...opened.pending,
+      moments: pinOpeningMoment(opened.pending.moments),
+      ...(scheduledKey ? {} : { debut: true }),
+    },
+  };
+}
+
 /** Plays one moment. Deterministic for a given career, moment and choice, so the daily race stays fair. */
 export function resolveMoment(career: Career, index: number, optionId: string): Career {
   const pending = career.pending;
@@ -1448,17 +1491,19 @@ export function finishBigMatch(career: Career): Career {
   const report = composeReport(pending);
   const rng = makeRng(pending.rngState);
   const roll = () => rng.next();
+  const debut = pending.debut === true;
   const applied = applyReport({ ...career, pending: null }, report, roll, "report");
   // Key matches weigh double in the table and lift the cup run.
-  if (!applied.race) {
+  // The opening decision is a normal league match: applyReport already paid it.
+  if (!debut && !applied.race) {
     const earned = Math.round(earnForReport(report, true, pending.moments) * coinMultiplier(career));
     applied.seasonCoins = earnSeasonCoins(applied, "matches", earned - (applied.coinsEarnedLast ?? 0));
     applied.coins = applied.coins - (applied.coinsEarnedLast ?? 0) + earned;
     applied.coinsEarnedLast = earned;
   }
   const log = applied.season.fixturesPlayed[applied.season.fixturesPlayed.length - 1];
-  if (log) applied.season.fixturesPlayed[applied.season.fixturesPlayed.length - 1] = { ...log, key: true };
-  if (report.competition === "league") {
+  if (log && !debut) applied.season.fixturesPlayed[applied.season.fixturesPlayed.length - 1] = { ...log, key: true };
+  if (!debut && report.competition === "league") {
     const bonus = report.us > report.them ? 3 : report.us === report.them ? 1 : 0;
     applied.season = {
       ...applied.season,
@@ -1466,7 +1511,7 @@ export function finishBigMatch(career: Career): Career {
       keyWins: (applied.season.keyWins ?? 0) + (report.us > report.them ? 1 : 0),
     };
   }
-  applied.story = rollStory(applied, roll);
+  applied.story = debut ? null : rollStory(applied, roll);
   applied.rng = rng.state();
   applied.lastTrain = null;
   return applied;
@@ -1474,7 +1519,8 @@ export function finishBigMatch(career: Career): Career {
 
 /** Where the game goes after a match report: the winter break, the next match, or the season review. */
 export function afterReport(career: Career): Career {
-  const cleared: Career = { ...career, activeReport: null };
+  const cleared: Career = { ...career, activeReport: null, campPending: false };
+  if (career.campPending) return { ...cleared, screen: "camp", story: null };
   if (!cleared.season.breakDone && cleared.season.cursor >= cleared.season.breakAt) {
     return { ...cleared, screen: "break", season: { ...cleared.season, phase: "first" } };
   }
@@ -1510,19 +1556,79 @@ export function trainOdds(career: Career, key: AttrKey) {
   return { up, big, down };
 }
 
+export type TrainOdds = { up: number; big: number; down: number };
+export type TrainPartId = "up" | "flat" | "big" | "down";
+
+/**
+ * The roll applyTrain uses, in 0..99.
+ * Injury is [0, down), +3 is the next `big` rolls, +1 the next `up` rolls, and the rest change nothing.
+ */
+export function trainBucket(roll: number, odds: TrainOdds): TrainPartId {
+  if (roll < odds.down) return "down";
+  if (roll < odds.down + odds.big) return "big";
+  if (roll < odds.down + odds.big + odds.up) return "up";
+  return "flat";
+}
+
+/** Every real outcome of these odds, most likely first. The counts are the buckets trainBucket uses. */
+export function trainOutcomes(odds: TrainOdds): { id: TrainPartId; n: number }[] {
+  const parts: { id: TrainPartId; n: number }[] = [
+    { id: "up", n: odds.up },
+    { id: "flat", n: 100 - odds.big - odds.up - odds.down },
+    { id: "big", n: odds.big },
+    { id: "down", n: odds.down },
+  ];
+  const rank: Record<TrainPartId, number> = { up: 0, flat: 1, big: 2, down: 3 };
+  return parts.filter((part) => part.n > 0).sort((a, b) => b.n - a.n || rank[a.id] - rank[b.id]);
+}
+
+/** The odds line, most likely outcome first, using the same percentages applyTrain rolls. */
+export function formatTrainOdds(odds: TrainOdds, lang?: Lang) {
+  return trainOutcomes(odds)
+    .map((part) => t(`train.part.${part.id}`, { n: part.n }, lang))
+    .join(" · ");
+}
+
+/**
+ * The one odds line when every stat rolls the same buckets.
+ * Null when any stat differs (a ceiling, a tight room), so each row must print its own.
+ */
+export function sessionTrainOdds(career: Career): TrainOdds | null {
+  const first = trainOdds(career, ATTR_KEYS[0]);
+  for (const key of ATTR_KEYS) {
+    const odds = trainOdds(career, key);
+    if (odds.up !== first.up || odds.big !== first.big || odds.down !== first.down) return null;
+  }
+  return first;
+}
+
+/**
+ * The text the training screen shows.
+ * `key === null` is the shared line above the list (only when every stat matches).
+ * A stat key is that row's own roll, and only when the stats do not share one line.
+ * A ceiling stat has no +1 or +3 bucket, so its line has no "+" outcome.
+ */
+export function displayedTrainLine(career: Career, key: AttrKey | null, lang?: Lang): string | null {
+  const shared = sessionTrainOdds(career);
+  if (key === null) return shared ? formatTrainOdds(shared, lang) : null;
+  if (shared) return null;
+  return formatTrainOdds(trainOdds(career, key), lang);
+}
+
 function applyTrain(career: Career, key: AttrKey, which: "camp" | "break"): Career {
   const odds = trainOdds(career, key);
   const room = statCap(career.player.position, career.player.potential, key) - career.player.attrs[key];
   const rng = makeRng(career.rng);
   const roll = Math.floor(rng.next() * 100);
+  const bucket = trainBucket(roll, odds);
   let delta = 0;
   let spell = 0;
-  if (roll < odds.down) {
+  if (bucket === "down") {
     delta = -1;
     spell = career.difficulty === "hard" ? 4 : career.difficulty === "easy" ? 2 : 3;
-  } else if (roll < odds.down + odds.big) {
+  } else if (bucket === "big") {
     delta = Math.min(3, room);
-  } else if (roll < odds.down + odds.big + odds.up) {
+  } else if (bucket === "up") {
     delta = Math.min(1, room);
   }
   const nextVal = clamp(career.player.attrs[key] + delta, 40, 99);
