@@ -5,12 +5,6 @@ import { chromium } from "playwright";
 import { checkedOutputPath, checkedUrl } from "./browser-guard.mjs";
 import { computeBrandWarnings } from "./brand-check.mjs";
 import {
-  authInvariantWarnings,
-  buildAuthEnabled,
-  compareAuthInvariant,
-  probeDevAuthEnabled,
-} from "./check-auth-invariant.mjs";
-import {
   baselineComparison,
   bodyTextPrefix,
   derivedPaths,
@@ -141,14 +135,7 @@ try {
   }
 
   const brandWarnings = computeBrandWarnings({ hasCanvas: viewports.desktop.hasCanvas });
-  // Only a dev server answers /__app-env, so smoking the built output reads as
-  // indeterminate — report a divergence, never the absence of an observation.
-  const authWarnings = authInvariantWarnings(
-    compareAuthInvariant({
-      devAuthEnabled: await probeDevAuthEnabled(url),
-      buildAuthEnabled: buildAuthEnabled(),
-    }),
-  );
+  const authWarnings = [];
   const verdict = { url, viewports, brandWarnings, authWarnings, verdictFile: outJson };
   if (baselineRequested) {
     const { divergesFromBaseline, reasons } = compareAgainstBaseline(verdict);

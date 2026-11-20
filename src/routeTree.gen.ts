@@ -65,26 +65,10 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/delete-account'
-    | '/licenses'
-    | '/privacy'
-    | '/terms'
+  fullPaths: '/' | '/delete-account' | '/licenses' | '/privacy' | '/terms'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/delete-account'
-    | '/licenses'
-    | '/privacy'
-    | '/terms'
-  id:
-    | '__root__'
-    | '/'
-    | '/delete-account'
-    | '/licenses'
-    | '/privacy'
-    | '/terms'
+  to: '/' | '/delete-account' | '/licenses' | '/privacy' | '/terms'
+  id: '__root__' | '/' | '/delete-account' | '/licenses' | '/privacy' | '/terms'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {

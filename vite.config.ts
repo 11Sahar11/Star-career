@@ -27,6 +27,13 @@ export default defineConfig({
     grokPwaPlugin(),
     tailwindcss(),
     tanstackStart({
+      pages: [
+        { path: "/" },
+        { path: "/privacy" },
+        { path: "/terms" },
+        { path: "/delete-account" },
+        { path: "/licenses" },
+      ],
       prerender: {
         enabled: true,
         crawlLinks: true,

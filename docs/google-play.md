@@ -63,7 +63,9 @@ Other rules already in the game:
 - The season summary is on screen before its continue button can ask for the interstitial. Nothing is requested during a match or at halftime.
 - Rewarded clips only when the player chooses one.
 - No banners.
-- If the device save has `removeAds.owned`, ads are skipped and rewards are granted without a clip.
+- If the device save has `removeAds.owned`, the season-end interstitial is skipped. Optional rewarded clips stay available and pay only after AdMob's Rewarded event.
+- If no rewarded ad is ready, the daily chest shows only the normal reward. A double is never granted without a watch.
+- Android backup is off (`android:allowBackup="false"`), so the career save is not copied into Google's automatic backup.
 
 The browser build does not load AdMob. Rewards are granted immediately and the interstitial is skipped.
 

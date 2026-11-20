@@ -14,5 +14,6 @@ dist
 *.jks
 android/keystore.properties
 android/local.properties
+google-services.json
 .node_modules.lock
 .impeccable/review/

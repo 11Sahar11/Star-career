@@ -78,7 +78,7 @@ import { cname, loadLang, setLang, show, t, type Lang } from "@/game/i18n";
 import { hydrateKv, kvGet, kvSet } from "@/game/kv";
 import { STORIES, answerStory, storyAttr } from "@/game/stories";
 import { ACHIEVEMENTS, checkAchievements, loadUnlocked } from "@/game/achievements";
-import { adsEnabled, adsSuppressed, adAge, adPrivacyOptionsRequired, initAds, openAdPrivacyOptions, prepareAds, seasonAdContext, setAdAge, setAdsSuppressed, showInterstitial, showRewarded, type AdAge } from "@/game/ads";
+import { adsEnabled, adsSuppressed, adAge, adPrivacyOptionsRequired, initAds, openAdPrivacyOptions, prepareAds, rewardedAdReady, seasonAdContext, setAdAge, setAdsSuppressed, showInterstitial, showRewarded, subscribeRewardedAd, type AdAge } from "@/game/ads";
 import {
   CATALOG,
   COSMETIC_IDS,
@@ -187,7 +187,7 @@ export function GameApp() {
       setStreak(settled);
       if (settled.freezesUsed) track("streak_freeze_used", { used: settled.freezesUsed, streak: settled.n });
       initAds();
-      if (!admin && adsEnabled() && !loadDevice().removeAds.owned) {
+      if (!admin && adsEnabled()) {
         if (adAge()) void prepareAds().then(() => setAdPrivacy(adPrivacyOptionsRequired()));
         else setAdAgePrompt(true);
       }
@@ -1349,11 +1349,13 @@ function Home({
   );
 }
 
-/** The daily chest on home: open it free, or watch a video to double it. Two equal buttons; the video is never required. */
+/** The daily chest on home: open it free. Watch a video to double it only when a clip is ready. */
 function DailyChest({ career, onChange }: { career: Career; onChange: (c: Career) => void }) {
   const { tr } = useTx();
   const today = todayKey();
   const [chest, setChest] = useState(() => chestToday(today));
+  const [videoReady, setVideoReady] = useState(() => rewardedAdReady());
+  useEffect(() => subscribeRewardedAd(() => setVideoReady(rewardedAdReady())), []);
   if (!chest || career.race) return null;
   const open = (double: boolean) => {
     markChest(today);
@@ -1368,12 +1370,14 @@ function DailyChest({ career, onChange }: { career: Career; onChange: (c: Career
       <button type="button" className="btn-ghost h-12 w-full text-base" data-chest-open onClick={() => open(false)}>
         {chest.kind === "coins" ? tr("eco.openPlain", { n: formatCoins(chest.coins) }) : tr("eco.openPlainCamp")}
       </button>
-      <RewardButton
-        name="daily-chest"
-        className="reward-quiet h-12 w-full text-base"
-        label={chest.kind === "coins" ? tr("eco.videoCoins", { n: formatCoins(chest.coins * 2) }) : tr("eco.chestDouble")}
-        onReward={() => open(true)}
-      />
+      {videoReady ? (
+        <RewardButton
+          name="daily-chest"
+          className="reward-quiet h-12 w-full text-base"
+          label={chest.kind === "coins" ? tr("eco.videoCoins", { n: formatCoins(chest.coins * 2) }) : tr("eco.chestDouble")}
+          onReward={() => open(true)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -2368,16 +2372,9 @@ function SummerScreen({
   );
 }
 
-/** True when rewarded clips can actually run: an ad client is configured, not admin, and no remove-ads entitlement. */
+/** True when an ad client exists. Remove-ads still leaves optional rewarded clips. */
 function useAdsShown() {
-  const [shown] = useState(() => {
-    if (!adsEnabled() || adsSuppressed()) return false;
-    try {
-      return !loadDevice().removeAds.owned;
-    } catch {
-      return false;
-    }
-  });
+  const [shown] = useState(() => adsEnabled() && !adsSuppressed());
   return shown;
 }
 

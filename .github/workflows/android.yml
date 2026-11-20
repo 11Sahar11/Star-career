@@ -1,7 +1,10 @@
 name: Android
 
+# `push` is required: this workflow is not on the default branch yet, and a
+# pull_request whose base is not `main` did not start it.
 on:
   pull_request:
+  push:
 
 jobs:
   check:

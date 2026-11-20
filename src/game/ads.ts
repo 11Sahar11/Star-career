@@ -1,7 +1,7 @@
 /**
  * Ads for the Android app, through AdMob (Capacitor). The browser build never
- * requests an ad: a rewarded clip grants its reward at once and an interstitial
- * is skipped.
+ * requests an ad. A rewarded clip pays only after AdMob's Rewarded event, so
+ * with no ad client the reward is not granted. An interstitial is skipped.
  *
  * This file loads ads. It does not decide how often a season interstitial
  * may play. That belongs to the caller. `showInterstitial` only presents a
@@ -32,12 +32,27 @@ export const GOOGLE_TEST_ADS = {
 
 export type AdAge = "under" | "16plus";
 
-let starting: Promise<boolean> | null = null;
+let starting: Promise<boolean | "retry"> | null = null;
 let suppressed = false;
 let privacyOptionsRequired = false;
 let lastRewardedAt = 0;
 let interstitialReady = false;
 let rewardedReady = false;
+const rewardedListeners = new Set<() => void>();
+
+type ListenerHandle = { remove: () => Promise<void> };
+
+/** A full-screen ad the player does not close should not freeze the season. */
+const DISMISS_TIMEOUT_MS = 60_000;
+
+function markRewardedReady(value: boolean) {
+  rewardedReady = value;
+  for (const listener of rewardedListeners) listener();
+}
+
+async function removeListeners(handles: ListenerHandle[]) {
+  await Promise.all(handles.map((handle) => handle.remove().catch(() => undefined)));
+}
 
 type AdMobModule = typeof import("@capacitor-community/admob");
 
@@ -59,7 +74,7 @@ export function resolvedAdUnitIds() {
   };
 }
 
-/** Admin play: nothing is requested, and rewards are granted without a clip. */
+/** Admin play: no ad is requested, and a missing clip does not invent a reward. */
 export function setAdsSuppressed(value: boolean) {
   suppressed = value;
 }
@@ -100,8 +115,35 @@ function removeAdsOwned() {
   }
 }
 
+/** Forced placements only. A remove-ads purchase does not block an optional rewarded clip. */
 function adsBlocked() {
   return suppressed || removeAdsOwned();
+}
+
+/** True when a rewarded clip can play right now. Remove-ads does not turn this off. */
+export function rewardedAdReady() {
+  return adsEnabled() && !suppressed && rewardedReady;
+}
+
+export function subscribeRewardedAd(listener: () => void) {
+  rewardedListeners.add(listener);
+  return () => {
+    rewardedListeners.delete(listener);
+  };
+}
+
+/**
+ * A reward is paid only for AdMob's Rewarded event. Dismissed (early close)
+ * stamps the season-ad cooldown and does not pay. FailedToShow does neither.
+ */
+export function applyRewardAdEvent(
+  event: "rewarded" | "dismissed" | "failed",
+  state: { grant: boolean; lastRewardedAt: number },
+  now: number,
+): { grant: boolean; lastRewardedAt: number } {
+  if (event === "rewarded") return { grant: true, lastRewardedAt: now };
+  if (event === "dismissed") return { grant: state.grant, lastRewardedAt: now };
+  return state;
 }
 
 /** What `shouldShowSeasonAd` reads from this layer. Frequency rules stay in economy.ts. */
@@ -134,42 +176,51 @@ async function preload(admob: AdMobModule) {
     admob.AdMob.prepareRewardVideoAd({ adId: ids.rewarded, isTesting }),
   ]);
   interstitialReady = interstitial.status === "fulfilled";
-  rewardedReady = rewarded.status === "fulfilled";
+  markRewardedReady(rewarded.status === "fulfilled");
 }
 
 async function ensureAds(): Promise<AdMobModule | null> {
-  if (!adsEnabled() || adsBlocked()) return null;
+  if (!adsEnabled() || suppressed) return null;
   const age = adAge();
   if (!age) return null;
   if (!starting) {
     starting = (async () => {
-      const admob = await import("@capacitor-community/admob");
-      const underAge = age === "under";
-      const request: import("@capacitor-community/admob").AdmobConsentRequestOptions = {};
-      if (underAge) request.tagForUnderAgeOfConsent = true;
-      if (appConfig.ads.testOnly) {
-        // EEA debug geography exercises the GDPR form used for the EEA and the UK.
-        request.debugGeography = admob.AdmobConsentDebugGeography.EEA;
-        const devices = appConfig.ads.umpTestDeviceIds ?? [];
-        if (devices.length) request.testDeviceIdentifiers = devices;
+      try {
+        const admob = await import("@capacitor-community/admob");
+        const underAge = age === "under";
+        const request: import("@capacitor-community/admob").AdmobConsentRequestOptions = {};
+        if (underAge) request.tagForUnderAgeOfConsent = true;
+        if (appConfig.ads.testOnly) {
+          // EEA debug geography exercises the GDPR form used for the EEA and the UK.
+          request.debugGeography = admob.AdmobConsentDebugGeography.EEA;
+          const devices = appConfig.ads.umpTestDeviceIds ?? [];
+          if (devices.length) request.testDeviceIdentifiers = devices;
+        }
+        let info = await admob.AdMob.requestConsentInfo(request);
+        if (!underAge && info.isConsentFormAvailable && info.status === admob.AdmobConsentStatus.REQUIRED) {
+          info = await admob.AdMob.showConsentForm();
+        }
+        privacyOptionsRequired = String(info.privacyOptionsRequirementStatus) === "REQUIRED";
+        if (!info.canRequestAds) return false;
+        await admob.AdMob.initialize({
+          initializeForTesting: appConfig.ads.testOnly,
+          maxAdContentRating: admob.MaxAdContentRating.Teen,
+          ...(underAge ? { tagForUnderAgeOfConsent: true } : {}),
+        });
+        await preload(admob);
+        return true;
+      } catch {
+        // Offline or a failed init must not stick for the whole session.
+        return "retry" as const;
       }
-      let info = await admob.AdMob.requestConsentInfo(request);
-      if (!underAge && info.isConsentFormAvailable && info.status === admob.AdmobConsentStatus.REQUIRED) {
-        info = await admob.AdMob.showConsentForm();
-      }
-      privacyOptionsRequired = String(info.privacyOptionsRequirementStatus) === "REQUIRED";
-      if (!info.canRequestAds) return false;
-      await admob.AdMob.initialize({
-        initializeForTesting: appConfig.ads.testOnly,
-        maxAdContentRating: admob.MaxAdContentRating.Teen,
-        ...(underAge ? { tagForUnderAgeOfConsent: true } : {}),
-      });
-      await preload(admob);
-      return true;
-    })().catch(() => false);
+    })();
   }
-  const ok = await starting;
-  if (!ok) return null;
+  const outcome = await starting;
+  if (outcome === "retry") {
+    starting = null;
+    return null;
+  }
+  if (!outcome) return null;
   return import("@capacitor-community/admob");
 }
 
@@ -196,19 +247,25 @@ export function showInterstitial(name: string, done: () => void, shown?: () => v
   }
   interstitialReady = false;
   void (async () => {
+    const handles: ListenerHandle[] = [];
     let presented = false;
     try {
       const admob = await import("@capacitor-community/admob");
       let closed = false;
+      let end = () => {};
       const untilClosed = new Promise<void>((resolve) => {
-        const end = () => {
+        end = () => {
           if (closed) return;
           closed = true;
           resolve();
         };
-        void admob.AdMob.addListener(admob.InterstitialAdPluginEvents.Dismissed, end);
-        void admob.AdMob.addListener(admob.InterstitialAdPluginEvents.FailedToShow, end);
       });
+      handles.push(
+        ...(await Promise.all([
+          admob.AdMob.addListener(admob.InterstitialAdPluginEvents.Dismissed, end),
+          admob.AdMob.addListener(admob.InterstitialAdPluginEvents.FailedToShow, end),
+        ])),
+      );
       await Promise.race([
         admob.AdMob.showInterstitial(),
         new Promise<never>((_, reject) => {
@@ -218,28 +275,35 @@ export function showInterstitial(name: string, done: () => void, shown?: () => v
       presented = true;
       shown?.();
       track("interstitial_shown", { placement: name });
-      await untilClosed;
+      await Promise.race([
+        untilClosed,
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, DISMISS_TIMEOUT_MS);
+        }),
+      ]);
       void preload(admob);
     } catch {
       if (!presented) finish();
     } finally {
+      await removeListeners(handles);
       finish();
     }
   })();
 }
 
 /**
- * A rewarded clip the player chose. `onReward` runs only when the clip was
- * watched; with ads off, suppressed, or remove-ads it runs at once.
- * `onUnavailable` when no clip could be shown, `onDismissed` when it was closed early.
+ * A rewarded clip the player chose. `onReward` runs only after AdMob's
+ * Rewarded event. No client, a clip that is not ready, or an early close
+ * does not pay. `onUnavailable` when no clip could be shown, `onDismissed`
+ * when it was closed early. Remove-ads owners can still watch one.
  */
 export function showRewarded(name: string, onReward: () => void, onUnavailable?: () => void, onDismissed?: () => void) {
-  if (!adsEnabled() || adsBlocked() || !rewardedReady) {
-    if (!adsEnabled() || adsBlocked()) onReward();
-    else onUnavailable?.();
+  if (!adsEnabled() || suppressed || !rewardedReady) {
+    onUnavailable?.();
     return;
   }
   void (async () => {
+    const handles: ListenerHandle[] = [];
     try {
       const admob = await ensureAds();
       if (!admob) {
@@ -255,30 +319,41 @@ export function showRewarded(name: string, onReward: () => void, onUnavailable?:
           closed = true;
           resolve();
         };
-        void admob.AdMob.addListener(admob.RewardAdPluginEvents.Rewarded, () => {
-          rewarded = true;
-          lastRewardedAt = Date.now();
-        });
-        void admob.AdMob.addListener(admob.RewardAdPluginEvents.Dismissed, () => {
-          lastRewardedAt = Date.now();
-          end();
-        });
-        void admob.AdMob.addListener(admob.RewardAdPluginEvents.FailedToShow, end);
       });
-      rewardedReady = false;
-      const play = () => {
-        void Promise.race([
-          admob.AdMob.showRewardVideoAd(),
-          new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error("timeout")), 2000);
-          }),
-        ]).catch(() => {
-          end();
-          void preload(admob);
-        });
+      const stamp = (event: "rewarded" | "dismissed" | "failed") => {
+        const next = applyRewardAdEvent(event, { grant: rewarded, lastRewardedAt }, Date.now());
+        rewarded = next.grant;
+        lastRewardedAt = next.lastRewardedAt;
       };
-      play();
-      await untilClosed;
+      handles.push(
+        ...(await Promise.all([
+          admob.AdMob.addListener(admob.RewardAdPluginEvents.Rewarded, () => stamp("rewarded")),
+          admob.AdMob.addListener(admob.RewardAdPluginEvents.Dismissed, () => {
+            stamp("dismissed");
+            end();
+          }),
+          admob.AdMob.addListener(admob.RewardAdPluginEvents.FailedToShow, () => {
+            stamp("failed");
+            end();
+          }),
+        ])),
+      );
+      markRewardedReady(false);
+      void Promise.race([
+        admob.AdMob.showRewardVideoAd(),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("timeout")), 2000);
+        }),
+      ]).catch(() => {
+        end();
+        void preload(admob);
+      });
+      await Promise.race([
+        untilClosed,
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, DISMISS_TIMEOUT_MS);
+        }),
+      ]);
       void preload(admob);
       if (rewarded) {
         track("rewarded_watched", { placement: name });
@@ -286,6 +361,8 @@ export function showRewarded(name: string, onReward: () => void, onUnavailable?:
       } else onDismissed?.();
     } catch {
       onUnavailable?.();
+    } finally {
+      await removeListeners(handles);
     }
   })();
 }
