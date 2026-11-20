@@ -64,7 +64,7 @@
   --color-gold-deep: #e89c10;
   --color-on-gold: #1d1300;
   --color-coin: #f2c443;
-  --color-trophy: #9a6a00;
+  --color-trophy: #7f5700;
 
   --color-good: #0e7a42;
   --color-bad: #c8232f;
@@ -1438,7 +1438,7 @@
 .gear-price:not(:disabled):hover { color: var(--color-fg); }
 .gear-price:disabled { opacity: 0.6; }
 .gear-price .coin { width: 0.95rem; height: 0.95rem; }
-.gear-note { font-size: 0.6875rem; line-height: 1.25; color: var(--color-muted); }
+.gear-note { font-size: 0.75rem; line-height: 1.25; color: var(--color-muted); }
 /* the plate behind gear art elsewhere (daily offer) */
 .gear-well {
   border-radius: 10px;

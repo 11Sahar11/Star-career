@@ -216,6 +216,7 @@ function LoginPage() {
             <button type="submit" className="btn-primary mt-1 h-13 text-base" disabled={busy || !email.trim() || !password}>
               {mode === "signup" ? tr("acct.signupBtn") : tr("acct.signinBtn")}
             </button>
+            {mode === "signup" ? <SignupConsent lang={lang} /> : null}
           </form>
 
           <button
@@ -231,5 +232,28 @@ function LoginPage() {
         </>
       )}
     </main>
+  );
+}
+
+/** One line under "Create account": signing up means agreeing to the Terms and the Privacy Policy. */
+function SignupConsent({ lang }: { lang: Lang }) {
+  const link = "py-2 text-accent underline underline-offset-2";
+  const parts = t("acct.agree", undefined, lang).split(/(\{terms\}|\{privacy\})/);
+  return (
+    <p className="text-[0.8125rem] leading-6 text-muted" data-signup-consent>
+      {parts.map((part, i) =>
+        part === "{terms}" ? (
+          <Link key={i} to="/terms" className={link}>
+            {t("acct.agreeTerms", undefined, lang)}
+          </Link>
+        ) : part === "{privacy}" ? (
+          <Link key={i} to="/privacy" className={link}>
+            {t("acct.agreePrivacy", undefined, lang)}
+          </Link>
+        ) : (
+          part
+        ),
+      )}
+    </p>
   );
 }

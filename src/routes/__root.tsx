@@ -6,6 +6,8 @@ import appCss from "../styles.css?url";
 const APP_NAME = "STAR";
 /** Vercel Web Analytics: production builds only (the path exists only on a Vercel deployment). */
 const ANALYTICS = import.meta.env.PROD;
+/** The live-preview bridge only matters on the dev server; production ships without it. */
+const PREVIEW_BRIDGE = import.meta.env.DEV;
 
 export const Route = createRootRoute({
   head: () => ({
@@ -15,6 +17,11 @@ export const Route = createRootRoute({
       { title: APP_NAME },
       { name: "description", content: "A football player career. Pick a country at 16 and climb to a European final." },
       { name: "theme-color", content: "#f3f1ec" },
+      // Share-card basics (production has no platform head injector; the dev preview overwrites these).
+      { property: "og:title", content: APP_NAME },
+      { property: "og:description", content: "A football player career. Pick a country at 16 and climb to a European final." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
@@ -46,7 +53,7 @@ export const Route = createRootRoute({
         ) : null}
       </head>
       <body>
-        <PreviewHostBridge />
+        {PREVIEW_BRIDGE ? <PreviewHostBridge /> : null}
         <AuthProvider>
           <Outlet />
         </AuthProvider>
