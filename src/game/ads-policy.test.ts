@@ -2,17 +2,28 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { HALFTIME_INTERSTITIAL } from "./economy.ts";
+import { showInterstitial } from "./ads.ts";
 
 const root = new URL("../../", import.meta.url);
 
 test("the interstitial hook does not encode the season frequency cap", () => {
   const game = readFileSync(new URL("../components/game/GameApp.tsx", import.meta.url), "utf8");
-  const calls = [...game.matchAll(/showInterstitial\(/g)];
-  assert.equal(calls.length, 1);
+  const names = [...game.matchAll(/showInterstitial\(\s*"([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(names, ["season-end"]);
   assert.equal(HALFTIME_INTERSTITIAL, false);
+  assert.doesNotMatch(game, /canShowSeasonInterstitial|keymatch-half/);
+  const call = game.slice(game.indexOf("onSummer={() => {"), game.indexOf('showInterstitial(\n            "season-end"'));
+  assert.match(call, /shouldShowSeasonAd\(/);
+  assert.match(call, /\.\.\.seasonAdContext\(\)/);
+  assert.match(call, /summaryClosed: true/);
+  assert.match(call, /removeAdsOwned: loadDevice\(\)\.removeAds\.owned/);
+  assert.match(call, /if \(!showAd\) return update\(startSummer\(run\)\)/);
   const ads = readFileSync(new URL("./ads.ts", import.meta.url), "utf8");
-  assert.doesNotMatch(ads, /REWARD_COOLDOWN|90 \* 1000|90000|interstitialsPerSeason|season 1/);
-  assert.match(ads, /export function showInterstitial\(done: \(\) => void/);
+  assert.doesNotMatch(ads, /REWARD_COOLDOWN|90 \* 1000|90000|interstitialsPerSeason|canShowSeasonInterstitial/);
+  assert.match(ads, /export function showInterstitial\(name: string, done: \(\) => void/);
+  assert.match(ads, /export function seasonAdContext\(\)/);
+  assert.match(ads, /enabled = adsEnabled\(\) && !adsBlocked\(\)/);
+  assert.match(ads, /removeAdsOwned/);
   assert.match(ads, /prepareInterstitial/);
   assert.match(ads, /prepareRewardVideoAd/);
 });
@@ -54,4 +65,15 @@ test("AdMob stays on Google test units, asks for UMP consent, and is not child-d
 test("the release build cannot turn admin perks on", () => {
   const flag = readFileSync(new URL("./debug-admin.ts", import.meta.url), "utf8");
   assert.match(flag, /import\.meta\.env\.MODE !== "production"/);
+});
+
+test("showInterstitial continues immediately when AdMob is not ready or the placement is not season-end", () => {
+  let continued = 0;
+  showInterstitial("season-end", () => {
+    continued += 1;
+  });
+  showInterstitial("keymatch-half", () => {
+    continued += 1;
+  });
+  assert.equal(continued, 2);
 });

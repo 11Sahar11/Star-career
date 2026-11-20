@@ -56,7 +56,7 @@ Before any ad request, the Android app runs Google's UMP consent flow. Debug and
 
 Players who say they are under 16 are tagged `tagForUnderAgeOfConsent`. The app is not tagged for child-directed treatment. The max ad content rating is Teen (T).
 
-After consent, the interstitial and the rewarded ad are preloaded. `showInterstitial` only presents that preloaded full-screen ad and waits for AdMob's close button. It does not decide how often the season ad may play. That frequency (once per season transition, not after season 1, skip if a rewarded ad played in the last 90 seconds) is not in this change.
+After consent, the interstitial and the rewarded ad are preloaded. `showInterstitial("season-end")` presents that preloaded full-screen ad and waits for AdMob's close button. If AdMob is not ready, times out, or fails, the season continues at once. How often that ad may play is `shouldShowSeasonAd` in `src/game/economy.ts` (once per season transition, not after season 1, skip if a rewarded ad played in the last 90 seconds). This layer only supplies `seasonAdContext()`: ads are enabled, remove-ads is not owned, and the time of the last rewarded clip.
 
 Other rules already in the game:
 

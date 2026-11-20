@@ -371,10 +371,6 @@ export function shouldShowSeasonAd(input: SeasonAdInput, now: number): boolean {
   return true;
 }
 
-export function canShowSeasonInterstitial(career: Career) {
-  return !career.race && career.adState.interstitialsThisSeason < CAPS.interstitialsPerSeason;
-}
-
 export function countInterstitial(career: Career): Career {
   return { ...career, adState: { ...career.adState, interstitialsThisSeason: career.adState.interstitialsThisSeason + 1 } };
 }

@@ -35,6 +35,9 @@ export type AdAge = "under" | "16plus";
 let starting: Promise<boolean> | null = null;
 let suppressed = false;
 let privacyOptionsRequired = false;
+let lastRewardedAt = 0;
+let interstitialReady = false;
+let rewardedReady = false;
 
 type AdMobModule = typeof import("@capacitor-community/admob");
 
@@ -101,6 +104,12 @@ function adsBlocked() {
   return suppressed || removeAdsOwned();
 }
 
+/** What `shouldShowSeasonAd` reads from this layer. Frequency rules stay in economy.ts. */
+export function seasonAdContext(): { enabled: boolean; adAvailable: boolean; lastRewardedAt: number } {
+  const enabled = adsEnabled() && !adsBlocked();
+  return { enabled, adAvailable: enabled, lastRewardedAt };
+}
+
 /** Session counter only. Consent starts once an age answer is saved. */
 export function initAds() {
   if (typeof window === "undefined") return;
@@ -120,10 +129,12 @@ export function prepareAds(): Promise<void> {
 async function preload(admob: AdMobModule) {
   const ids = resolvedAdUnitIds();
   const isTesting = appConfig.ads.testOnly;
-  await Promise.allSettled([
+  const [interstitial, rewarded] = await Promise.allSettled([
     admob.AdMob.prepareInterstitial({ adId: ids.interstitial, isTesting }),
     admob.AdMob.prepareRewardVideoAd({ adId: ids.rewarded, isTesting }),
   ]);
+  interstitialReady = interstitial.status === "fulfilled";
+  rewardedReady = rewarded.status === "fulfilled";
 }
 
 async function ensureAds(): Promise<AdMobModule | null> {
@@ -172,21 +183,22 @@ function settleOnce(run: () => void) {
 }
 
 /**
- * Presents the preloaded interstitial. `done` runs when AdMob's close button
- * dismisses it, or immediately when no ad can be shown. `shown` runs only when
- * one was presented. Does not apply a frequency cap.
+ * Presents the preloaded season-end interstitial. Any other name is ignored.
+ * `done` runs when AdMob's close button dismisses a shown ad, or immediately
+ * when the ad is not ready, times out, or fails. No spinner and no wait in
+ * those cases. Frequency rules stay in `shouldShowSeasonAd`.
  */
-export function showInterstitial(done: () => void, shown?: () => void) {
+export function showInterstitial(name: string, done: () => void, shown?: () => void) {
   const finish = settleOnce(done);
-  if (!adsEnabled() || adsBlocked()) {
+  if (name !== "season-end" || !interstitialReady || !adsEnabled() || adsBlocked()) {
     finish();
     return;
   }
+  interstitialReady = false;
   void (async () => {
+    let presented = false;
     try {
-      const admob = await ensureAds();
-      if (!admob) return;
-      const ids = resolvedAdUnitIds();
+      const admob = await import("@capacitor-community/admob");
       let closed = false;
       const untilClosed = new Promise<void>((resolve) => {
         const end = () => {
@@ -197,18 +209,19 @@ export function showInterstitial(done: () => void, shown?: () => void) {
         void admob.AdMob.addListener(admob.InterstitialAdPluginEvents.Dismissed, end);
         void admob.AdMob.addListener(admob.InterstitialAdPluginEvents.FailedToShow, end);
       });
-      try {
-        await admob.AdMob.showInterstitial();
-      } catch {
-        await admob.AdMob.prepareInterstitial({ adId: ids.interstitial, isTesting: appConfig.ads.testOnly });
-        await admob.AdMob.showInterstitial();
-      }
+      await Promise.race([
+        admob.AdMob.showInterstitial(),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("timeout")), 2000);
+        }),
+      ]);
+      presented = true;
       shown?.();
-      track("interstitial_shown", { placement: "interstitial" });
+      track("interstitial_shown", { placement: name });
       await untilClosed;
       void preload(admob);
     } catch {
-      /* no fill */
+      if (!presented) finish();
     } finally {
       finish();
     }
@@ -221,8 +234,9 @@ export function showInterstitial(done: () => void, shown?: () => void) {
  * `onUnavailable` when no clip could be shown, `onDismissed` when it was closed early.
  */
 export function showRewarded(name: string, onReward: () => void, onUnavailable?: () => void, onDismissed?: () => void) {
-  if (!adsEnabled() || adsBlocked()) {
-    onReward();
+  if (!adsEnabled() || adsBlocked() || !rewardedReady) {
+    if (!adsEnabled() || adsBlocked()) onReward();
+    else onUnavailable?.();
     return;
   }
   void (async () => {
@@ -232,7 +246,6 @@ export function showRewarded(name: string, onReward: () => void, onUnavailable?:
         onUnavailable?.();
         return;
       }
-      const ids = resolvedAdUnitIds();
       let rewarded = false;
       let end = () => {};
       const untilClosed = new Promise<void>((resolve) => {
@@ -244,18 +257,24 @@ export function showRewarded(name: string, onReward: () => void, onUnavailable?:
         };
         void admob.AdMob.addListener(admob.RewardAdPluginEvents.Rewarded, () => {
           rewarded = true;
+          lastRewardedAt = Date.now();
         });
-        void admob.AdMob.addListener(admob.RewardAdPluginEvents.Dismissed, end);
+        void admob.AdMob.addListener(admob.RewardAdPluginEvents.Dismissed, () => {
+          lastRewardedAt = Date.now();
+          end();
+        });
         void admob.AdMob.addListener(admob.RewardAdPluginEvents.FailedToShow, end);
       });
+      rewardedReady = false;
       const play = () => {
-        void admob.AdMob.showRewardVideoAd().catch(async () => {
-          try {
-            await admob.AdMob.prepareRewardVideoAd({ adId: ids.rewarded, isTesting: appConfig.ads.testOnly });
-            void admob.AdMob.showRewardVideoAd().catch(() => end());
-          } catch {
-            end();
-          }
+        void Promise.race([
+          admob.AdMob.showRewardVideoAd(),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("timeout")), 2000);
+          }),
+        ]).catch(() => {
+          end();
+          void preload(admob);
         });
       };
       play();

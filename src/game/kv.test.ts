@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { KV_KEYS, planKvMigration } from "./kv.ts";
+import { KV_KEYS, planKvMigration } from "./kv";
+import { loadDevice } from "./legacy";
 
 const empty = () => Object.fromEntries(KV_KEYS.map((key) => [key, null]));
 
@@ -30,4 +31,29 @@ test("a deleted durable key is not resurrected from a stale localStorage value",
   });
   assert.equal(plan.local["kochav-career-v10"], null);
   assert.equal(plan.durable["kochav-career-v10"], null);
+});
+
+test("loadDevice still reads an old star-economy-v1 save, including remove-ads", () => {
+  const store = new Map<string, string>();
+  (globalThis as { localStorage?: Storage }).localStorage = {
+    getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
+    setItem: (key: string, value: string) => {
+      store.set(key, String(value));
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    clear: () => store.clear(),
+    key: () => null,
+    length: 0,
+  } as Storage;
+  localStorage.setItem(
+    "star-economy-v1",
+    JSON.stringify({ removeAds: { owned: true, checkedAt: 5 }, unlockedCountries: ["ita"], careersFinished: 2 }),
+  );
+  const device = loadDevice();
+  assert.equal(device.removeAds.owned, true);
+  assert.equal(device.removeAds.checkedAt, 5);
+  assert.deepEqual(device.unlockedCountries, ["ita"]);
+  assert.equal(device.careersFinished, 2);
 });
