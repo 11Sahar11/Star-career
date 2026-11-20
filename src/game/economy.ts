@@ -85,7 +85,7 @@ export const OPEN_COUNTRIES = ["eng", "esp"];
 
 export const CAPS = ECONOMY.caps;
 
-/** The halftime interstitial in key matches is off until the owner approves it. */
+/** Mid-match and halftime ads are not allowed. The only forced ad is the season-end interstitial. */
 export const HALFTIME_INTERSTITIAL = false;
 /** Remove-ads purchase: off, no price, Play Billing not wired. */
 export const REMOVE_ADS_ENABLED = false;
@@ -386,10 +386,6 @@ export function shouldShowSeasonAd(input: SeasonAdInput, now: number): boolean {
   if (career.adState.interstitialsThisSeason >= CAPS.interstitialsPerSeason) return false;
   if (input.lastRewardedAt > 0 && now - input.lastRewardedAt < SEASON_AD.rewardCooldownMs) return false;
   return true;
-}
-
-export function canShowSeasonInterstitial(career: Career) {
-  return !career.race && career.adState.interstitialsThisSeason < CAPS.interstitialsPerSeason;
 }
 
 export function countInterstitial(career: Career): Career {

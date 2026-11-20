@@ -1,3 +1,4 @@
+import { kvGet, kvRemove, kvSet } from "./kv";
 import { isHairColor, isHairStyle, isSkin } from "./look";
 import { OPEN_COUNTRIES, withEconomy } from "./economy";
 import { unlockCountry, withDeviceCosmetics } from "./legacy";
@@ -59,19 +60,19 @@ function migrateShape(raw: unknown): Career | null {
 
 export function loadCareer(): Career | null {
   try {
-    const raw = localStorage.getItem(CAREER_KEY);
+    const raw = kvGet(CAREER_KEY);
     if (raw) {
       const parsed = migrateCareer(JSON.parse(raw));
       return parsed && isCareer(parsed) ? parsed : null;
     }
     for (const oldKey of OLD_CAREER_KEYS) {
-      const old = localStorage.getItem(oldKey);
+      const old = kvGet(oldKey);
       if (!old) continue;
       const migrated = migrateCareer(JSON.parse(old));
       if (!migrated) continue;
       // Keep the old copy until the new save is written.
-      localStorage.setItem(CAREER_KEY, JSON.stringify(migrated));
-      if (localStorage.getItem(CAREER_KEY)) localStorage.removeItem(oldKey);
+      kvSet(CAREER_KEY, JSON.stringify(migrated));
+      if (kvGet(CAREER_KEY)) kvRemove(oldKey);
       return migrated;
     }
     return null;
@@ -82,8 +83,8 @@ export function loadCareer(): Career | null {
 
 export function saveCareer(career: Career | null) {
   try {
-    if (!career) localStorage.removeItem(CAREER_KEY);
-    else localStorage.setItem(CAREER_KEY, JSON.stringify(career));
+    if (!career) kvRemove(CAREER_KEY);
+    else kvSet(CAREER_KEY, JSON.stringify(career));
   } catch {
     /* private mode / quota — keep playing in memory */
   }
@@ -91,7 +92,7 @@ export function saveCareer(career: Career | null) {
 
 export function loadSound(): boolean {
   try {
-    return localStorage.getItem(SOUND_KEY) !== "off";
+    return kvGet(SOUND_KEY) !== "off";
   } catch {
     return true;
   }
@@ -99,7 +100,7 @@ export function loadSound(): boolean {
 
 export function saveSound(on: boolean) {
   try {
-    localStorage.setItem(SOUND_KEY, on ? "on" : "off");
+    kvSet(SOUND_KEY, on ? "on" : "off");
   } catch {
     /* ignore */
   }
@@ -107,7 +108,7 @@ export function saveSound(on: boolean) {
 
 export function loadDailyAttempt(): DailyAttempt | null {
   try {
-    const raw = localStorage.getItem(DAILY_KEY);
+    const raw = kvGet(DAILY_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as DailyAttempt;
     if (!parsed || typeof parsed.date !== "string") return null;
@@ -167,7 +168,7 @@ function shiftDay(days: number) {
 /** Reads the stored streak; the v1 format ({ date, n }, counted on app open) keeps its count. */
 function loadStreak(): StoredStreak | null {
   try {
-    const raw = localStorage.getItem(STREAK_KEY);
+    const raw = kvGet(STREAK_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw) as Partial<StoredStreak> & { date?: string; n?: number };
     if (typeof data?.date !== "string" || typeof data.n !== "number") return null;
@@ -182,7 +183,7 @@ function loadStreak(): StoredStreak | null {
 
 function storeStreak(state: StoredStreak) {
   try {
-    localStorage.setItem(STREAK_KEY, JSON.stringify(state));
+    kvSet(STREAK_KEY, JSON.stringify(state));
   } catch {
     /* ignore */
   }
@@ -236,7 +237,7 @@ export function boostId(name: string, year: number) {
 
 export function boostTaken(id: string) {
   try {
-    return localStorage.getItem(BOOST_KEY) === id;
+    return kvGet(BOOST_KEY) === id;
   } catch {
     return false;
   }
@@ -244,7 +245,7 @@ export function boostTaken(id: string) {
 
 export function markBoost(id: string) {
   try {
-    localStorage.setItem(BOOST_KEY, id);
+    kvSet(BOOST_KEY, id);
   } catch {
     /* ignore */
   }
@@ -252,7 +253,7 @@ export function markBoost(id: string) {
 
 export function saveDailyAttempt(attempt: DailyAttempt) {
   try {
-    localStorage.setItem(DAILY_KEY, JSON.stringify(attempt));
+    kvSet(DAILY_KEY, JSON.stringify(attempt));
   } catch {
     /* ignore */
   }
@@ -262,7 +263,7 @@ const HEAL_KEY = "star-heal";
 
 export function healTaken(id: string) {
   try {
-    return localStorage.getItem(HEAL_KEY) === id;
+    return kvGet(HEAL_KEY) === id;
   } catch {
     return false;
   }
@@ -270,7 +271,7 @@ export function healTaken(id: string) {
 
 export function markHeal(id: string) {
   try {
-    localStorage.setItem(HEAL_KEY, id);
+    kvSet(HEAL_KEY, id);
   } catch {
     /* ignore */
   }

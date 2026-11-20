@@ -1,11 +1,11 @@
 import { localClub } from "./clubnames";
+import { kvGet, kvSet } from "./kv";
 export type Lang = "en" | "he" | "es" | "fr";
 
 const KEY = "star-lang";
 function readLang(): Lang {
   try {
-    if (typeof localStorage === "undefined") return "en";
-    const saved = localStorage.getItem(KEY);
+    const saved = kvGet(KEY);
     return saved === "he" || saved === "es" || saved === "fr" ? saved : "en";
   } catch {
     return "en";
@@ -26,7 +26,7 @@ export function loadLang(): Lang {
 export function setLang(lang: Lang) {
   current = lang;
   try {
-    localStorage.setItem(KEY, lang);
+    kvSet(KEY, lang);
   } catch {
     /* private mode */
   }
@@ -128,6 +128,11 @@ const en: Record<string, string> = {
   form: "Form",
   streak: "{n}-day streak",
   adLabel: "Ad",
+  "ads.ageTitle": "Ads and your age",
+  "ads.ageCopy": "STAR is for ages 13 and up. In the UK and Europe, ads need to know if you are under 16.",
+  "ads.ageOver": "I am 16 or older",
+  "ads.ageUnder": "I am under 16",
+  "ads.privacy": "Ad privacy",
   adBanner: "Banner on the menu only. Never over a button.",
   adBreak: "Season break. On Google Play this is a full-screen ad you can skip.",
   adSkip: "Skip",
@@ -887,6 +892,11 @@ const he: Record<string, string> = {
   form: "כושר",
   streak: "רצף של {n} ימים",
   adLabel: "פרסומת",
+  "ads.ageTitle": "פרסומות והגיל שלך",
+  "ads.ageCopy": "STAR מגיל 13. בבריטניה ובאירופה הפרסומות צריכות לדעת אם אתה מתחת ל־16.",
+  "ads.ageOver": "אני בן 16 או יותר",
+  "ads.ageUnder": "אני מתחת ל־16",
+  "ads.privacy": "פרטיות פרסומות",
   adBanner: "באנר רק בתפריט. אף פעם לא על כפתור.",
   adBreak: "הפסקת עונה. בגוגל פליי זו מודעה במסך מלא שאפשר לדלג.",
   adSkip: "דלג",
@@ -1646,6 +1656,11 @@ const es: Record<string, string> = {
   form: "Forma",
   streak: "Racha de {n} días",
   adLabel: "Anuncio",
+  "ads.ageTitle": "Anuncios y tu edad",
+  "ads.ageCopy": "STAR es para mayores de 13. En el Reino Unido y Europa, los anuncios necesitan saber si tienes menos de 16.",
+  "ads.ageOver": "Tengo 16 o más",
+  "ads.ageUnder": "Tengo menos de 16",
+  "ads.privacy": "Privacidad de anuncios",
   adBanner: "Banner solo en el menú. Nunca encima de un botón.",
   adBreak: "Descanso de temporada. En Google Play es un anuncio a pantalla completa que se puede saltar.",
   adSkip: "Saltar",
@@ -2405,6 +2420,11 @@ const fr: Record<string, string> = {
   form: "Forme",
   streak: "Série de {n} jours",
   adLabel: "Pub",
+  "ads.ageTitle": "Pubs et ton âge",
+  "ads.ageCopy": "STAR est à partir de 13 ans. Au Royaume-Uni et en Europe, les pubs doivent savoir si tu as moins de 16 ans.",
+  "ads.ageOver": "J'ai 16 ans ou plus",
+  "ads.ageUnder": "J'ai moins de 16 ans",
+  "ads.privacy": "Confidentialité des pubs",
   adBanner: "Bannière seulement au menu. Jamais sur un bouton.",
   adBreak: "Trêve. Sur Google Play, c'est une pub plein écran que l'on peut passer.",
   adSkip: "Passer",
@@ -3098,7 +3118,7 @@ export function show(raw: string, lang: Lang = current): string {
   const named = (value: string) => (value.includes(".") ? t(value, undefined, lang) : localClub(value, lang));
   const name = named(a);
   const second = ["Quarter-final", "Semi-final", "Final", "Winners"].includes(b) ? t(`stage.${b}`, undefined, lang) : named(b);
-  let text = t(key, { n: b ? second : name, name, p: second, g: second, y: a }, lang);
+  const text = t(key, { n: b ? second : name, name, p: second, g: second, y: a }, lang);
   if (index >= 0 && text.includes("|")) {
     const bag = text.split("|");
     return bag[index] ?? bag[0] ?? text;

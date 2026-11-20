@@ -1,4 +1,5 @@
 import { careerAim, overall } from "./engine";
+import { kvGet, kvSet } from "./kv";
 import type { Career } from "./types";
 
 /**
@@ -42,7 +43,7 @@ const KEY = "star-achievements-v1";
 
 export function loadUnlocked(): Record<string, string> {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = kvGet(KEY);
     const data = raw ? (JSON.parse(raw) as unknown) : null;
     return data && typeof data === "object" ? (data as Record<string, string>) : {};
   } catch {
@@ -58,7 +59,7 @@ export function checkAchievements(career: Career): string[] {
   const stamp = new Date().toISOString().slice(0, 10);
   for (const id of fresh) unlocked[id] = stamp;
   try {
-    localStorage.setItem(KEY, JSON.stringify(unlocked));
+    kvSet(KEY, JSON.stringify(unlocked));
   } catch {
     /* private mode: the toast still shows, the unlock just is not kept */
   }

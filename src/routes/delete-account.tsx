@@ -4,7 +4,7 @@ import { t } from "@/game/i18n";
 import { PRIVACY_EMAIL } from "@/game/contact";
 import { LegalPage, usePageLang } from "@/components/legal/LegalPage";
 
-/** Public data-deletion page for the Play listing: the save is local; an optional account can be deleted on request. */
+/** Public data-deletion page for the Play listing. Version 1 has no account; progress is on the device. */
 export const Route = createFileRoute("/delete-account")({
   head: () => ({ meta: [{ title: "Delete data · STAR" }] }),
   component: DeleteAccountPage,

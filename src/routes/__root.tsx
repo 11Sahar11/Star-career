@@ -1,11 +1,8 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
-import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
 
 const APP_NAME = "STAR";
-/** Vercel Web Analytics: production builds only (the path exists only on a Vercel deployment). */
-const ANALYTICS = import.meta.env.PROD;
 /** The live-preview bridge only matters on the dev server; production ships without it. */
 const PREVIEW_BRIDGE = import.meta.env.DEV;
 
@@ -45,18 +42,10 @@ export const Route = createRootRoute({
               'try{var l=localStorage.getItem("star-lang");if(l==="he"||l==="es"||l==="fr"){document.documentElement.lang=l;document.documentElement.dir=l==="he"?"rtl":"ltr"}}catch(e){}',
           }}
         />
-        {ANALYTICS ? (
-          <>
-            <script dangerouslySetInnerHTML={{ __html: "window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};" }} />
-            <script defer src="/_vercel/insights/script.js" />
-          </>
-        ) : null}
       </head>
       <body>
         {PREVIEW_BRIDGE ? <PreviewHostBridge /> : null}
-        <AuthProvider>
-          <Outlet />
-        </AuthProvider>
+        <Outlet />
         <Scripts />
       </body>
     </html>
