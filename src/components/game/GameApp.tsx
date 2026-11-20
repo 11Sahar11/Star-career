@@ -1072,7 +1072,6 @@ function Privacy({ onBack }: { onBack: () => void }) {
         <p>{tr("privacyData")}</p>
         <p>{tr("privacyAds")}</p>
         <p>{tr("privacyAdsData")}</p>
-        <p>{tr("privacyStats")}</p>
         <p>{tr("privacyContact", { email: PRIVACY_EMAIL })}</p>
       </div>
     </Shell>
