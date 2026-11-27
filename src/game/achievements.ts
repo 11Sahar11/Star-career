@@ -13,18 +13,18 @@ export type Achievement = {
   test: (career: Career) => boolean;
 };
 
-const anyMatch = (career: Career, check: (log: Career["season"]["fixturesPlayed"][number]) => boolean) =>
-  career.season.fixturesPlayed.some(check);
+const countEvents = (career: Career, check: (text: string) => boolean) =>
+  career.season.fixturesPlayed.reduce((sum, log) => sum + log.events.filter((event) => check(event.text)).length, 0);
 
 const hasTrophy = (career: Career, prefix: string) => career.trophies.some((trophy) => trophy.id.startsWith(prefix));
 
 export const ACHIEVEMENTS: Achievement[] = [
-  { id: "first_goal", test: (c) => c.totals.goals >= 1 },
-  { id: "moment_goal", test: (c) => anyMatch(c, (log) => log.events.some((event) => /^@mo\.goal\.(shoot|dribble)/.test(event.text))) },
-  { id: "moment_stop", test: (c) => anyMatch(c, (log) => log.events.some((event) => event.text.startsWith("@mo.stop."))) },
-  { id: "rating_9", test: (c) => anyMatch(c, (log) => !log.missed && log.rating >= 9) },
-  { id: "hat_trick", test: (c) => anyMatch(c, (log) => log.goals >= 3) },
-  { id: "goals_season_15", test: (c) => c.season.goals >= 15 || c.history.some((row) => row.goals >= 15) },
+  { id: "first_goal", test: (c) => c.totals.goals >= 10 },
+  { id: "moment_goal", test: (c) => countEvents(c, (text) => /^@mo\.goal\.(shoot|dribble)/.test(text)) >= 3 },
+  { id: "moment_stop", test: (c) => countEvents(c, (text) => text.startsWith("@mo.stop.")) >= 3 },
+  { id: "rating_9", test: (c) => c.season.fixturesPlayed.filter((log) => !log.missed && log.rating >= 9).length >= 3 },
+  { id: "hat_trick", test: (c) => c.season.fixturesPlayed.filter((log) => log.goals >= 3).length >= 2 || c.history.some((row) => row.goals >= 20) },
+  { id: "goals_season_15", test: (c) => c.season.goals >= 25 || c.history.some((row) => row.goals >= 25) },
   { id: "first_trophy", test: (c) => c.trophies.length >= 1 },
   { id: "cup", test: (c) => hasTrophy(c, "cup-") },
   { id: "top_flight", test: (c) => careerAim(c) !== "division" },

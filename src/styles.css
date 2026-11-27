@@ -1305,6 +1305,10 @@
 .has-bottom-nav .toast {
   bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
 }
+/* Keep the Wrap "Next season" button above the toast so it stays tappable. */
+.has-bottom-nav .app-shell.wrap-screen {
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px) + 1.5rem + 4.75rem);
+}
 
 /* ---------- loading screen (boot/hydration; never shows ads) ---------- */
 .loading-screen {

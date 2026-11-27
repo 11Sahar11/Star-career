@@ -777,6 +777,7 @@ function freshSeason(career: Career, rng: () => number) {
   return {
     training: emptyAttrs(),
     startAttrs: { ...career.player.attrs },
+    startOvr: overall(career.player.position, career.player.attrs),
     startRank,
     apps: 0,
     sumRating: 0,
@@ -1183,9 +1184,10 @@ export function playStep(career: Career): Career {
 export function runToStop(career: Career): Career {
   let current = career;
   let guard = 0;
-  while (current.screen === "run" && nextFixture(current) && guard < 80) {
+  while (current.screen === "run" && !current.story && nextFixture(current) && guard < 80) {
     current = playStep(current);
     guard += 1;
+    if (current.story || current.screen !== "run") break;
   }
   return current;
 }
@@ -2187,6 +2189,50 @@ function seasonWasPoor(career: Career) {
   return career.season.sumRating / apps < 6.4;
 }
 
+function makeStepUpOffer(career: Career, ovr: number, age: number, years: number): Offer | null {
+  const club = getClub(career.clubId);
+  const league = getLeague(leagueOf(career, club.id));
+  const up = nextLeague(league);
+  let dest: ReturnType<typeof getClub> | undefined;
+  let kind: Offer["kind"] = "up";
+  if (up) {
+    dest = clubBySalt(career, up.id, `${career.player.name}|${career.year}|step`, "mid");
+    if (dest.id === club.id) dest = divisionClubs(career, up.id).find((item) => item.id !== club.id);
+  } else {
+    kind = "side";
+    const list = divisionClubs(career, league.id);
+    const idx = list.findIndex((item) => item.id === club.id);
+    dest = list.slice(0, Math.max(0, idx)).find((item) => item.id !== club.id);
+  }
+  if (!dest || dest.id === club.id) {
+    const abroad = LEAGUES.filter((item) => item.countryId !== league.countryId && item.tier >= league.tier).sort((a, b) => b.tier - a.tier)[0];
+    if (abroad) {
+      dest = clubBySalt(career, abroad.id, `${career.player.name}|${career.year}|step-abroad`, "top");
+      kind = "up";
+    }
+  }
+  if (!dest || dest.id === club.id) return null;
+  return { ...offerFor(career, dest, ovr, age, kind, years), stepUp: true, note: "@note.stepUp" };
+}
+
+function attachStepUp(career: Career, offers: Offer[], ovr: number, age: number, years: number): Offer[] {
+  if (!career.growthPreview?.targetHit || career.race) return offers;
+  if (age >= farewellAge(career.player.position)) return offers;
+  const tagged = offers.find((item) => item.stepUp) ?? offers.find((item) => item.kind === "up" && item.clubId !== career.clubId);
+  if (tagged) {
+    tagged.stepUp = true;
+    return offers;
+  }
+  const extra = makeStepUpOffer(career, ovr, age, years);
+  if (!extra) return offers;
+  const same = offers.find((item) => item.clubId === extra.clubId);
+  if (same) {
+    same.stepUp = true;
+    return offers;
+  }
+  return [...offers, extra];
+}
+
 export function buildOffers(career: Career, ovr: number, tablePos: number): Offer[] {
   const club = getClub(career.clubId);
   const league = getLeague(leagueOf(career, club.id));
@@ -2207,12 +2253,12 @@ export function buildOffers(career: Career, ovr: number, tablePos: number): Offe
     const limit = farewellAge(career.player.position);
     if (age >= limit) {
       offers[0].years = 1;
-      return offers.slice(0, 1);
+      return attachStepUp(career, offers.slice(0, 1), ovr, age, 1);
     }
     if (career.contractLeft > 0) {
       offers[0].years = career.contractLeft;
       offers[0].note = career.contractLeft === 1 ? "@note.locked1" : `@note.locked|${career.contractLeft}`;
-      return offers.slice(0, 1);
+      return attachStepUp(career, offers.slice(0, 1), ovr, age, career.contractLeft);
     }
   }
   const avg = career.season.apps ? career.season.sumRating / career.season.apps : 0;
@@ -2273,13 +2319,25 @@ export function buildOffers(career: Career, ovr: number, tablePos: number): Offe
     const dest = clubBySalt(career, pool, `${salt}|agent`, kind === "up" ? "mid" : "top");
     if (dest.id !== club.id && !unique.some((item) => item.clubId === dest.id)) unique.push({ ...offerFor(career, dest, ovr, age, kind, years), note: "@note.agent" });
   }
-  const hit = career.growthPreview?.targetHit;
+  const gathered: Offer[] = [];
   for (const offer of unique) {
+    if (!gathered.some((item) => item.clubId === offer.clubId)) gathered.push(offer);
+  }
+  const withStep = attachStepUp(career, gathered, ovr, age, years);
+  const hit = career.growthPreview?.targetHit;
+  for (const offer of withStep) {
     if (career.agentHired) offer.wage = Math.round(offer.wage * 1.1);
     if (hit === true) offer.wage = Math.round(offer.wage * 1.12);
     if (hit === false) offer.wage = Math.round(offer.wage * 0.9);
   }
-  return unique.slice(0, career.agentHired || career.trialCall ? 7 : 5);
+  const cap = career.agentHired || career.trialCall ? 7 : 5;
+  const step = withStep.find((item) => item.stepUp);
+  const kept = withStep.filter((item) => !item.stepUp).slice(0, cap);
+  if (step && !kept.some((item) => item.clubId === step.clubId)) {
+    if (kept.length >= cap) kept[kept.length - 1] = step;
+    else kept.push(step);
+  }
+  return kept;
 }
 
 export function commitSeason(career: Career): Career {
@@ -2325,6 +2383,12 @@ export function commitSeason(career: Career): Career {
     reputation: clamp(career.reputation + preview.awards.length * 4 + (preview.targetHit ? 5 : -3), 0, 100),
     lastFinish: preview.tablePos,
     growthPreview: preview,
+    targetStreak: preview.targetHit ? (career.targetStreak ?? 0) + 1 : 0,
+    season: {
+      ...career.season,
+      startOvr: career.season.startOvr ?? preview.ovrBefore,
+      endOvr: preview.ovrAfter,
+    },
     pendingOffers: null,
     summer: null,
     screen: "offers",
