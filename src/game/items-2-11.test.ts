@@ -21,7 +21,10 @@ import {
   playStep,
   playedApps,
   rowPoints,
-  seasonGoalForRank,
+  boardTarget,
+  divisionClubs,
+  wrapNextSeason,
+  prepareSeasonWrap,
   skipBigMatch,
 } from "./engine";
 import { answerStory } from "./stories";
@@ -115,7 +118,7 @@ test("3. an injured player never plays, including key matches, and the return ca
   const afterHurt = afterReport(hurt);
   assert.equal(afterHurt.healEligible, false);
 
-  let spell = applyReport({ ...career, season: { ...career.season, cursor: 0, outFor: 1 }, screen: "run" }, reportFor({ ...career, season: { ...career.season, cursor: 0 } }, { missed: true, missReason: "injury", injured: false }), () => 0.5, "run");
+  const spell = applyReport({ ...career, season: { ...career.season, cursor: 0, outFor: 1 }, screen: "run" }, reportFor({ ...career, season: { ...career.season, cursor: 0 } }, { missed: true, missReason: "injury", injured: false }), () => 0.5, "run");
   assert.equal(spell.season.outFor, 0);
   assert.equal(spell.justRecovered, true);
 
@@ -213,23 +216,47 @@ test("9. the season report omits Down when nobody went down", () => {
   assert.doesNotMatch(game.slice(game.indexOf("tr(\"down\""), game.indexOf("tr(\"down\"") + 80), /names\(career\.shuffle\.relegated\) \}\}<\/p>/);
 });
 
-test("10. one primary season goal is fixed from the start ranking", () => {
-  assert.deepEqual(seasonGoalForRank(24, 1), { label: "@target.win", line: 1 });
-  assert.deepEqual(seasonGoalForRank(24, 4), { label: "@target.four", line: 4 });
-  assert.deepEqual(seasonGoalForRank(24, 12), { label: "@target.half", line: 12 });
-  assert.deepEqual(seasonGoalForRank(24, 13), { label: "@target.stay", line: 22 });
-  const career = createCareer("Goal", "ST", "eng", 13);
-  const label = career.season.targetLabel;
-  const rank = career.season.startRank;
-  assert.ok(rank && rank >= 1);
-  if (rank === 13) assert.equal(label, "@target.stay");
-  assert.notEqual(rank === 13 && label, "@target.win");
-  const thirteenth = seasonGoalForRank(24, 13);
-  assert.notEqual(thirteenth.label, "@target.win");
-  const mid = { ...career, role: "Star" as const, season: { ...career.season, table: career.season.table.map((row, i) => ({ ...row, pts: i === 0 ? 0 : 3 })) } };
-  const ended = { ...mid };
-  assert.equal(ended.season.targetLabel, label);
-  assert.equal(ended.season.startRank, rank);
+test("10. a strong opener can get the title, and the target stays fixed through the season", () => {
+  const career = createCareer("Title", "ST", "eng", 10);
+  const plClubs = divisionClubs(career, "eng-pl");
+  const top = plClubs[0];
+  const fourClub = plClubs[6];
+  assert.ok(top && fourClub);
+  const title = boardTarget({ ...career, clubId: top.id, role: "Starter", season: { ...career.season, startRank: undefined } });
+  assert.equal(title.label, "@target.title");
+  assert.equal(title.line, 1);
+  const asStarter = boardTarget({ ...career, clubId: fourClub.id, role: "Starter", season: { ...career.season, startRank: undefined } });
+  const asStar = boardTarget({ ...career, clubId: fourClub.id, role: "Star", season: { ...career.season, startRank: undefined } });
+  assert.equal(asStarter.label, "@target.four");
+  assert.equal(asStar.label, "@target.win");
+  assert.equal(asStar.line, 1);
+
+  const started = createCareer("Fixed goal", "ST", "eng", 31);
+  const startLabel = started.season.targetLabel;
+  const startLine = started.season.targetLine;
+  const startRank = started.season.startRank;
+  const ended = drainToSeason(started);
+  assert.equal(ended.screen, "season", `stopped on ${ended.screen}`);
+  assert.equal(ended.season.targetLabel, startLabel);
+  assert.equal(ended.season.targetLine, startLine);
+  assert.equal(ended.season.startRank, startRank);
+  const midStar = { ...ended, role: "Star" as const };
+  assert.equal(midStar.season.targetLabel, startLabel);
+
+  const wrap = ended.pendingOffers ? ended : prepareSeasonWrap(ended);
+  const offer = {
+    clubId: top.id,
+    leagueId: top.leagueId,
+    wage: 20000,
+    role: "Starter" as const,
+    kind: "up" as const,
+    years: 3,
+    note: "",
+  };
+  const next = wrapNextSeason({ ...wrap, pendingOffers: [...(wrap.pendingOffers ?? []), offer] }, top.id);
+  assert.equal(next.season.targetLabel, "@target.title");
+  assert.equal(next.season.targetLine, 1);
+  assert.equal(next.season.startRank, 1);
 });
 
 test("11. the first decision shows the odds hint once, in all four languages", () => {

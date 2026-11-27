@@ -129,7 +129,7 @@ test("expected key-match coins stay within 5% of the old 7-moment total", () => 
   const was = 0 + (report.us > report.them ? 60 : 8) + Math.min(25, 2 * 5) + 10 + Math.round((successes / KEY_MOMENT_COUNT) * PREVIOUS_KEY_MOMENT_AVG) * oldPay;
   // Direct check: 4 * 8.75 == 7 * 5
   assert.equal(EARN.keyMoment * KEY_MOMENT_COUNT, oldPay * PREVIOUS_KEY_MOMENT_AVG);
-  assert.ok(Math.abs(got - (earnForReport(report, true, []) + successes * EARN.keyMoment)) < 1e-9);
+  assert.equal(got, Math.round(earnForReport(report, true, []) + successes * EARN.keyMoment));
   void oldEquivalent;
   void was;
 });

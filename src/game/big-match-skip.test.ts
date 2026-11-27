@@ -135,4 +135,10 @@ test("an injured player who skips a key match does not take part", () => {
   assert.equal(skipped.activeReport?.missed, true);
   assert.equal(skipped.activeReport?.missReason, "injury");
   assert.equal(skipped.season.apps, injured.season.apps);
+  assert.equal(Number.isFinite(skipped.activeReport?.us), true);
+  assert.equal(Number.isFinite(skipped.activeReport?.them), true);
+  for (const row of skipped.season.table) {
+    assert.equal(Number.isFinite(row.pts), true);
+    assert.equal(Number.isNaN(row.gf), false);
+  }
 });
