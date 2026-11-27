@@ -81,3 +81,12 @@ test("season ad wiring: no first-session rule or own cooldown left in ads.ts", (
   assert.doesNotMatch(ads, /REWARD_COOLDOWN_MS|GAP_MS/);
   assert.match(ads, /export function seasonAdContext\(\)/);
 });
+
+test("season-end ad is asked from the Next season button, shouldShowSeasonAd unchanged", () => {
+  const i18n = readFileSync(new URL("./i18n.ts", import.meta.url), "utf8");
+  assert.match(i18n, /nextSeason: "לעונה הבאה"/);
+  const btn = game.slice(game.indexOf("onClick={() => summaryReady && onSummer()}"));
+  assert.match(btn, /tr\("nextSeason"\)/);
+  const call = game.slice(game.indexOf("onSummer={() => {"), game.indexOf('showInterstitial(\n            "season-end"'));
+  assert.match(call, /shouldShowSeasonAd\(/);
+});
