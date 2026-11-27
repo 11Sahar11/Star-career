@@ -147,6 +147,8 @@ export type Offer = {
   kind: "stay" | "up" | "down" | "pro" | "side";
   years: number;
   note: string;
+  /** Guaranteed signable bump when the season target was hit. */
+  stepUp?: boolean;
 };
 
 export type Trophy = { id: string; name: string; year: number; detail: string };
@@ -204,6 +206,9 @@ export type SeasonState = {
   startAttrs?: Attrs;
   /** 1-based club ranking at season start; the board target is fixed from this. */
   startRank?: number;
+  /** Overall at season start and after growth, for the wrap line. Missing in old saves. */
+  startOvr?: number;
+  endOvr?: number;
 };
 
 
@@ -292,6 +297,8 @@ export type Career = {
   healEligible?: boolean;
   /** First-decision odds hint has been dismissed. */
   oddsHintSeen?: boolean;
+  /** Consecutive seasons the board target was hit. Missing in old saves = 0. */
+  targetStreak?: number;
   news: string[];
   /** Economy (save v9). Coins are per career; retirement resets them. */
   coins: number;
