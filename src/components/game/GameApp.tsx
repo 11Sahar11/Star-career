@@ -35,7 +35,7 @@ function NameCrest({ name, className = "mx-auto mb-1 block h-10 w-10" }: { name:
   return club ? <Crest clubId={club.id} name={club.name} className={className} /> : null;
 }
 import { playGoal, playWhistle, setAudioEnabled, unlockAudio } from "@/game/audio";
-import { CLUBS, COUNTRIES, LEAGUES, NATIONS, POSITIONS, entryLeague, getClub, getCountry, getLeague, nationById } from "@/game/data";
+import { CLUBS, COUNTRIES, LEAGUES, NATIONS, POSITIONS, clubCode, entryLeague, getClub, getCountry, getLeague, nationById } from "@/game/data";
 import {
   acceptOffer,
   afterReport,
@@ -76,6 +76,9 @@ import {
   startSummer,
   tablePosition,
   todayKey,
+  matchdayProgress,
+  matchdayCount,
+  contractTerms,
 } from "@/game/engine";
 import { loadCareer, loadDailyAttempt, loadSound, markStreakPlayed, readStreak, saveCareer, saveDailyAttempt, saveSound, type DailyAttempt, type StreakState } from "@/game/save";
 import { setAnalyticsSuppressed, track, trackDailyOpen } from "@/game/analytics";
@@ -155,6 +158,7 @@ export function GameApp() {
   const [lang, setLangState] = useState<Lang>("en");
   const [toasts, setToasts] = useState<string[]>([]);
   const admin = debugAdmin;
+  const notifyBought = () => setToasts((list) => [...list, "bought"]);
   const [adAgePrompt, setAdAgePrompt] = useState(false);
   const [adPrivacy, setAdPrivacy] = useState(false);
   const [storeOpen, setStoreOpen] = useState<boolean | "player">(false);
@@ -385,6 +389,7 @@ export function GameApp() {
         </div>
         {createStore ? (
           <StoreScreen
+            onBought={notifyBought}
             career={createStore}
             deviceOnly
             onChange={setCreateStore}
@@ -433,9 +438,9 @@ export function GameApp() {
   else if (storeOpen && playing === "main" && run.screen !== "bigmatch" && run.screen !== "match") {
     screen =
       storeOpen === "player" ? (
-        <MyPlayerScreen career={run} onChange={update} onBack={() => setStoreOpen(true)} onStore={() => setStoreOpen(true)} />
+        <MyPlayerScreen career={run} onChange={update} onBack={() => setStoreOpen(true)} onStore={() => setStoreOpen(true)} onBought={notifyBought} />
       ) : (
-        <StoreScreen career={run} onChange={update} onBack={() => setStoreOpen(false)} onPlayer={() => setStoreOpen("player")} />
+        <StoreScreen career={run} onChange={update} onBack={() => setStoreOpen(false)} onPlayer={() => setStoreOpen("player")} onBought={notifyBought} />
       );
   } else if (run.screen === "camp" || run.screen === "break") {
     screen = <TrainingScreen career={run} onChange={update} onMenu={menu} />;
@@ -450,7 +455,7 @@ export function GameApp() {
         report={run.activeReport}
         onNext={() => update(afterReport(run))}
         onMenu={menu}
-        extra={playing === "main" ? <DoubleCoins career={run} onChange={update} /> : null}
+        extra={playing === "main" ? <DoubleCoins career={run} onChange={update} hideEarned /> : null}
       />
     );
   } else if (run.screen === "season") {
@@ -604,7 +609,7 @@ export function GameApp() {
             }}
           />
         ) : null}
-        {toasts.length ? toasts[0].startsWith("streak:") ? <StreakToast days={Number(toasts[0].slice(7))} /> : <AchievementToast id={toasts[0]} /> : null}
+        {toasts.length ? toasts[0] === "bought" ? <BoughtToast /> : toasts[0].startsWith("streak:") ? <StreakToast days={Number(toasts[0].slice(7))} /> : <AchievementToast id={toasts[0]} /> : null}
         </div>
         {!booted || !minShown ? <LoadingScreen ready={booted} /> : null}
       </AdminContext.Provider>
@@ -859,14 +864,6 @@ function leagueLabel(tr: (key: string, vars?: Record<string, string | number>) =
   return tr(`div.${m[2]}`, { country: country ? tr(`country.${country.id}`) : m[1] });
 }
 
-/** Three-letter club code from the crest monogram (MOR, COL). */
-function clubCode(id: string, name: string) {
-  const mono = crestSpec(id, name).mono;
-  if (mono && mono.length >= 3) return mono.slice(0, 3).toUpperCase();
-  const letters = name.replace(/[^A-Za-z]/g, "");
-  return (letters.slice(0, 3) || mono || name.slice(0, 3)).toUpperCase();
-}
-
 /** The next fixture in the dark match card. Home side first, so it mirrors with the reading direction. */
 function NextMatchCard({ career, children }: { career: Career; children?: ReactNode }) {
   const { tr, text } = useTx();
@@ -951,9 +948,7 @@ function PlayerHeader({ career }: { career: Career }) {
 }
 
 function leagueCount(career: Career) {
-  const total = career.season.fixtures.filter((item) => item.competition === "league").length;
-  const played = career.season.fixturesPlayed.filter((item) => item.competition === "league").length;
-  return { played, total };
+  return matchdayCount(career);
 }
 
 /**
@@ -962,15 +957,17 @@ function leagueCount(career: Career) {
  */
 function SeasonProgress({ career, withYear = true }: { career: Career; withYear?: boolean }) {
   const { tr, text } = useTx();
-  const { played, total } = leagueCount(career);
+  const { played, total, cupPlayed, cupTotal } = matchdayCount(career);
+  const day = matchdayProgress(career);
   const place = tablePosition(career);
   const onTrack = place <= career.season.targetLine;
   return (
-    <div className="season-strip">
+    <div className="season-strip" data-matchday={`${day.n}/${day.m}`}>
       <div className="flex items-baseline justify-between gap-3 text-xs">
         <span className="text-muted">
           {withYear ? `${seasonLabel(career.year)} · ` : ""}
-          {tr("matchday", { n: played, m: total })}
+          {tr("matchday", { n: day.n, m: day.m })}
+          {cupTotal ? <> · {tr("cupDay", { n: cupPlayed, m: cupTotal })}</> : null}
         </span>
         <span className={`text-end font-bold ${played ? (onTrack ? "text-good" : "text-bad") : "text-muted"}`}>
           {text(career.season.targetLabel)}
@@ -1197,7 +1194,7 @@ function Home({
 
       {career ? (
         <>
-          <PlayerRow career={career} status={`${seasonLabel(career.year)} · ${tr("matchday", { n: Math.min((count?.played ?? 0) + 1, count?.total ?? 0), m: count?.total ?? 0 })}`} />
+          <PlayerRow career={career} status={`${seasonLabel(career.year)} · ${tr("matchday", { n: matchdayProgress(career).n, m: matchdayProgress(career).m })}${matchdayCount(career).cupTotal ? ` · ${tr("cupDay", { n: matchdayCount(career).cupPlayed, m: matchdayCount(career).cupTotal })}` : ""}`} />
           <div className="mt-5">
             {nextFixture(career) ? (
               <NextMatchCard career={career}>
@@ -1601,6 +1598,7 @@ function AttrBar({ attr, value, delta }: { attr: AttrKey; value: number; hot?: b
 
 function HealClip({ career, onChange }: { career: Career; onChange: (c: Career) => void }) {
   const { tr } = useTx();
+  if (!career.healEligible || career.season.outFor <= 0) return null;
   if (!rewardAvailable(career, "injury-return", todayKey())) return null;
   // Is a key match among the games the injury would cost?
   const keys = keyFixtureIds(career.season, career.clubId);
@@ -1658,12 +1656,21 @@ function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onCh
         <NextMatchCard career={career} />
       </div>
       <SeasonProgress career={career} />
+      {career.justRecovered ? (
+        <p className="card mt-3 px-4 py-3 text-sm font-semibold text-good" data-back-from-injury>
+          {tr("backFromInjury")}
+        </p>
+      ) : null}
       <section className="scorebox mt-4 px-5 py-4">
         <p className="goal-strip mt-0">{tr(`aim.${careerAim(career)}`)}</p>
         <p className="mt-1 text-xs text-muted">
           {tr(career.difficulty === "easy" ? "diff.easy" : career.difficulty === "hard" ? "diff.hard" : "diff.normal")}
           {" · "}
-          {career.contractLeft === 1 ? tr("year1") : tr("years", { n: career.contractLeft })}
+          {tr("wageMonth", { n: money(career.wage, getCountry(career.countryId).currency) })}
+          {" · "}
+          <span data-contract-length>
+            {contractTerms(career).left === 1 ? tr("contractLengthOne") : tr("contractLengthMany", { n: contractTerms(career).left })}
+          </span>
           {career.season.outFor > 0 ? <span className="text-bad"> · {tr("injured", { n: career.season.outFor })}</span> : null}
         </p>
         {career.europeComp ? (
@@ -1697,7 +1704,7 @@ function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onCh
         )}
       </section>
 
-      {onStore && !career.race && career.activeReport && career.coinsFixtureId === career.activeReport.fixtureId ? <DoubleCoins career={career} onChange={onChange} /> : null}
+      {onStore && !career.race && career.activeReport && career.coinsFixtureId === career.activeReport.fixtureId ? <DoubleCoins career={career} onChange={onChange} hideEarned /> : null}
       {career.keyCampBonus > 0 ? <p className="mt-3"><span className="chip chip-good">{tr("eco.campActive", { n: career.keyCampBonus })}</span></p> : null}
 
       <div className="card mt-3 flex items-center gap-3 px-3 py-3">
@@ -1970,7 +1977,8 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
   }, [showCard, momentKey, cardMode]);
 
   function choose(index: number, optionId: string) {
-    const next = resolveMoment(career, index, optionId);
+    const base = career.oddsHintSeen ? career : { ...career, oddsHintSeen: true };
+    const next = resolveMoment(base, index, optionId);
     setReveal(index);
     onChange(next);
   }
@@ -2091,6 +2099,16 @@ function BigMatchScreen({ career, onChange, onMenu }: { career: Career; onChange
             </div>
             {showCard ? null : (
               <div className="pb-options">
+                {!career.oddsHintSeen ? (
+                  <button
+                    type="button"
+                    className="pb-odds-hint"
+                    data-odds-hint
+                    onClick={() => onChange({ ...career, oddsHintSeen: true })}
+                  >
+                    {tr("oddsHint")}
+                  </button>
+                ) : null}
                 {focusMoment.options.map((option) => (
                   <button
                     key={option.id}
@@ -2312,6 +2330,11 @@ function ReportScreen({
         </p>
       ) : null}
       {report.injured ? <p className="mt-3 text-sm text-bad">{tr("creaked")}</p> : null}
+      {!career.race && (career.coinsEarnedLast ?? 0) > 0 && career.coinsFixtureId === report.fixtureId ? (
+        <p className="mt-3 text-sm font-semibold text-trophy" data-coins-earned>
+          {tr("eco.earned", { n: formatCoins(career.coinsEarnedLast ?? 0) })}
+        </p>
+      ) : null}
       <button type="button" className="btn-primary mt-5 h-13 w-full text-base" onClick={onNext}>
         {last ? tr("seasonReview") : tr("backRun")}
       </button>
@@ -2336,10 +2359,11 @@ function ResultRow({ item }: { item: MatchLog }) {
   return (
     <div className="result-row">
       <button type="button" className="flex min-h-12 w-full items-center gap-3 px-3.5 py-2 text-sm" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-        <span className={`wdl wdl-${outcome}`}>{tr(`wdl.${outcome}`)}</span>
+        <span className={`wdl ${item.missed ? "wdl-d" : `wdl-${outcome}`}`}>{item.missed ? tr("unplayed") : tr(`wdl.${outcome}`)}</span>
         <span className="min-w-0 flex-1 text-start">
           <span className="block truncate font-medium">{text(item.opponentName)}</span>
           <span className="block truncate text-xs text-muted">
+            {item.missed ? <span className="font-semibold">{tr("unplayed")} · </span> : null}
             {item.key ? <span className="font-semibold text-accent">{tr("keyTag")} · </span> : null}
             {text(item.roundLabel)}
           </span>
@@ -2739,7 +2763,7 @@ function SeasonScreen({
 
       <h2 className="section-title mt-6">{tr("attrsMoved")}</h2>
       <div className="mt-3 grid grid-cols-[4.5rem_minmax(0,1fr)_3.2rem] items-center gap-x-3 gap-y-2.5 text-sm">
-        {ATTR_KEYS.map((key) => {
+        {ATTR_KEYS.filter((key) => preview.deltas[key] !== 0).map((key) => {
           const before = preview.before[key];
           const delta = preview.deltas[key];
           const base = delta >= 0 ? before : preview.after[key];
@@ -2793,7 +2817,7 @@ function SeasonScreen({
         <div className="card mt-3 px-4 py-3 text-sm leading-6">
           <p className="font-semibold">{tr("who")}</p>
           <p className="mt-1">{tr("up", { n: names(career.shuffle.promoted) })}</p>
-          <p>{tr("down", { n: names(career.shuffle.relegated) })}</p>
+          {career.shuffle.relegated.length ? <p>{tr("down", { n: names(career.shuffle.relegated) })}</p> : null}
           {career.shuffle.arrivedDown.length ? <p className="text-muted">{tr("relegatedIn", { n: names(career.shuffle.arrivedDown) })}</p> : null}
           {career.shuffle.arrivedUp.length ? <p className="text-muted">{tr("promotedIn", { n: names(career.shuffle.arrivedUp) })}</p> : null}
         </div>
@@ -2867,11 +2891,11 @@ function OffersScreen({
                 <dl className="terms">
                   <div>
                     <dt>{tr("perMonth")}</dt>
-                    <dd className="num">{money(offer.wage, offerCountry.currency || currency)}</dd>
+                    <dd className="num" data-contract-wage>{tr("wageMonth", { n: money(offer.wage, offerCountry.currency || currency) })}</dd>
                   </div>
                   <div>
                     <dt>{tr("yearsShort")}</dt>
-                    <dd className="num">{offer.years}</dd>
+                    <dd data-contract-length>{offer.years === 1 ? tr("contractLengthOne") : tr("contractLengthMany", { n: offer.years })}</dd>
                   </div>
                   <div>
                     <dt>{tr("minutes")}</dt>
@@ -3166,6 +3190,17 @@ function StreakLine({ streak, onDaily }: { streak: StreakState | null; onDaily: 
   );
 }
 
+function BoughtToast() {
+  const { tr } = useTx();
+  return (
+    <div className="toast" role="status" data-bought-toast>
+      <span className="min-w-0">
+        <span dir="auto" className="block font-semibold">{tr("bought")}</span>
+      </span>
+    </div>
+  );
+}
+
 function StreakToast({ days }: { days: number }) {
   const { tr } = useTx();
   return (
@@ -3435,7 +3470,7 @@ function PriceButton({
   );
 }
 
-function DoubleCoins({ career }: { career: Career; onChange: (c: Career) => void }) {
+function DoubleCoins({ career, hideEarned = false }: { career: Career; onChange: (c: Career) => void; hideEarned?: boolean }) {
   const { tr } = useTx();
   const apply = useContext(ApplyContext);
   const earned = career.coinsEarnedLast ?? 0;
@@ -3443,9 +3478,11 @@ function DoubleCoins({ career }: { career: Career; onChange: (c: Career) => void
   const available = rewardAvailable(career, "double-coins", todayKey());
   return (
     <div className="mt-4 grid gap-2">
-      <p className="text-sm">
-        {tr("eco.earned", { n: formatCoins(earned) })} · <CoinChip n={career.coins} />
-      </p>
+      {hideEarned ? null : (
+        <p className="text-sm">
+          {tr("eco.earned", { n: formatCoins(earned) })} · <CoinChip n={career.coins} />
+        </p>
+      )}
       {available ? (
         <RewardButton name="double-coins" className="btn-ghost h-12 w-full text-sm" label={tr("eco.double", { n: formatCoins(earned) })} onReward={() => apply(grantDoubleCoins)} />
       ) : career.coinsFixtureId && career.adState.doubledFixtureIds.includes(career.coinsFixtureId) ? (
@@ -3499,7 +3536,7 @@ function BigTrialCard({ career, onChange }: { career: Career; onChange: (c: Care
   );
 }
 
-function StoreScreen({ career, onChange, onBack, onPlayer, deviceOnly = false }: { career: Career; onChange: (c: Career) => void; onBack: () => void; onPlayer?: () => void; deviceOnly?: boolean }) {
+function StoreScreen({ career, onChange, onBack, onPlayer, deviceOnly = false, onBought }: { career: Career; onChange: (c: Career) => void; onBack: () => void; onPlayer?: () => void; deviceOnly?: boolean; onBought?: () => void }) {
   const { tr } = useTx();
   const admin = useContext(AdminContext);
   const today = todayKey();
@@ -3515,12 +3552,13 @@ function StoreScreen({ career, onChange, onBack, onPlayer, deviceOnly = false }:
     if (id === "unlock-country" && nextLocked) setDevice(unlockCountry(nextLocked.id));
     if (COSMETIC_IDS.includes(id)) setDevice(ownCosmetic(id));
     onChange(next);
+    onBought?.();
   };
   return (
     <Shell>
       <ScreenHeader title={tr("eco.store")} sub={admin ? tr("eco.adminFree") : deviceOnly ? tr("eco.storeDevice") : tr("eco.storeSub")} onBack={onBack} right={<CoinChip n={career.coins} />} />
       {shelf.rewards.length ? <p className="mt-3 text-sm leading-6 text-muted">{tr("eco.storeEarn")}</p> : null}
-      {shelf.rewards.includes("gear-offer") ? <GearOfferCard career={career} onChange={onChange} /> : null}
+      {shelf.rewards.includes("gear-offer") ? <GearOfferCard career={career} onChange={onChange} onBought={onBought} /> : null}
       {/* One rewarded clip at a time: the free camp first, then the discount once the camp is taken. */}
       {shelf.rewards.includes("store-discount") && discountPick ? (
         <p className="mt-3 text-sm text-accent">{tr("eco.discountPick", { n: Math.round(ECONOMY.discount * 100) })}</p>
@@ -3563,6 +3601,10 @@ function StoreScreen({ career, onChange, onBack, onPlayer, deviceOnly = false }:
                   >
                     -{Math.round(ECONOMY.discount * 100)}%
                   </button>
+                ) : check === "owned" ? (
+                  <span className="chip chip-good shrink-0" data-item-owned>
+                    {tr("itemOwned")}
+                  </span>
                 ) : (
                   <PriceButton price={price} was={item.price} label={label} disabled={check !== "ok"} onClick={() => purchase(item.id)} />
                 )}
@@ -3602,7 +3644,7 @@ function GearIcon({ item, tier, dim = false, className = "h-12 w-12" }: { item: 
   );
 }
 
-function GearOfferCard({ career, onChange }: { career: Career; onChange: (c: Career) => void }) {
+function GearOfferCard({ career, onChange, onBought }: { career: Career; onChange: (c: Career) => void; onBought?: () => void }) {
   const { tr } = useTx();
   const admin = useContext(AdminContext);
   const apply = useContext(ApplyContext);
@@ -3637,6 +3679,7 @@ function GearOfferCard({ career, onChange }: { career: Career; onChange: (c: Car
             buying.current = true;
             window.setTimeout(() => (buying.current = false), 600);
             onChange(buyGear(career, offer.slot, offer.tier, today, top, admin));
+            onBought?.();
           }}
         />
       </div>
@@ -3773,7 +3816,7 @@ function PlayerCharacter({ career, children }: { career: Career; children?: Reac
   );
 }
 
-function MyPlayerScreen({ career, onChange }: { career: Career; onChange: (c: Career) => void; onBack: () => void; onStore: () => void }) {
+function MyPlayerScreen({ career, onChange, onBought }: { career: Career; onChange: (c: Career) => void; onBack: () => void; onStore: () => void; onBought?: () => void }) {
   const { tr } = useTx();
   const admin = useContext(AdminContext);
   const today = todayKey();
@@ -3820,6 +3863,8 @@ function MyPlayerScreen({ career, onChange }: { career: Career; onChange: (c: Ca
           >
             {tr("gear.tier.gold")}
           </button>
+        ) : !nextTier && tier ? (
+          <span className="chip chip-good mt-1" data-item-active>{tr("perkOwned")}</span>
         ) : nextTier ? (
           <button
             type="button"
@@ -3831,6 +3876,7 @@ function MyPlayerScreen({ career, onChange }: { career: Career; onChange: (c: Ca
               buying.current = true;
               window.setTimeout(() => (buying.current = false), 600);
               onChange(buyGear(career, slot.id, nextTier, today, top, admin));
+              onBought?.();
             }}
           >
             <Coin />

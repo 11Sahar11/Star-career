@@ -90,7 +90,7 @@ test("skipping a key match before any moment plays it and applies key-match rule
     const beforeRow = before.season.table.find((row) => row.clubId === before.clubId);
     const afterRow = skipped.season.table.find((row) => row.clubId === skipped.clubId);
     assert.ok(beforeRow && afterRow);
-    assert.equal(afterRow.pts, beforeRow.pts + pts * 2);
+    assert.equal(afterRow.pts, beforeRow.pts + pts);
     assert.equal(afterRow.gf, beforeRow.gf + report.us);
     assert.equal(afterRow.ga, beforeRow.ga + report.them);
     assert.equal(skipped.season.keyWins ?? 0, (before.season.keyWins ?? 0) + (report.us > report.them ? 1 : 0));
@@ -127,12 +127,12 @@ test("skip does nothing outside a live key match", () => {
   assert.equal(skipBigMatch(running), running);
 });
 
-test("an injured player who skips a key match still takes part", () => {
+test("an injured player who skips a key match does not take part", () => {
   const { opened } = openKey(15);
   const injured = { ...opened, season: { ...opened.season, outFor: 4 } };
   const skipped = skipBigMatch(injured);
   assert.deepEqual(snapshot(skipped), snapshot(autoFinish(structuredClone(injured))));
-  assert.equal(skipped.activeReport?.missed, false);
-  assert.equal(skipped.activeReport?.missReason, undefined);
-  assert.equal(skipped.season.apps, injured.season.apps + 1);
+  assert.equal(skipped.activeReport?.missed, true);
+  assert.equal(skipped.activeReport?.missReason, "injury");
+  assert.equal(skipped.season.apps, injured.season.apps);
 });
