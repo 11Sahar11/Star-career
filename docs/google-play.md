@@ -56,14 +56,14 @@ Before any ad request, the Android app runs Google's UMP consent flow. Debug and
 
 Players who say they are under 16 are tagged `tagForUnderAgeOfConsent`. The app is not tagged for child-directed treatment. The max ad content rating is Teen (T).
 
-After consent, the interstitial and the rewarded ad are preloaded. `showInterstitial("season-end")` presents that preloaded full-screen ad and waits for AdMob's close button. If AdMob is not ready, times out, or fails, the season continues at once. How often that ad may play is `shouldShowSeasonAd` in `src/game/economy.ts` (once per season transition, not after season 1, skip if a rewarded ad played in the last 90 seconds). This layer only supplies `seasonAdContext()`: ads are enabled, remove-ads is not owned, and the time of the last rewarded clip.
+After consent, the interstitial and the rewarded ad are preloaded. `showInterstitial("season-end")` presents that preloaded full-screen ad and waits for AdMob's close button. If AdMob is not ready, times out, or fails, the season continues at once. How often that ad may play is `shouldShowSeasonAd` in `src/game/economy.ts` (once per season transition, not after season 1, skip if a rewarded ad played in the last 90 seconds). That season-end interstitial is the only forced ad. This layer only supplies `seasonAdContext()`: whether ads are enabled and an interstitial is available, and the time of the last rewarded clip.
 
 Other rules already in the game:
 
 - The season summary is on screen before its continue button can ask for the interstitial. Nothing is requested during a match or at halftime.
 - Rewarded clips only when the player chooses one.
 - No banners.
-- If the device save has `removeAds.owned`, the season-end interstitial is skipped. Optional rewarded clips stay available and pay only after AdMob's Rewarded event.
+- Version 1 does not offer a purchase to remove ads (`REMOVE_ADS_ENABLED` is false). A leftover `removeAds.owned` flag in an old device save still skips the season-end interstitial. Optional rewarded clips stay available and pay only after AdMob's Rewarded event.
 - If no rewarded ad is ready, the daily chest shows only the normal reward. A double is never granted without a watch.
 - Android backup is off (`android:allowBackup="false"`), so the career save is not copied into Google's automatic backup.
 
@@ -76,7 +76,7 @@ The browser build does not load AdMob. Rewards are granted immediately and the i
 1. **Play Console** app for `com.starcareer.game`, with Play App Signing enabled.
 2. The **upload keystore**, stored outside this repo.
 3. **Real AdMob app id and unit ids** when the owner is ready to leave test ads. The test app id in the manifest must be replaced at the same time (`app.config.json` → `ads.androidAppId`, applied by Gradle).
-4. A public **privacy policy** URL. The in-app page is `/privacy`. Host that text on a free static host (GitHub Pages is enough) and paste the URL into Play Console. The listing is **13+**, contains ads, and stores the career only on the device (no account in version 1).
+4. A public **privacy policy** URL. The in-app page is `/privacy`. Host that text on a free static host (GitHub Pages is enough) and paste the URL into Play Console. The listing is **13+**, contains ads, and stores the career only on the device (no account, no login, and no cloud save in version 1). The contact address on that page is `tailgild.store@gmail.com` (`PRIVACY_EMAIL` in `src/game/contact.ts`).
 5. Store listing assets already in `store/` (icon and feature graphic), plus phone screenshots.
 
 ## Icons
