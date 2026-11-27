@@ -259,7 +259,9 @@ export type Career = {
   growthPreview: GrowthPreview | null;
   activeReport: MatchReport | null;
   recentDeltas: Attrs | null;
-  lastTrain?: { key: AttrKey; delta: number; outFor: number } | null;
+  lastTrain?: { key: AttrKey; delta: number; outFor: number; bar?: number; barFull?: boolean } | null;
+  /** Filled training-bar segments per attribute (0–2). A third session grants +1 and resets. */
+  trainBar?: Partial<Record<AttrKey, number>>;
   /** Attribute points gained from training since the last key match; shown as +X% on its choices. */
   keyGain?: Partial<Record<AttrKey, number>> | null;
   daily: DailyState | null;

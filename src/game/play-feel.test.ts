@@ -13,6 +13,7 @@ import {
   trainBarParts,
   trainBucket,
   trainOdds,
+  TRAIN_BAR_SEGMENTS,
 } from "./engine";
 import { ATTR_KEYS, type Career, type MatchReport, type Moment, type PositionId } from "./types";
 import { STORY_MIN_GAP, rollStory } from "./stories";
@@ -162,7 +163,7 @@ test("story cards are at most one per 4 rounds, and injury is not a story", () =
   assert.ok(rollStory(c, yes), "11 - 7 = 4 meets the cap and the every-7 cadence");
 });
 
-test("the training odds bar matches the rolled percentages and is shown separately", () => {
+test("the training odds line matches the rolled percentages, and the 3-segment bar is shown separately under each attribute", () => {
   const c = career();
   const odds = trainOdds(c, "shooting");
   const shared = sessionTrainOdds(c);
@@ -175,14 +176,27 @@ test("the training odds bar matches the rolled percentages and is shown separate
     const part = parts.find((p) => p.id === bucket);
     assert.ok(part, `roll ${roll} bucket ${bucket}`);
   }
-  // Camp uses the same parts (value is unchanged — same trainOdds).
+  assert.equal(TRAIN_BAR_SEGMENTS, 3);
   const game = readFileSync(new URL("../../src/components/game/GameApp.tsx", import.meta.url), "utf8");
-  const trainFn = game.slice(game.indexOf("function TrainOddsBar"), game.indexOf("function effectLines"));
-  assert.match(trainFn, /TrainOddsBar/);
+  const trainFn = game.slice(game.indexOf("function TrainProgressBar"), game.indexOf("function effectLines"));
+  assert.match(trainFn, /TrainProgressBar/);
   assert.match(trainFn, /data-train-bar/);
   assert.match(trainFn, /data-train-odds=/);
+  assert.match(trainFn, /trainBarHint/);
+  assert.match(trainFn, /trainFlatBar/);
+  assert.match(trainFn, /trainBarFull/);
+  assert.match(trainFn, /trainHurtBar/);
   assert.match(trainFn, /answerCamp/);
   assert.match(trainFn, /answerBreak/);
   const css = readFileSync(new URL("../../src/styles.css", import.meta.url), "utf8");
-  assert.match(css, /\.train-odds-bar/);
+  assert.match(css, /\.train-prog /);
+  const i18n = readFileSync(new URL("./i18n.ts", import.meta.url), "utf8");
+  assert.match(i18n, /trainBarHint: "Every session fills the bar\."/);
+  assert.match(i18n, /trainBarHint: "כל אימון ממלא את הפס\."/);
+  assert.match(i18n, /trainFlatBar: "No jump this time\. Bar \{r\}\/3"/);
+  assert.match(i18n, /trainFlatBar: "הפעם בלי קפיצה\. הפס \{r\}\/3"/);
+  assert.match(i18n, /trainBarFull: "Bar full: \{attr\} \+1"/);
+  assert.match(i18n, /trainBarFull: "הפס מלא: \{attr\} ‎\+1"/);
+  assert.match(i18n, /trainHurtBar: "Injured\. Bar kept\."/);
+  assert.match(i18n, /trainHurtBar: "פציעה\. הפס נשמר\."/);
 });
