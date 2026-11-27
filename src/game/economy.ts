@@ -12,7 +12,11 @@ export const ECONOMY = {
     goalAssistCap: 25,
     highRating: 10,
     keyWin: 60,
-    keyMoment: 5,
+    /**
+     * Was 5 when a key match had 6–8 moments (average 7). Now there are 4
+     * moments, so 5 * 7/4 keeps the expected coins per match the same.
+     */
+    keyMoment: 5 * (7 / 4),
     trophy: { league: 250, cup: 150, europe: 400, national: 300 },
     targetHit: 100,
     award: 50,
@@ -194,7 +198,7 @@ export function earnForReport(report: MatchReport, isKey: boolean, moments: Mome
   if (report.rating >= 8) coins += EARN.highRating;
   // Every successful key-match moment pays, whatever it led to.
   coins += moments.filter((moment) => moment.success === true).length * EARN.keyMoment;
-  return coins;
+  return Math.round(coins);
 }
 
 export function itemPrice(career: Career, id: StoreItemId, today: string, admin = false) {

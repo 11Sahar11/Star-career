@@ -32,6 +32,8 @@ export type Club = {
   name: string;
   short: string;
   leagueId: string;
+  /** Unique 3-letter code across all leagues (CHF, CHE, …). */
+  code?: string;
 };
 
 export type Fixture = {
@@ -101,6 +103,8 @@ export type MatchLog = {
   goals: number;
   assists: number;
   missed: boolean;
+  /** True when this played match is the one that caused the current injury. */
+  injured?: boolean;
   events: MatchEvent[];
   headline: string;
   /** One of the season's two key matches. */
@@ -196,7 +200,12 @@ export type SeasonState = {
   leagueId: string;
   /** Wins in this season's two key matches; they lift the cup run. Missing in old saves = 0. */
   keyWins?: number;
+  /** Attribute snapshot when the season's fixtures were built. */
+  startAttrs?: Attrs;
+  /** 1-based club ranking at season start; the board target is fixed from this. */
+  startRank?: number;
 };
+
 
 export type SummerKind = "friendly" | "euros" | "world-cup" | "copa";
 
@@ -237,6 +246,8 @@ export type Career = {
   wage: number;
   role: Role;
   contractLeft: number;
+  /** Original contract length in years; remaining time is contractLeft. */
+  contractYears?: number;
   lastFinish: number;
   europeComp: EuropeComp | null;
   divisions: Record<string, string>;
@@ -259,7 +270,9 @@ export type Career = {
   growthPreview: GrowthPreview | null;
   activeReport: MatchReport | null;
   recentDeltas: Attrs | null;
-  lastTrain?: { key: AttrKey; delta: number; outFor: number } | null;
+  lastTrain?: { key: AttrKey; delta: number; outFor: number; bar?: number; barFull?: boolean } | null;
+  /** Filled training-bar segments per attribute (0–2). A third session grants +1 and resets. */
+  trainBar?: Partial<Record<AttrKey, number>>;
   /** Attribute points gained from training since the last key match; shown as +X% on its choices. */
   keyGain?: Partial<Record<AttrKey, number>> | null;
   daily: DailyState | null;
@@ -269,6 +282,16 @@ export type Career = {
   pending?: PendingMatch | null;
   story?: PendingStory | null;
   storiesSeen?: string[];
+  /** Situation ids from recent key matches, newest last. Used to vary scenes. */
+  recentSituations?: string[];
+  /** fixturesPlayed.length when the last between-match story was offered. */
+  lastStoryPlayed?: number;
+  /** Show the 'back from injury' notice on the next run, not on the injury match. */
+  justRecovered?: boolean;
+  /** Early-return clip is offered only after leaving the match that caused the injury. */
+  healEligible?: boolean;
+  /** First-decision odds hint has been dismissed. */
+  oddsHintSeen?: boolean;
   news: string[];
   /** Economy (save v9). Coins are per career; retirement resets them. */
   coins: number;

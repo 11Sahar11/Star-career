@@ -144,6 +144,18 @@ export function money(wage: number, currency = "€") {
   return `${currency}${wage.toLocaleString("en-GB")}`;
 }
 
+/** One source for the wage line: "£1,300 / month". */
+export function formatWage(wage: number, currency = "€") {
+  return `${money(wage, currency)} / month`;
+}
+
+/** Length and years remaining come from contractYears + contractLeft. */
+export function contractTerms(career: Career): { length: number; left: number } {
+  const left = Math.max(0, career.contractLeft);
+  const length = Math.max(left, career.contractYears ?? left);
+  return { length, left };
+}
+
 function ageGrowth(age: number) {
   if (age <= 17) return 0.55;
   if (age <= 19) return 0.42;
@@ -354,6 +366,10 @@ function applyScore(table: TableRow[], homeId: string, awayId: string, homeGoals
     home.d += 1;
     away.d += 1;
   }
+}
+
+export function rowPoints(row: TableRow): number {
+  return 3 * row.w + row.d;
 }
 
 export function sortTable(table: TableRow[]) {
@@ -724,11 +740,15 @@ function buildFixtures(career: Career, rng: () => number): { fixtures: Fixture[]
   return { fixtures, table: emptyTable(divisionClubs(career, league.id)), breakAt };
 }
 
-function boardTarget(career: Career) {
+/** Opening-rank season goal, same rules as main: title for a strong start in higher tiers, stricter line for Star. Uses startRank when already fixed. */
+export function boardTarget(career: Career) {
   const league = getLeague(leagueOf(career, career.clubId));
   const list = divisionClubs(career, league.id);
   const size = Math.max(1, list.length);
-  const idx = Math.max(0, list.findIndex((club) => club.id === career.clubId));
+  const idx =
+    career.season.startRank != null
+      ? Math.max(0, Math.min(size - 1, career.season.startRank - 1))
+      : Math.max(0, list.findIndex((club) => club.id === career.clubId));
   const rank = idx / Math.max(1, size - 1);
   let label = "target.half";
   let line = Math.max(1, Math.ceil(size / 2));
@@ -751,9 +771,13 @@ function boardTarget(career: Career) {
 
 function freshSeason(career: Career, rng: () => number) {
   const built = buildFixtures(career, rng);
-  const target = boardTarget(career);
+  const list = divisionClubs(career, leagueOf(career, career.clubId));
+  const startRank = Math.max(1, list.findIndex((club) => club.id === career.clubId) + 1);
+  const target = boardTarget({ ...career, season: { ...career.season, startRank } });
   return {
     training: emptyAttrs(),
+    startAttrs: { ...career.player.attrs },
+    startRank,
     apps: 0,
     sumRating: 0,
     goals: 0,
@@ -808,6 +832,7 @@ export function createCareer(name: string, position: PositionId, countryId: stri
     wage: 900,
     role: "Starter",
     contractLeft: moveEvery(difficulty),
+    contractYears: moveEvery(difficulty),
     lastFinish: 3,
     europeComp: null,
     divisions: initialDivisions(),
@@ -864,6 +889,40 @@ export function nextFixture(career: Career) {
   return career.season.fixtures[career.season.cursor] ?? null;
 }
 
+/** League games in a double round-robin: 2 × (teams − 1). */
+export function leagueFixtureTotal(career: Career): number {
+  const teams = Math.max(1, divisionClubs(career, career.season.leagueId).length);
+  return 2 * (teams - 1);
+}
+
+export function matchdayCount(career: Career): { played: number; total: number; cupPlayed: number; cupTotal: number } {
+  const cups = career.season.fixtures.filter((item) => item.competition !== "league");
+  const playedLogs = career.season.fixturesPlayed;
+  const total = leagueFixtureTotal(career);
+  const played = playedLogs.filter((item) => item.competition === "league").length;
+  return {
+    played,
+    total,
+    cupPlayed: playedLogs.filter((item) => item.competition !== "league").length,
+    cupTotal: cups.length,
+  };
+}
+
+/** Current matchday shown on Home and Season: the next league day, or the total when the league is done. */
+export function matchdayProgress(career: Career): { n: number; m: number } {
+  const { played, total } = matchdayCount(career);
+  const n = Math.min(total, played < total ? played + 1 : total);
+  return { n, m: total };
+}
+
+export function playedApps(logs: { missed?: boolean }[]): number {
+  return logs.filter((item) => !item.missed).length;
+}
+
+export function goldenBootGoals(career: Career): number {
+  return career.season.leagueGoals;
+}
+
 function shouldBench(career: Career, rng: () => number) {
   if (career.role === "Star" || career.role === "Starter") return false;
   if (career.role === "Rotation") return rng() < 0.22;
@@ -881,6 +940,7 @@ function logFrom(report: MatchReport): MatchLog {
     goals: report.goals,
     assists: report.assists,
     missed: report.missed,
+    injured: report.injured,
     events: report.events,
     headline: report.headline,
   };
@@ -1020,12 +1080,17 @@ export function applyReport(career: Career, report: MatchReport, rng: () => numb
   next.season.fixturesPlayed.push(logFrom(report));
   next.season.cursor += 1;
   next.season.prep = "none";
-  if (report.missReason === "injury") next.season.outFor = Math.max(0, career.season.outFor - 1);
-  else if (!report.missed && report.injured) {
+  if (report.missReason === "injury") {
+    next.season.outFor = Math.max(0, career.season.outFor - 1);
+    if (career.season.outFor > 0 && next.season.outFor === 0) next.justRecovered = true;
+  } else if (!report.missed && report.injured) {
     const spell = career.player.age >= 33 ? (rng() < 0.4 ? 5 : 4) : rng() < 0.5 ? 2 : rng() < 0.85 ? 3 : 4;
     next.season.outFor = spell;
+    next.healEligible = false;
+    next.justRecovered = false;
     next.news = pushNews(next.news, `Injured. Out for the next ${spell} matches.`);
-  } else next.season.outFor = 0;
+  }
+  // Serving an injury never resets just because the player was benched or a key match was skipped.
   followUp(next, report, rng);
   const deltaText = ATTR_KEYS.filter((key) => report.deltas[key] > 0)
     .map((key) => `${ATTR_LABEL[key]} +${report.deltas[key]}`)
@@ -1077,6 +1142,7 @@ export function playNext(career: Career): Career {
 }
 
 export function playStep(career: Career): Career {
+  if (career.justRecovered) career = { ...career, justRecovered: false };
   if (career.retired || career.screen === "camp" || career.screen === "break" || career.screen === "season" || career.screen === "summer" || career.screen === "offers") return career;
   const fixture = nextFixture(career);
   if (!fixture) return openSeason(career);
@@ -1084,12 +1150,11 @@ export function playStep(career: Career): Career {
   const roll = () => rng.next();
   let playing = true;
   let missReason: MatchReport["missReason"];
-  // Key matches are always played: the manager starts you and you play through the knock.
-  if (isBigFixture(career, fixture)) return openBigMatch(career, fixture, roll, rng);
   if (career.season.outFor > 0) {
     playing = false;
     missReason = "injury";
-  } else if (shouldBench(career, roll)) {
+  } else if (isBigFixture(career, fixture)) return openBigMatch(career, fixture, roll, rng);
+  else if (shouldBench(career, roll)) {
     playing = false;
     missReason = "bench";
   }
@@ -1101,6 +1166,7 @@ export function playStep(career: Career): Career {
   }
   const applied = applyReport(career, report, roll, "run");
   applied.story = rollStory(applied, roll);
+  if (applied.story) applied.lastStoryPlayed = applied.season.fixturesPlayed.length;
   applied.rng = rng.state();
   applied.recentDeltas = null;
   applied.lastTrain = null;
@@ -1176,6 +1242,13 @@ export const MOMENT_QUALITY_PER_POINT = 0.045;
 export const FREE_KICK_PER_POINT = 0.051;
 export const FREE_KICK_BASE = 0.15;
 export const FREE_KICK_CEILING = 50;
+/** Key-match moments per match. Replaces the old 6–8 draw (average 7). */
+export const KEY_MOMENT_COUNT = 4;
+/** Previous average moments per key match (6, 7 or 8 equally). Used to keep coin totals stable. */
+export const PREVIOUS_KEY_MOMENT_AVG = 7;
+/** Minimum gap, in percentage points, between options in the same moment. */
+export const MIN_MOMENT_GAP = 5;
+
 
 /**
  * Football conversion rate at attribute 60 against an individual opponent rated 70.
@@ -1216,27 +1289,72 @@ const SITUATIONS: Record<string, { kind: MomentKind; options: OptionSpec[] }> = 
 const ATTACK_POOL = ["penalty", "freekick", "oneonone", "runbehind", "aerial", "keypass"];
 const KEEPER_POOL = ["gkdive", "gkstand", "gkcomeoff"];
 
+const REWARD_RANK: Record<string, number> = { goal: 2, assist: 1, stop: 0 };
+
+/**
+ * Safer must mean a smaller or equal reward, and every pair of options differs
+ * by at least {@link MIN_MOMENT_GAP} points. Adjustments stay inside each option's ceiling.
+ */
+export function enforceMomentGaps(options: MomentOption[], limits: number[]): MomentOption[] {
+  const items = options.map((option, index) => ({ ...option, limit: limits[index] ?? 92, index }));
+  items.sort((a, b) => (REWARD_RANK[a.reward] ?? 0) - (REWARD_RANK[b.reward] ?? 0) || b.odds - a.odds || a.index - b.index);
+  for (let i = 0; i < items.length - 1; i += 1) {
+    const need = items[i + 1].odds + MIN_MOMENT_GAP;
+    if (items[i].odds < need) items[i].odds = Math.min(items[i].limit, need);
+  }
+  for (let i = 0; i < items.length - 1; i += 1) {
+    if (items[i].odds - items[i + 1].odds < MIN_MOMENT_GAP) {
+      items[i + 1].odds = Math.max(5, items[i].odds - MIN_MOMENT_GAP);
+    }
+  }
+  items.sort((a, b) => a.index - b.index);
+  return items.map(({ limit: _limit, index: _index, ...option }) => option);
+}
+
+function rawMomentOptions(
+  career: Career,
+  situation: string,
+  opponent: number,
+  attrs: Career["player"]["attrs"],
+): { options: MomentOption[]; limits: number[] } {
+  const camp = career.keyCampBonus ?? 0;
+  const cap = ECONOMY.gear.oddsCap;
+  const options: MomentOption[] = [];
+  const limits: number[] = [];
+  for (const [id, attr, baseChance, reward, ceiling, qualityPerPoint] of SITUATIONS[situation].options) {
+    const limit = Math.min(cap, ceiling);
+    const odds = clamp(momentOdds(attrs[attr], opponent, baseChance, limit, qualityPerPoint) + camp, 5, limit);
+    options.push({ id, attr, odds, reward });
+    limits.push(limit);
+  }
+  return { options, limits };
+}
+
 /** Odds for each choice; `gain` is how much training since the last key match added. */
 export function momentOptions(career: Career, situation: string, opponent: number): MomentOption[] {
   const a = effectiveAttrs(career, true);
   const bare = career.player.attrs;
   const gains = career.keyGain ?? {};
-  const camp = career.keyCampBonus ?? 0;
-  const cap = ECONOMY.gear.oddsCap;
-  return SITUATIONS[situation].options.map(([id, attr, baseChance, reward, ceiling, qualityPerPoint]) => {
-    const limit = Math.min(cap, ceiling);
-    const oddsFor = (value: number) => clamp(momentOdds(value, opponent, baseChance, limit, qualityPerPoint) + camp, 5, limit);
-    const odds = oddsFor(a[attr]);
-    const option: MomentOption = { id, attr, odds, reward };
-    const gain = odds - oddsFor(a[attr] - (gains[attr] ?? 0));
-    if (gain > 0) option.gain = gain;
-    const gear = odds - oddsFor(bare[attr]);
-    const item = gearItemFor(career, attr, true);
+  const current = rawMomentOptions(career, situation, opponent, a);
+  const withoutGain = rawMomentOptions(
+    career,
+    situation,
+    opponent,
+    Object.fromEntries(ATTR_KEYS.map((key) => [key, a[key] - (gains[key] ?? 0)])) as Career["player"]["attrs"],
+  );
+  const withoutGear = rawMomentOptions(career, situation, opponent, bare);
+  const displayed = enforceMomentGaps(current.options, current.limits);
+  return displayed.map((option, index) => {
+    const next: MomentOption = { ...option };
+    const gain = current.options[index].odds - withoutGain.options[index].odds;
+    if (gain > 0) next.gain = gain;
+    const gear = current.options[index].odds - withoutGear.options[index].odds;
+    const item = gearItemFor(career, option.attr, true);
     if (gear > 0 && item) {
-      option.gear = gear;
-      option.gearItem = item;
+      next.gear = gear;
+      next.gearItem = item;
     }
-    return option;
+    return next;
   });
 }
 
@@ -1253,34 +1371,47 @@ function attrsCovered(situations: string[]) {
   return new Set(situations.flatMap((id) => SITUATIONS[id].options.map((option) => option[1]))).size;
 }
 
-/** 6-8 moments drawn from the pool, covering at least 4 different attributes. */
-export function drawSituations(position: PositionId, roll: () => number): string[] {
-  const count = 6 + Math.floor(roll() * 3);
-  if (position === "GK") {
-    const out = shuffled(KEEPER_POOL, roll);
-    while (out.length < count) out.push(KEEPER_POOL[Math.floor(roll() * KEEPER_POOL.length)]);
-    return shuffled(out, roll);
-  }
-  const defensive = position === "CB" || position === "FB" || position === "CDM";
-  const pool = defensive ? [...ATTACK_POOL, "defend", "defend"] : position === "CM" ? [...ATTACK_POOL, "defend"] : ATTACK_POOL;
-  // Start with four situations whose main attributes differ, then fill at random.
+/**
+ * Situations for one key match: {@link KEY_MOMENT_COUNT} unique types when the
+ * pool is large enough (draw without replacement). Fresh types (not in
+ * `recent`) are taken first. A smaller pool (goalkeepers) fills only after
+ * every type has been used once, so a match still has four moments.
+ */
+export function drawSituations(position: PositionId, roll: () => number, recent: string[] = []): string[] {
+  const count = KEY_MOMENT_COUNT;
+  const uniquePool =
+    position === "GK"
+      ? [...KEEPER_POOL]
+      : position === "CB" || position === "FB" || position === "CDM" || position === "CM"
+        ? [...ATTACK_POOL, "defend"]
+        : [...ATTACK_POOL];
+  const fresh = shuffled(uniquePool.filter((id) => !recent.includes(id)), roll);
+  const stale = shuffled(uniquePool.filter((id) => recent.includes(id)), roll).sort(
+    (a, b) => recent.lastIndexOf(a) - recent.lastIndexOf(b),
+  );
   const out: string[] = [];
-  const mains = new Set<AttrKey>();
-  for (const id of shuffled(ATTACK_POOL, roll)) {
-    const main = SITUATIONS[id].options[0][1];
-    if (mains.has(main)) continue;
-    mains.add(main);
-    out.push(id);
-    if (out.length === 4) break;
+  if ((position === "CB" || position === "FB" || position === "CDM") && uniquePool.includes("defend") && !out.includes("defend")) {
+    out.push("defend");
   }
-  if (defensive) out[0] = "defend";
-  while (out.length < count) out.push(pool[Math.floor(roll() * pool.length)]);
+  for (const id of [...fresh, ...stale]) {
+    if (out.includes(id)) continue;
+    out.push(id);
+    if (out.length === Math.min(count, uniquePool.length)) break;
+  }
+  // Only repeat once the unique pool is exhausted (keepers: 3 types, 4 moments).
+  const fill = [...fresh, ...stale, ...shuffled(uniquePool, roll)];
+  let i = 0;
+  while (out.length < count) {
+    out.push(fill[i % fill.length]);
+    i += 1;
+  }
   const final = shuffled(out, roll);
+  if (position === "GK") return final;
   return attrsCovered(final) >= 4 ? final : [...final.slice(0, -1), "keypass"];
 }
 
 function buildMoments(career: Career, fixture: Fixture, roll: () => number): Moment[] {
-  const situations = drawSituations(career.player.position, roll);
+  const situations = drawSituations(career.player.position, roll, career.recentSituations ?? []);
   const minutes = new Set<number>();
   while (minutes.size < situations.length) minutes.add(5 + Math.floor(roll() * 84));
   return [...minutes]
@@ -1294,12 +1425,22 @@ function buildMoments(career: Career, fixture: Fixture, roll: () => number): Mom
 const KEY_BASE_SHIFT = -14;
 
 function openBigMatch(career: Career, fixture: Fixture, roll: () => number, rng: ReturnType<typeof makeRng>): Career {
+  if (career.season.outFor > 0) {
+    const report = simulateAgainst(career, fixture, false, roll);
+    report.missed = true;
+    report.missReason = "injury";
+    report.headline = headlineFor(report);
+    const applied = applyReport(career, report, roll, "run");
+    applied.rng = rng.state();
+    return applied;
+  }
   // The moments carry the player's own chances, so the rest of the match is played a little tighter.
   const base = simulateAgainst(career, fixture, true, roll, KEY_BASE_SHIFT);
   const moments = buildMoments(career, fixture, roll);
   const seed = Math.floor(roll() * 2147483647) || 1;
   const pending: PendingMatch = { base, moments, seed, rngState: rng.state() };
-  return { ...career, pending, screen: "bigmatch", recentDeltas: null, lastTrain: null, keyGain: null, keyCampBonus: 0, gearTrial: null };
+  const recentSituations = [...(career.recentSituations ?? []), ...moments.map((moment) => moment.situation)].filter((id): id is string => Boolean(id)).slice(-16);
+  return { ...career, pending, screen: "bigmatch", recentDeltas: null, lastTrain: null, keyGain: null, keyCampBonus: 0, gearTrial: null, recentSituations };
 }
 
 /** Puts the earliest decision in minute 1 and keeps every other minute unique. */
@@ -1486,6 +1627,19 @@ export function composeReport(pending: PendingMatch): MatchReport {
 export function skipBigMatch(career: Career): Career {
   const pending = career.pending;
   if (career.screen !== "bigmatch" || !pending) return career;
+  if (career.season.outFor > 0) {
+    const rng = makeRng(pending.rngState);
+    const roll = () => rng.next();
+    const fixture = nextFixture(career);
+    if (!fixture) return career;
+    const report = simulateAgainst({ ...career, pending: null }, fixture, false, roll);
+    report.missed = true;
+    report.missReason = "injury";
+    report.headline = headlineFor(report);
+    const applied = applyReport({ ...career, pending: null }, report, roll, "report");
+    applied.rng = rng.state();
+    return applied;
+  }
   const moments = pending.moments.map((moment, index) => {
     if (moment.picked) return moment;
     let option: MomentOption | undefined;
@@ -1504,6 +1658,7 @@ export function skipBigMatch(career: Career): Career {
 export function finishBigMatch(career: Career): Career {
   const pending = career.pending;
   if (!pending || pending.moments.some((moment) => !moment.picked)) return career;
+  if (career.season.outFor > 0) return skipBigMatch(career);
   const report = composeReport(pending);
   const rng = makeRng(pending.rngState);
   const roll = () => rng.next();
@@ -1520,14 +1675,13 @@ export function finishBigMatch(career: Career): Career {
   const log = applied.season.fixturesPlayed[applied.season.fixturesPlayed.length - 1];
   if (log && !debut) applied.season.fixturesPlayed[applied.season.fixturesPlayed.length - 1] = { ...log, key: true };
   if (!debut && report.competition === "league") {
-    const bonus = report.us > report.them ? 3 : report.us === report.them ? 1 : 0;
     applied.season = {
       ...applied.season,
-      table: applied.season.table.map((row) => (row.clubId === applied.clubId ? { ...row, pts: row.pts + bonus } : row)),
       keyWins: (applied.season.keyWins ?? 0) + (report.us > report.them ? 1 : 0),
     };
   }
   applied.story = debut ? null : rollStory(applied, roll);
+  if (applied.story) applied.lastStoryPlayed = applied.season.fixturesPlayed.length;
   applied.rng = rng.state();
   applied.lastTrain = null;
   return applied;
@@ -1535,7 +1689,13 @@ export function finishBigMatch(career: Career): Career {
 
 /** Where the game goes after a match report: the winter break, the next match, or the season review. */
 export function afterReport(career: Career): Career {
-  const cleared: Career = { ...career, activeReport: null, campPending: false };
+  const injuredThis = Boolean(career.activeReport?.injured);
+  const cleared: Career = {
+    ...career,
+    activeReport: null,
+    campPending: false,
+    healEligible: career.season.outFor > 0 && !injuredThis,
+  };
   if (career.campPending) return { ...cleared, screen: "camp", story: null };
   if (!cleared.season.breakDone && cleared.season.cursor >= cleared.season.breakAt) {
     return { ...cleared, screen: "break", season: { ...cleared.season, phase: "first" } };
@@ -1598,6 +1758,45 @@ export function trainOutcomes(odds: TrainOdds): { id: TrainPartId; n: number }[]
   return parts.filter((part) => part.n > 0).sort((a, b) => b.n - a.n || rank[a.id] - rank[b.id]);
 }
 
+/** Segments of the training odds bar, in roll order, totalling 100. Shown separately from the text line. */
+export function trainBarParts(odds: TrainOdds): { id: TrainPartId; n: number }[] {
+  return [
+    { id: "down" as const, n: odds.down },
+    { id: "big" as const, n: odds.big },
+    { id: "up" as const, n: odds.up },
+    { id: "flat" as const, n: 100 - odds.big - odds.up - odds.down },
+  ].filter((part) => part.n > 0);
+}
+
+/** Sessions needed to fill a training bar and grant +1. */
+export const TRAIN_BAR_SEGMENTS = 3;
+
+/** Advance (or keep) the 3-segment training bar. Injury does not fill; a full bar grants +1 if there is room. */
+export function progressTrainBar(
+  bars: Career["trainBar"],
+  key: AttrKey,
+  injured: boolean,
+  room: number,
+): { trainBar: NonNullable<Career["trainBar"]>; bar: number; barFull: boolean; bonus: number } {
+  const trainBar = { ...(bars ?? {}) };
+  const kept = trainBar[key] ?? 0;
+  if (injured) return { trainBar, bar: kept, barFull: false, bonus: 0 };
+  let bar = kept + 1;
+  let barFull = false;
+  let bonus = 0;
+  if (bar >= TRAIN_BAR_SEGMENTS) {
+    barFull = true;
+    bar = 0;
+    bonus = room > 0 ? 1 : 0;
+  }
+  trainBar[key] = bar;
+  return { trainBar, bar: barFull ? TRAIN_BAR_SEGMENTS : bar, barFull, bonus };
+}
+
+export function trainBarLevel(career: Career, key: AttrKey): number {
+  return career.trainBar?.[key] ?? 0;
+}
+
 /** The odds line, most likely outcome first, using the same percentages applyTrain rolls. */
 export function formatTrainOdds(odds: TrainOdds, lang?: Lang) {
   return trainOutcomes(odds)
@@ -1647,22 +1846,28 @@ function applyTrain(career: Career, key: AttrKey, which: "camp" | "break"): Care
   } else if (bucket === "up") {
     delta = Math.min(1, room);
   }
-  const nextVal = clamp(career.player.attrs[key] + delta, 40, 99);
+  const injured = spell > 0;
+  let nextVal = clamp(career.player.attrs[key] + delta, 40, 99);
+  const cap = statCap(career.player.position, career.player.potential, key);
+  const progressed = progressTrainBar(career.trainBar, key, injured, Math.max(0, Math.min(99, cap) - nextVal));
+  nextVal = clamp(nextVal + progressed.bonus, 40, 99);
   const real = nextVal - career.player.attrs[key];
   const attrs = { ...career.player.attrs, [key]: nextVal };
   const deltas = emptyAttrs();
   deltas[key] = real;
   const training = { ...career.season.training };
   if (real > 0) training[key] += 2;
-  const injured = spell > 0;
   const note = injured
     ? `Training injury. ${ATTR_LABEL[key]} ${real}, out for ${spell} matches.`
-    : real > 0
-      ? `The session landed. ${ATTR_LABEL[key]} +${real}, now ${nextVal}.`
-      : `The session did nothing. ${ATTR_LABEL[key]} stays ${nextVal}.`;
+    : progressed.barFull
+      ? `Bar full: ${ATTR_LABEL[key]} +1, now ${nextVal}.`
+      : real > 0
+        ? `The session landed. ${ATTR_LABEL[key]} +${real}, now ${nextVal}.`
+        : `The session did nothing. ${ATTR_LABEL[key]} stays ${nextVal}.`;
   return {
     ...career,
     rng: rng.state(),
+    trainBar: progressed.trainBar,
     player: {
       ...career.player,
       attrs,
@@ -1677,7 +1882,7 @@ function applyTrain(career: Career, key: AttrKey, which: "camp" | "break"): Care
       ...(which === "break" ? { phase: "second" as const, breakDone: true } : {}),
     },
     recentDeltas: deltas,
-    lastTrain: { key, delta: real, outFor: spell },
+    lastTrain: { key, delta: real, outFor: spell, bar: progressed.bar, barFull: progressed.barFull },
     keyGain: real > 0 ? { ...career.keyGain, [key]: (career.keyGain?.[key] ?? 0) + real } : career.keyGain,
     screen: "run",
     news: pushNews(career.news, note),
@@ -1767,7 +1972,10 @@ export function computeGrowth(career: Career): GrowthPreview {
     deltas.shooting -= 1;
   }
 
+  const start = career.season.startAttrs ?? before;
   const after = applyDeltas(before, deltas);
+  const display = emptyAttrs();
+  for (const key of ATTR_KEYS) display[key] = after[key] - start[key];
   const lines: string[] = [];
   if (career.difficulty === "easy") lines.push("@line.easy");
   else if (career.difficulty === "hard") lines.push("@line.hard");
@@ -1801,10 +2009,10 @@ export function computeGrowth(career: Career): GrowthPreview {
   }
   lines.push(ballon.yours ? "@ballon.you" : `@ballon.other|${ballon.name}`);
   return {
-    before,
-    deltas,
+    before: start,
+    deltas: display,
     after,
-    ovrBefore: overall(career.player.position, before),
+    ovrBefore: overall(career.player.position, start),
     ovrAfter: overall(career.player.position, after),
     avg: Math.round(avg * 10) / 10,
     lines,
@@ -1899,11 +2107,13 @@ function paySeasonBonus(target: Career, source: Career, preview: GrowthPreview):
 }
 
 export function openSeason(career: Career): Career {
+  if (career.screen === "season" || career.screen === "summer" || career.screen === "offers") return career;
   if (nextFixture(career)) return career;
   const growthPreview = computeGrowth(career);
   const paid = paySeasonBonus(career, career, growthPreview);
   if (career.shuffle?.year === career.year) {
-    return { ...career, ...paid, screen: "season", growthPreview, activeReport: null };
+    const opened = { ...career, ...paid, screen: "season" as const, growthPreview, activeReport: null };
+    return career.race ? opened : prepareSeasonWrap(opened);
   }
   const moved = shufflePyramid(career);
   const clubName = getClub(career.clubId).name;
@@ -1915,16 +2125,17 @@ export function openSeason(career: Career): Career {
       : getLeague(after).tier > getLeague(before).tier
         ? `${clubName} are promoted to ${getLeague(after).name}.`
         : `${clubName} are relegated to ${getLeague(after).name}.`;
-  return {
+  const opened = {
     ...career,
     ...paid,
     divisions: moved.divisions,
     shuffle: moved.shuffle,
-    screen: "season",
+    screen: "season" as const,
     growthPreview,
     activeReport: null,
     news: pushNews(career.news, line),
   };
+  return career.race ? opened : prepareSeasonWrap(opened);
 }
 
 function wageFor(tier: number, ovr: number) {
@@ -2074,7 +2285,7 @@ export function buildOffers(career: Career, ovr: number, tablePos: number): Offe
 export function commitSeason(career: Career): Career {
   if (career.screen === "offers" || career.screen === "retired") return career;
   const preview = career.growthPreview ?? computeGrowth(career);
-  const attrs = applyDeltas(career.player.attrs, preview.deltas);
+  const attrs = { ...preview.after };
   const ovr = overall(career.player.position, attrs);
   const trophies = [
     ...career.trophies,
@@ -2188,6 +2399,7 @@ export function acceptOffer(career: Career, clubId: string): Career {
     wage: offer.wage,
     role: offer.role,
     contractLeft: offer.years,
+    contractYears: offer.years,
     year: career.year + 1,
     player: {
       ...career.player,
@@ -2332,9 +2544,58 @@ export function playSummer(career: Career): Career {
   };
 }
 
+function mergeSeasonCoins(a: Career["seasonCoins"], b: Career["seasonCoins"]): NonNullable<Career["seasonCoins"]> {
+  const x = a ?? emptySeasonCoins();
+  const y = b ?? emptySeasonCoins();
+  return { matches: x.matches + y.matches, bonuses: x.bonuses + y.bonuses, salary: x.salary + y.salary, ads: x.ads + y.ads };
+}
+
+/** Instantly resolve summer and build offers, staying on the season wrap screen. */
+export function prepareSeasonWrap(career: Career): Career {
+  if (career.screen !== "season" || career.pendingOffers) return career;
+  const savedCoins = career.seasonCoins ?? emptySeasonCoins();
+  let next = startSummer(career);
+  let guard = 0;
+  while (next.summer && !next.summer.done && guard < 8) {
+    next = playSummer(next);
+    guard += 1;
+  }
+  const summer = next.summer;
+  next = commitSeason(next);
+  return { ...next, screen: "season", summer, seasonCoins: mergeSeasonCoins(savedCoins, next.seasonCoins) };
+}
+
+/** Leave the wrap: sign the chosen club and go to pre-season camp. */
+export function wrapNextSeason(career: Career, clubId: string): Career {
+  const next = acceptOffer(career, clubId);
+  return { ...next, seasonCoins: emptySeasonCoins() };
+}
+
+export function previewBoardTarget(career: Career, clubId: string, role?: Career["role"]) {
+  const next = { ...career, clubId, role: role ?? career.role, season: { ...career.season, startRank: undefined } };
+  return boardTarget(next);
+}
+
+export function summerWrapInfo(career: Career): { tournamentKey: string; stageKey: string; goals: number } | null {
+  const summer = career.summer;
+  if (!summer?.called) return null;
+  const tournamentKey = summer.kind === "world-cup" ? "summer.wc" : summer.kind === "euros" ? "summer.euros" : summer.kind === "copa" ? "summer.copa" : "summer.friendly";
+  const goals = summer.played.reduce((sum, item) => sum + item.goals, 0);
+  const lastFx = summer.fixtures[Math.max(0, summer.played.length - 1)];
+  const last = summer.played[summer.played.length - 1];
+  const wonLast = Boolean(last && last.us > last.them);
+  let stageKey = "wrap.stage.group";
+  if (summer.kind === "friendly") stageKey = "wrap.stage.friendly";
+  else if (lastFx?.id.startsWith("t3") && wonLast) stageKey = "wrap.stage.winners";
+  else if (lastFx?.id.startsWith("t3")) stageKey = "wrap.stage.final";
+  else if (lastFx?.id.startsWith("t2")) stageKey = "wrap.stage.semi";
+  return { tournamentKey, stageKey, goals };
+}
+
 export function retireCareer(career: Career): Career {
   const preview = career.growthPreview ?? (nextFixture(career) ? null : computeGrowth(career));
-  const attrs = preview ? applyDeltas(career.player.attrs, preview.deltas) : career.player.attrs;
+  const alreadyApplied = Boolean(preview && ATTR_KEYS.every((key) => career.player.attrs[key] === preview.after[key]));
+  const attrs = preview && !alreadyApplied ? applyDeltas(career.player.attrs, preview.deltas) : career.player.attrs;
   return {
     ...career,
     retired: true,
@@ -2403,6 +2664,7 @@ export function createDailyCareer(name: string, date = todayKey()): Career {
     wage: 5000,
     role: "Starter",
     contractLeft: 1,
+    contractYears: 1,
     lastFinish: place,
     europeComp: null,
     divisions: initialDivisions(),

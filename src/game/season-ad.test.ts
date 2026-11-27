@@ -68,16 +68,28 @@ const game = readFileSync(new URL("../components/game/GameApp.tsx", import.meta.
 const ads = readFileSync(new URL("./ads.ts", import.meta.url), "utf8");
 
 test("season ad wiring: the summary button asks shouldShowSeasonAd with the remove-ads flag", () => {
-  const call = game.slice(game.indexOf("onSummer={() => {"), game.indexOf('showInterstitial(\n            "season-end"'));
+  const call = game.slice(game.indexOf("onSummer={(clubId) => {"), game.indexOf('showInterstitial(\n            "season-end"'));
   assert.match(call, /shouldShowSeasonAd\(/);
   assert.match(call, /\.\.\.seasonAdContext\(\)/);
   assert.match(call, /summaryClosed: true/);
   assert.match(call, /removeAdsOwned: loadDevice\(\)\.removeAds\.owned/);
-  assert.match(call, /if \(!showAd\) return update\(startSummer\(run\)\)/);
+  assert.match(call, /if \(!showAd\) return update\(leave\(run\)\)/);
+  assert.match(game, /wrapNextSeason/);
 });
 
 test("season ad wiring: no first-session rule or own cooldown left in ads.ts", () => {
   assert.doesNotMatch(ads, /firstSession/);
   assert.doesNotMatch(ads, /REWARD_COOLDOWN_MS|GAP_MS/);
   assert.match(ads, /export function seasonAdContext\(\)/);
+});
+
+test("season-end ad is asked from the Next season button, shouldShowSeasonAd unchanged", () => {
+  const i18n = readFileSync(new URL("./i18n.ts", import.meta.url), "utf8");
+  assert.match(i18n, /nextSeason: "לעונה הבאה"/);
+  const btn = game.includes("data-next-season")
+    ? game.slice(game.indexOf("data-next-season"))
+    : game.slice(game.indexOf("onClick={() => summaryReady && onSummer()}"));
+  assert.match(btn, /tr\("nextSeason"\)/);
+  const call = game.slice(game.indexOf("onSummer={(clubId) => {"), game.indexOf('showInterstitial(\n            "season-end"'));
+  assert.match(call, /shouldShowSeasonAd\(/);
 });
