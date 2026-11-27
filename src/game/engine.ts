@@ -1676,6 +1676,35 @@ export function trainBarParts(odds: TrainOdds): { id: TrainPartId; n: number }[]
   ].filter((part) => part.n > 0);
 }
 
+/** Sessions needed to fill a training bar and grant +1. */
+export const TRAIN_BAR_SEGMENTS = 3;
+
+/** Advance (or keep) the 3-segment training bar. Injury does not fill; a full bar grants +1 if there is room. */
+export function progressTrainBar(
+  bars: Career["trainBar"],
+  key: AttrKey,
+  injured: boolean,
+  room: number,
+): { trainBar: NonNullable<Career["trainBar"]>; bar: number; barFull: boolean; bonus: number } {
+  const trainBar = { ...(bars ?? {}) };
+  const kept = trainBar[key] ?? 0;
+  if (injured) return { trainBar, bar: kept, barFull: false, bonus: 0 };
+  let bar = kept + 1;
+  let barFull = false;
+  let bonus = 0;
+  if (bar >= TRAIN_BAR_SEGMENTS) {
+    barFull = true;
+    bar = 0;
+    bonus = room > 0 ? 1 : 0;
+  }
+  trainBar[key] = bar;
+  return { trainBar, bar: barFull ? TRAIN_BAR_SEGMENTS : bar, barFull, bonus };
+}
+
+export function trainBarLevel(career: Career, key: AttrKey): number {
+  return career.trainBar?.[key] ?? 0;
+}
+
 /** The odds line, most likely outcome first, using the same percentages applyTrain rolls. */
 export function formatTrainOdds(odds: TrainOdds, lang?: Lang) {
   return trainOutcomes(odds)
@@ -1725,22 +1754,28 @@ function applyTrain(career: Career, key: AttrKey, which: "camp" | "break"): Care
   } else if (bucket === "up") {
     delta = Math.min(1, room);
   }
-  const nextVal = clamp(career.player.attrs[key] + delta, 40, 99);
+  const injured = spell > 0;
+  let nextVal = clamp(career.player.attrs[key] + delta, 40, 99);
+  const cap = statCap(career.player.position, career.player.potential, key);
+  const progressed = progressTrainBar(career.trainBar, key, injured, Math.max(0, Math.min(99, cap) - nextVal));
+  nextVal = clamp(nextVal + progressed.bonus, 40, 99);
   const real = nextVal - career.player.attrs[key];
   const attrs = { ...career.player.attrs, [key]: nextVal };
   const deltas = emptyAttrs();
   deltas[key] = real;
   const training = { ...career.season.training };
   if (real > 0) training[key] += 2;
-  const injured = spell > 0;
   const note = injured
     ? `Training injury. ${ATTR_LABEL[key]} ${real}, out for ${spell} matches.`
-    : real > 0
-      ? `The session landed. ${ATTR_LABEL[key]} +${real}, now ${nextVal}.`
-      : `The session did nothing. ${ATTR_LABEL[key]} stays ${nextVal}.`;
+    : progressed.barFull
+      ? `Bar full: ${ATTR_LABEL[key]} +1, now ${nextVal}.`
+      : real > 0
+        ? `The session landed. ${ATTR_LABEL[key]} +${real}, now ${nextVal}.`
+        : `The session did nothing. ${ATTR_LABEL[key]} stays ${nextVal}.`;
   return {
     ...career,
     rng: rng.state(),
+    trainBar: progressed.trainBar,
     player: {
       ...career.player,
       attrs,
@@ -1755,7 +1790,7 @@ function applyTrain(career: Career, key: AttrKey, which: "camp" | "break"): Care
       ...(which === "break" ? { phase: "second" as const, breakDone: true } : {}),
     },
     recentDeltas: deltas,
-    lastTrain: { key, delta: real, outFor: spell },
+    lastTrain: { key, delta: real, outFor: spell, bar: progressed.bar, barFull: progressed.barFull },
     keyGain: real > 0 ? { ...career.keyGain, [key]: (career.keyGain?.[key] ?? 0) + real } : career.keyGain,
     screen: "run",
     news: pushNews(career.news, note),
@@ -1977,11 +2012,13 @@ function paySeasonBonus(target: Career, source: Career, preview: GrowthPreview):
 }
 
 export function openSeason(career: Career): Career {
+  if (career.screen === "season" || career.screen === "summer" || career.screen === "offers") return career;
   if (nextFixture(career)) return career;
   const growthPreview = computeGrowth(career);
   const paid = paySeasonBonus(career, career, growthPreview);
   if (career.shuffle?.year === career.year) {
-    return { ...career, ...paid, screen: "season", growthPreview, activeReport: null };
+    const opened = { ...career, ...paid, screen: "season" as const, growthPreview, activeReport: null };
+    return career.race ? opened : prepareSeasonWrap(opened);
   }
   const moved = shufflePyramid(career);
   const clubName = getClub(career.clubId).name;
@@ -1993,16 +2030,17 @@ export function openSeason(career: Career): Career {
       : getLeague(after).tier > getLeague(before).tier
         ? `${clubName} are promoted to ${getLeague(after).name}.`
         : `${clubName} are relegated to ${getLeague(after).name}.`;
-  return {
+  const opened = {
     ...career,
     ...paid,
     divisions: moved.divisions,
     shuffle: moved.shuffle,
-    screen: "season",
+    screen: "season" as const,
     growthPreview,
     activeReport: null,
     news: pushNews(career.news, line),
   };
+  return career.race ? opened : prepareSeasonWrap(opened);
 }
 
 function wageFor(tier: number, ovr: number) {
@@ -2408,6 +2446,53 @@ export function playSummer(career: Career): Career {
     reputation: clamp(career.reputation + (report.rating - 6.2) * 0.7 + (won && fx.id.startsWith("t3") ? 8 : 0), 0, 100),
     news,
   };
+}
+
+function mergeSeasonCoins(a: Career["seasonCoins"], b: Career["seasonCoins"]): NonNullable<Career["seasonCoins"]> {
+  const x = a ?? emptySeasonCoins();
+  const y = b ?? emptySeasonCoins();
+  return { matches: x.matches + y.matches, bonuses: x.bonuses + y.bonuses, salary: x.salary + y.salary, ads: x.ads + y.ads };
+}
+
+/** Instantly resolve summer and build offers, staying on the season wrap screen. */
+export function prepareSeasonWrap(career: Career): Career {
+  if (career.screen !== "season" || career.pendingOffers) return career;
+  const savedCoins = career.seasonCoins ?? emptySeasonCoins();
+  let next = startSummer(career);
+  let guard = 0;
+  while (next.summer && !next.summer.done && guard < 8) {
+    next = playSummer(next);
+    guard += 1;
+  }
+  const summer = next.summer;
+  next = commitSeason(next);
+  return { ...next, screen: "season", summer, seasonCoins: mergeSeasonCoins(savedCoins, next.seasonCoins) };
+}
+
+/** Leave the wrap: sign the chosen club and go to pre-season camp. */
+export function wrapNextSeason(career: Career, clubId: string): Career {
+  const next = acceptOffer(career, clubId);
+  return { ...next, seasonCoins: emptySeasonCoins() };
+}
+
+export function previewBoardTarget(career: Career, clubId: string, role?: Career["role"]) {
+  return boardTarget({ ...career, clubId, role: role ?? career.role });
+}
+
+export function summerWrapInfo(career: Career): { tournamentKey: string; stageKey: string; goals: number } | null {
+  const summer = career.summer;
+  if (!summer?.called) return null;
+  const tournamentKey = summer.kind === "world-cup" ? "summer.wc" : summer.kind === "euros" ? "summer.euros" : summer.kind === "copa" ? "summer.copa" : "summer.friendly";
+  const goals = summer.played.reduce((sum, item) => sum + item.goals, 0);
+  const lastFx = summer.fixtures[Math.max(0, summer.played.length - 1)];
+  const last = summer.played[summer.played.length - 1];
+  const wonLast = Boolean(last && last.us > last.them);
+  let stageKey = "wrap.stage.group";
+  if (summer.kind === "friendly") stageKey = "wrap.stage.friendly";
+  else if (lastFx?.id.startsWith("t3") && wonLast) stageKey = "wrap.stage.winners";
+  else if (lastFx?.id.startsWith("t3")) stageKey = "wrap.stage.final";
+  else if (lastFx?.id.startsWith("t2")) stageKey = "wrap.stage.semi";
+  return { tournamentKey, stageKey, goals };
 }
 
 export function retireCareer(career: Career): Career {
