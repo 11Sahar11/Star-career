@@ -64,6 +64,9 @@ import {
   runToStop,
   skipBigMatch,
   displayedTrainLine,
+  sessionTrainOdds,
+  trainBarParts,
+  trainOdds,
   seasonLabel,
   shirtNumber,
   sortTable,
@@ -1751,6 +1754,17 @@ function OddsText({ text }: { text: string }) {
   );
 }
 
+/** Segment bar for camp and winter training; widths are the same percentages applyTrain rolls. */
+function TrainOddsBar({ odds, which }: { odds: ReturnType<typeof trainOdds>; which: string }) {
+  return (
+    <div className="train-odds-bar" data-train-bar={which} aria-hidden="true">
+      {trainBarParts(odds).map((part) => (
+        <span key={part.id} className={`train-odds-seg is-${part.id}`} data-train-part={part.id} data-n={part.n} style={{ width: `${part.n}%` }} />
+      ))}
+    </div>
+  );
+}
+
 function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange: (c: Career) => void; onMenu: () => void }) {
   const club = getClub(career.clubId);
   const camp = career.screen === "camp";
@@ -1792,6 +1806,7 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
       </p>
       {career.premiumCamp ? <p className="mt-2 text-sm font-semibold text-accent">{tr("eco.premiumPick")}</p> : null}
       {oddsLine ? <p className="mt-3 text-sm font-semibold leading-5 text-muted" data-train-odds="shared"><OddsText text={oddsLine} /></p> : null}
+      {oddsLine && sessionTrainOdds(career) ? <TrainOddsBar odds={sessionTrainOdds(career)!} which="shared" /> : null}
       <div className="mt-2 grid gap-2">
         {ATTR_KEYS.map((key) => {
           const picked = reveal?.key === key;
@@ -1812,6 +1827,7 @@ function TrainingScreen({ career, onChange, onMenu }: { career: Career; onChange
                 <span className="min-w-0">
                   <span className="block font-semibold">{tr(`attr.${key}`)}</span>
                   {ownOdds ? <span className="mt-0.5 block text-xs font-medium leading-4 text-muted" data-train-odds={key}><OddsText text={ownOdds} /></span> : null}
+                  {ownOdds ? <TrainOddsBar odds={trainOdds(career, key)} which={key} /> : null}
                 </span>
                 <span className={`num text-lg font-bold ${picked ? (delta > 0 ? "text-good" : delta < 0 ? "text-bad" : "text-muted") : ""} ${picked ? "train-value" : ""}`}>
                   {value}
@@ -2602,7 +2618,7 @@ function SeasonScreen({
       <LeagueTable career={career} compact />
 
       <button type="button" className="btn-primary mt-5 h-13 w-full text-base" disabled={!summaryReady} onClick={() => summaryReady && onSummer()}>
-        {claimRace ? tr("dailyClaim") : tr("summerBtn")}
+        {claimRace ? tr("dailyClaim") : tr("nextSeason")}
       </button>
     </Shell>
   );

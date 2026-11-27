@@ -1405,7 +1405,7 @@
 }
 /* one grid with shared rows, so the tiles on both sides line up; the figure spans all three rows */
 .myplayer-grid { display: grid; grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr) minmax(0, 5.5rem); grid-template-rows: repeat(3, auto); gap: 0.75rem 0.5rem; align-items: start; }
-.gear-cell { min-width: 0; }
+.gear-cell { min-width: 0; position: relative; z-index: 2; }
 .gear-tile { display: grid; justify-items: center; text-align: center; }
 .gear-box {
   display: grid;
@@ -1475,7 +1475,7 @@
 .look-chip[aria-checked="true"] { border-color: var(--color-accent); background: var(--color-accent-tint); color: var(--color-accent-deep); }
 
 /* The character in My Player: large, centred, standing on the paper band. */
-.look-open.myplayer-stage { max-width: none; }
+.look-open.myplayer-stage { max-width: none; z-index: 1; }
 /* the canvas is wider than the column: the body is half its width, so he fills the band like the reference */
 .myplayer-stage .player-figure { width: 150%; max-width: none; margin: 0 -25%; }
 .myplayer-stage .character-canvas { max-height: none; }
@@ -1709,3 +1709,11 @@
 @media (prefers-reduced-motion: reduce) {
   .train-reveal, .train-value { animation: none; }
 }
+
+/* Training odds bar (camp and winter): segments match the rolled percentages, shown separately from the text. */
+.train-odds-bar { display: flex; overflow: hidden; height: 0.55rem; margin-top: 0.45rem; border-radius: 999px; background: var(--color-line); }
+.train-odds-seg { display: block; height: 100%; }
+.train-odds-seg.is-down { background: var(--color-bad); }
+.train-odds-seg.is-big { background: var(--color-accent); }
+.train-odds-seg.is-up { background: var(--color-good, #2f9e6a); }
+.train-odds-seg.is-flat { background: var(--color-muted); opacity: 0.45; }
