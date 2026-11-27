@@ -1,6 +1,6 @@
 import { PRIVACY_EMAIL } from "@/game/contact";
 import { Link } from "@tanstack/react-router";
-import { Fragment, useContext, useEffect, useMemo, useRef, useState, createContext, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useContext, useEffect, useMemo, useRef, useState, createContext, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import {
   ArrowLeftRight,
   Check,
@@ -28,6 +28,8 @@ import { Crest, crestSpec } from "@/components/game/crest";
 import { STAR_THEME, clubTheme, keepHyphens, type ClubTheme } from "@/components/game/kit";
 import { PitchBoard, ResultCard, headlineKey, outcomeOf } from "./PitchBoard";
 import { RESULT_OVERLAY_MS, resultCardMode } from "./pitch-timing";
+import { AUTO_STEP_MS } from "@/game/run-timing";
+import { achievementBatchCount, isAchievementBatch, queueAchievements, queueBought } from "@/game/toasts";
 import { HAIR_COLOR_IDS, HAIR_COLORS, HAIR_STYLES, SKIN_TONES, resolveLook, type HairColor, type HairStyle } from "@/game/look";
 
 function NameCrest({ name, className = "mx-auto mb-1 block h-10 w-10" }: { name: string; className?: string }) {
@@ -158,7 +160,7 @@ export function GameApp() {
   const [lang, setLangState] = useState<Lang>("en");
   const [toasts, setToasts] = useState<string[]>([]);
   const admin = debugAdmin;
-  const notifyBought = () => setToasts((list) => [...list, "bought"]);
+  const notifyBought = () => setToasts((list) => queueBought(list));
   const [adAgePrompt, setAdAgePrompt] = useState(false);
   const [adPrivacy, setAdPrivacy] = useState(false);
   const [storeOpen, setStoreOpen] = useState<boolean | "player">(false);
@@ -274,7 +276,7 @@ export function GameApp() {
     setCareer(next);
     if (next) {
       const fresh = checkAchievements(next);
-      if (fresh.length) setToasts((list) => [...list, ...fresh]);
+      if (fresh.length) setToasts((list) => queueAchievements(list, fresh));
     }
   }
 
@@ -609,7 +611,7 @@ export function GameApp() {
             }}
           />
         ) : null}
-        {toasts.length ? toasts[0] === "bought" ? <BoughtToast /> : toasts[0].startsWith("streak:") ? <StreakToast days={Number(toasts[0].slice(7))} /> : <AchievementToast id={toasts[0]} /> : null}
+        {toasts.length ? toasts[0] === "bought" ? <BoughtToast /> : toasts[0].startsWith("streak:") ? <StreakToast days={Number(toasts[0].slice(7))} /> : isAchievementBatch(toasts[0]) ? <AchievementsToast n={achievementBatchCount(toasts[0])} /> : <AchievementToast id={toasts[0]} /> : null}
         </div>
         {!booted || !minShown ? <LoadingScreen ready={booted} /> : null}
       </AdminContext.Provider>
@@ -778,8 +780,12 @@ function Splash() {
   );
 }
 
-function Shell({ children }: { children: ReactNode }) {
-  return <main className="app-shell mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-5">{children}</main>;
+function Shell({ children, className, onClick }: { children: ReactNode; className?: string; onClick?: (event: MouseEvent<HTMLElement>) => void }) {
+  return (
+    <main className={`app-shell mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 py-5${className ? ` ${className}` : ""}`} onClick={onClick}>
+      {children}
+    </main>
+  );
 }
 
 function band(value: number) {
@@ -1614,7 +1620,7 @@ function HealClip({ career, onChange }: { career: Career; onChange: (c: Career) 
 }
 
 function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onChange: (c: Career) => void; onMenu: () => void; onStore?: () => void }) {
-  const [paused, setPaused] = useState(() => Boolean(career.lastTrain));
+  const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState<1 | 2 | 4>(1);
   const league = getLeague(career.season.leagueId);
   const latest = career.season.fixturesPlayed[career.season.fixturesPlayed.length - 1];
@@ -1625,12 +1631,20 @@ function RunScreen({ career, onChange, onMenu, onStore }: { career: Career; onCh
     if (paused || career.screen !== "run" || career.story) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce) return;
-    const id = window.setTimeout(() => onChange(playStep(career)), 460 / speed);
+    const id = window.setTimeout(() => onChange(playStep(career)), AUTO_STEP_MS / speed);
     return () => window.clearTimeout(id);
   }, [career, paused, onChange, speed]);
 
+  function skipToDecision(event: MouseEvent<HTMLElement>) {
+    const node = event.target as HTMLElement;
+    if (node.closest("button, a, input, select, textarea, label")) return;
+    if (career.screen !== "run" || career.story) return;
+    unlockAudio();
+    onChange(runToStop(career));
+  }
+
   return (
-    <Shell>
+    <Shell className="run-screen" onClick={skipToDecision}>
       <TabHeader
         title={`${tr("season")} ${seasonLabel(career.year)}`}
         sub={leagueLabel(tr, league.name)}
@@ -2507,14 +2521,29 @@ function SeasonWrap({
       </Shell>
     );
   }
+  const startOvr = career.season.startOvr ?? preview.ovrBefore;
+  const endOvr = career.season.endOvr ?? preview.ovrAfter;
   return (
-    <Shell>
+    <Shell className="wrap-screen">
       <ScreenHeader title={`${tr("season")} ${seasonLabel(career.year)}`} sub={cname(club.name)} onBack={onMenu} />
       <p className="text-base font-bold" data-wrap-result>
         {tr("wrapResult", { pos: preview.tablePos, league: leagueLabel(tr, league.name) })}
         <span className="ms-2 text-sm font-semibold text-muted">{tr("average")} <span className="num">{preview.avg ? preview.avg.toFixed(1) : "–"}</span></span>
         {preview.awards.length || preview.ballonYours ? <Trophy className="ms-2 inline size-5 text-trophy" aria-hidden="true" /> : null}
       </p>
+      <p className="mt-3 text-center text-base font-bold" data-wrap-target-line>
+        <span className={preview.targetHit ? "text-good" : "text-bad"} data-target-result>
+          {tr(preview.targetHit ? "targetHit" : "targetMissed")}
+        </span>
+        <span className="ms-2 font-semibold text-muted" data-wrap-ovr>
+          {tr("wrapOvr", { a: startOvr, b: endOvr })}
+        </span>
+      </p>
+      {(career.targetStreak ?? 0) >= 2 ? (
+        <p className="mt-1 text-center text-sm font-semibold" data-target-streak>
+          {tr("targetStreak", { n: career.targetStreak ?? 0 })}
+        </p>
+      ) : null}
       <div className="wrap-stats" data-wrap-stats>
         <div className="wrap-stat">
           <UserRound aria-hidden="true" />
@@ -2534,7 +2563,7 @@ function SeasonWrap({
           {tr("wrapCoins", { n: formatCoins(earnedTotal) })}
         </p>
       ) : null}
-      {!career.race ? <DoubleCoins career={career} onChange={onChange} /> : null}
+      {!career.race ? <DoubleCoins career={career} onChange={onChange} hideEarned /> : null}
       {summer ? (
         <p className="card mt-4 px-4 py-3 text-sm font-semibold" data-wrap-summer>
           {tr("wrapSummer", { tournament: tr(summer.tournamentKey), stage: tr(summer.stageKey), g: summer.goals })}
@@ -2549,7 +2578,7 @@ function SeasonWrap({
           const destLeague = getLeague(offer.leagueId);
           const stayOffer = offer.kind === "stay" || offer.clubId === career.clubId;
           return (
-            <article key={offer.clubId} className={`wrap-offer ${picked === offer.clubId ? "is-picked" : ""}`} style={clubVars(dest.id)}>
+            <article key={offer.clubId} className={`wrap-offer ${picked === offer.clubId ? "is-picked" : ""}`} style={clubVars(dest.id)} data-step-up={offer.stepUp ? "true" : undefined}>
               <div className="flex items-center gap-2">
                 <Crest clubId={dest.id} name={dest.name} className="h-9 w-9 shrink-0" />
                 <div className="min-w-0">
@@ -2562,7 +2591,7 @@ function SeasonWrap({
                 className={`${stayOffer ? "btn-light" : "btn-club"} mt-3 h-11 w-full text-sm`}
                 onClick={() => setPicked(offer.clubId)}
               >
-                {stayOffer ? tr("wrapStay") : tr("wrapSign")}
+                {stayOffer ? tr("wrapStay") : offer.stepUp ? tr("wrapStepUp") : tr("wrapSign")}
               </button>
             </article>
           );
@@ -3247,6 +3276,20 @@ function AchievementToast({ id }: { id: string }) {
   );
 }
 
+function AchievementsToast({ n }: { n: number }) {
+  const { tr } = useTx();
+  return (
+    <div className="toast" role="status" data-achievements-toast>
+      <span className="list-icon text-trophy">
+        <Trophy className="size-5" />
+      </span>
+      <span className="min-w-0">
+        <span dir="auto" className="block font-semibold">{tr("achievementsN", { n })}</span>
+      </span>
+    </div>
+  );
+}
+
 function AchievementsScreen({ onBack }: { onBack: () => void }) {
   const { tr } = useTx();
   const [unlocked, setUnlocked] = useState<Record<string, string>>({});
@@ -3395,8 +3438,11 @@ function Retired({ career, legacyOn, onHome, onNew }: { career: Career; legacyOn
 /** Runs a rewarded clip with feedback: spinner while waiting, a message when none is available or it was closed early. */
 function RewardButton({ name, label, onReward, className }: { name: string; label: string; onReward: () => void; className: string }) {
   const { tr } = useTx();
+  const [ready, setReady] = useState(rewardedAdReady);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  useEffect(() => subscribeRewardedAd(() => setReady(rewardedAdReady())), []);
+  if (!ready) return null;
   return (
     <div className="grid gap-1">
       <button
@@ -3416,7 +3462,8 @@ function RewardButton({ name, label, onReward, className }: { name: string; labe
             },
             () => {
               setBusy(false);
-              setNote(tr("adUnavailable"));
+              setReady(rewardedAdReady());
+              setNote(null);
             },
             () => {
               setBusy(false);
@@ -3492,6 +3539,8 @@ function DoubleCoins({ career, hideEarned = false }: { career: Career; onChange:
   const earned = career.coinsEarnedLast ?? 0;
   if (career.race || !earned) return null;
   const available = rewardAvailable(career, "double-coins", todayKey());
+  const doubled = Boolean(career.coinsFixtureId && career.adState.doubledFixtureIds.includes(career.coinsFixtureId));
+  if (hideEarned && !available && !doubled) return null;
   return (
     <div className="mt-4 grid gap-2">
       {hideEarned ? null : (
@@ -3501,9 +3550,9 @@ function DoubleCoins({ career, hideEarned = false }: { career: Career; onChange:
       )}
       {available ? (
         <RewardButton name="double-coins" className="btn-ghost h-12 w-full text-sm" label={tr("eco.double", { n: formatCoins(earned) })} onReward={() => apply(grantDoubleCoins)} />
-      ) : career.coinsFixtureId && career.adState.doubledFixtureIds.includes(career.coinsFixtureId) ? (
+      ) : doubled ? (
         <p className="text-xs text-good">{tr("eco.doubled")}</p>
-      ) : (
+      ) : hideEarned ? null : (
         <p className="text-xs text-muted">{tr("eco.doubleCap", { n: ECONOMY.caps.doubleCoinsPerSeason })}</p>
       )}
     </div>
