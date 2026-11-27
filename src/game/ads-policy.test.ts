@@ -12,12 +12,12 @@ test("the interstitial hook does not encode the season frequency cap", () => {
   assert.deepEqual(names, ["season-end"]);
   assert.equal(HALFTIME_INTERSTITIAL, false);
   assert.doesNotMatch(game, /canShowSeasonInterstitial|keymatch-half/);
-  const call = game.slice(game.indexOf("onSummer={() => {"), game.indexOf('showInterstitial(\n            "season-end"'));
+  const call = game.slice(game.indexOf("onSummer={(clubId) => {"), game.indexOf('showInterstitial(\n            "season-end"'));
   assert.match(call, /shouldShowSeasonAd\(/);
   assert.match(call, /\.\.\.seasonAdContext\(\)/);
   assert.match(call, /summaryClosed: true/);
   assert.match(call, /removeAdsOwned: loadDevice\(\)\.removeAds\.owned/);
-  assert.match(call, /if \(!showAd\) return update\(startSummer\(run\)\)/);
+  assert.match(call, /if \(!showAd\) return update\(leave\(run\)\)/);
   const ads = readFileSync(new URL("./ads.ts", import.meta.url), "utf8");
   assert.doesNotMatch(ads, /REWARD_COOLDOWN|90 \* 1000|90000|interstitialsPerSeason|canShowSeasonInterstitial/);
   assert.match(ads, /export function showInterstitial\(name: string, done: \(\) => void/);
