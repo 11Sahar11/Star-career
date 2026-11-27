@@ -360,6 +360,69 @@ export function getLeague(id: string): League {
   return league;
 }
 
+
+/** Preferred 3-letter codes where the automatic prefix would collide. */
+const PREFERRED_CLUB_CODES: Record<string, string> = {
+  "Chesterfield Knights": "CHF",
+  "Cheltenham Bears": "CHE",
+};
+
+function cityName(name: string) {
+  const parts = name.replace(/\s+II$/, "").trim().split(/\s+/);
+  return parts.length > 1 ? parts.slice(0, -1).join(" ") : parts[0] ?? name;
+}
+
+function lettersOf(text: string) {
+  return text.replace(/[^A-Za-z]/g, "").toUpperCase();
+}
+
+function nextCode(seed: string, used: Set<string>): string {
+  const letters = lettersOf(seed) + "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const first = letters.slice(0, 3).padEnd(3, "X");
+  if (!used.has(first)) return first;
+  for (let i = 2; i < letters.length; i += 1) {
+    const alt = (letters.slice(0, 2) + letters[i]).slice(0, 3);
+    if (alt.length === 3 && !used.has(alt)) return alt;
+  }
+  for (const a of "ABCDEFGHJKLMNPQRSTUVWXYZ") {
+    for (const b of "ABCDEFGHJKLMNPQRSTUVWXYZ") {
+      const alt = (letters[0] ?? "X") + a + b;
+      if (!used.has(alt)) return alt;
+    }
+  }
+  return first;
+}
+
+/** Unique 3-letter codes for every club, stable across leagues. */
+export function assignClubCodes(clubs: { id: string; name: string; short: string }[]): Record<string, string> {
+  const used = new Set<string>();
+  const codes: Record<string, string> = {};
+  for (const club of clubs) {
+    const preferred = PREFERRED_CLUB_CODES[club.name];
+    if (preferred && !used.has(preferred)) {
+      used.add(preferred);
+      codes[club.id] = preferred;
+    }
+  }
+  for (const club of clubs) {
+    if (codes[club.id]) continue;
+    const seed = club.short || cityName(club.name) || club.name;
+    const code = nextCode(seed, used);
+    used.add(code);
+    codes[club.id] = code;
+  }
+  return codes;
+}
+
+const CLUB_CODES = assignClubCodes(CLUBS);
+for (const club of CLUBS) club.code = CLUB_CODES[club.id];
+
+export function clubCode(id: string, name = ""): string {
+  if (CLUB_CODES[id]) return CLUB_CODES[id];
+  const letters = lettersOf(name);
+  return letters.slice(0, 3).padEnd(3, "X");
+}
+
 export function getClub(id: string): Club {
   const club = CLUBS.find((item) => item.id === id);
   if (!club) throw new Error(`unknown club ${id}`);

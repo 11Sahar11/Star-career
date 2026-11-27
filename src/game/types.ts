@@ -32,6 +32,8 @@ export type Club = {
   name: string;
   short: string;
   leagueId: string;
+  /** Unique 3-letter code across all leagues (CHF, CHE, …). */
+  code?: string;
 };
 
 export type Fixture = {
@@ -101,6 +103,8 @@ export type MatchLog = {
   goals: number;
   assists: number;
   missed: boolean;
+  /** True when this played match is the one that caused the current injury. */
+  injured?: boolean;
   events: MatchEvent[];
   headline: string;
   /** One of the season's two key matches. */
@@ -196,7 +200,12 @@ export type SeasonState = {
   leagueId: string;
   /** Wins in this season's two key matches; they lift the cup run. Missing in old saves = 0. */
   keyWins?: number;
+  /** Attribute snapshot when the season's fixtures were built. */
+  startAttrs?: Attrs;
+  /** 1-based club ranking at season start; the board target is fixed from this. */
+  startRank?: number;
 };
+
 
 export type SummerKind = "friendly" | "euros" | "world-cup" | "copa";
 
@@ -237,6 +246,8 @@ export type Career = {
   wage: number;
   role: Role;
   contractLeft: number;
+  /** Original contract length in years; remaining time is contractLeft. */
+  contractYears?: number;
   lastFinish: number;
   europeComp: EuropeComp | null;
   divisions: Record<string, string>;
@@ -275,6 +286,12 @@ export type Career = {
   recentSituations?: string[];
   /** fixturesPlayed.length when the last between-match story was offered. */
   lastStoryPlayed?: number;
+  /** Show the 'back from injury' notice on the next run, not on the injury match. */
+  justRecovered?: boolean;
+  /** Early-return clip is offered only after leaving the match that caused the injury. */
+  healEligible?: boolean;
+  /** First-decision odds hint has been dismissed. */
+  oddsHintSeen?: boolean;
   news: string[];
   /** Economy (save v9). Coins are per career; retirement resets them. */
   coins: number;

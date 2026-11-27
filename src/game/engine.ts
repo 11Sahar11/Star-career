@@ -144,6 +144,18 @@ export function money(wage: number, currency = "€") {
   return `${currency}${wage.toLocaleString("en-GB")}`;
 }
 
+/** One source for the wage line: "£1,300 / month". */
+export function formatWage(wage: number, currency = "€") {
+  return `${money(wage, currency)} / month`;
+}
+
+/** Length and years remaining come from contractYears + contractLeft. */
+export function contractTerms(career: Career): { length: number; left: number } {
+  const left = Math.max(0, career.contractLeft);
+  const length = Math.max(left, career.contractYears ?? left);
+  return { length, left };
+}
+
 function ageGrowth(age: number) {
   if (age <= 17) return 0.55;
   if (age <= 19) return 0.42;
@@ -354,6 +366,10 @@ function applyScore(table: TableRow[], homeId: string, awayId: string, homeGoals
     home.d += 1;
     away.d += 1;
   }
+}
+
+export function rowPoints(row: TableRow): number {
+  return 3 * row.w + row.d;
 }
 
 export function sortTable(table: TableRow[]) {
@@ -724,36 +740,34 @@ function buildFixtures(career: Career, rng: () => number): { fixtures: Fixture[]
   return { fixtures, table: emptyTable(divisionClubs(career, league.id)), breakAt };
 }
 
+/** Primary season goal from the team's start ranking. Never "Win the league" outside 1st. */
+export function seasonGoalForRank(size: number, startRank: number): { label: string; line: number } {
+  const n = Math.max(1, size);
+  const rank = Math.max(1, Math.min(n, startRank));
+  if (rank === 1) return { label: "@target.win", line: 1 };
+  if (rank <= 4) return { label: "@target.four", line: 4 };
+  const half = Math.max(1, Math.ceil(n / 2));
+  if (rank <= half) return { label: "@target.half", line: half };
+  return { label: "@target.stay", line: Math.max(1, n - 2) };
+}
+
 function boardTarget(career: Career) {
   const league = getLeague(leagueOf(career, career.clubId));
   const list = divisionClubs(career, league.id);
   const size = Math.max(1, list.length);
-  const idx = Math.max(0, list.findIndex((club) => club.id === career.clubId));
-  const rank = idx / Math.max(1, size - 1);
-  let label = "target.half";
-  let line = Math.max(1, Math.ceil(size / 2));
-  if (rank <= 0.2 && league.tier >= 2) {
-    label = "target.title";
-    line = 1;
-  } else if (rank <= 0.35) {
-    label = "target.four";
-    line = Math.min(4, line);
-  } else if (rank >= 0.72) {
-    label = "target.stay";
-    line = Math.max(1, size - 2);
-  }
-  if (career.role === "Star" && line > 1) {
-    label = line <= 4 ? "target.win" : "target.four";
-    line = line <= 4 ? 1 : 4;
-  }
-  return { label: `@${label}`, line };
+  const startRank = career.season.startRank ?? Math.max(1, list.findIndex((club) => club.id === career.clubId) + 1);
+  return seasonGoalForRank(size, startRank);
 }
 
 function freshSeason(career: Career, rng: () => number) {
   const built = buildFixtures(career, rng);
-  const target = boardTarget(career);
+  const list = divisionClubs(career, leagueOf(career, career.clubId));
+  const startRank = Math.max(1, list.findIndex((club) => club.id === career.clubId) + 1);
+  const target = seasonGoalForRank(list.length, startRank);
   return {
     training: emptyAttrs(),
+    startAttrs: { ...career.player.attrs },
+    startRank,
     apps: 0,
     sumRating: 0,
     goals: 0,
@@ -808,6 +822,7 @@ export function createCareer(name: string, position: PositionId, countryId: stri
     wage: 900,
     role: "Starter",
     contractLeft: moveEvery(difficulty),
+    contractYears: moveEvery(difficulty),
     lastFinish: 3,
     europeComp: null,
     divisions: initialDivisions(),
@@ -864,6 +879,41 @@ export function nextFixture(career: Career) {
   return career.season.fixtures[career.season.cursor] ?? null;
 }
 
+/** League games in a double round-robin: 2 × (teams − 1). */
+export function leagueFixtureTotal(career: Career): number {
+  const teams = Math.max(1, divisionClubs(career, career.season.leagueId).length);
+  return 2 * (teams - 1);
+}
+
+export function matchdayCount(career: Career): { played: number; total: number; cupPlayed: number; cupTotal: number } {
+  const league = career.season.fixtures.filter((item) => item.competition === "league");
+  const cups = career.season.fixtures.filter((item) => item.competition !== "league");
+  const playedLogs = career.season.fixturesPlayed;
+  const total = leagueFixtureTotal(career);
+  const played = playedLogs.filter((item) => item.competition === "league").length;
+  return {
+    played,
+    total,
+    cupPlayed: playedLogs.filter((item) => item.competition !== "league").length,
+    cupTotal: cups.length,
+  };
+}
+
+/** Current matchday shown on Home and Season: the next league day, or the total when the league is done. */
+export function matchdayProgress(career: Career): { n: number; m: number } {
+  const { played, total } = matchdayCount(career);
+  const n = Math.min(total, played < total ? played + 1 : total);
+  return { n, m: total };
+}
+
+export function playedApps(logs: { missed?: boolean }[]): number {
+  return logs.filter((item) => !item.missed).length;
+}
+
+export function goldenBootGoals(career: Career): number {
+  return career.season.leagueGoals;
+}
+
 function shouldBench(career: Career, rng: () => number) {
   if (career.role === "Star" || career.role === "Starter") return false;
   if (career.role === "Rotation") return rng() < 0.22;
@@ -881,6 +931,7 @@ function logFrom(report: MatchReport): MatchLog {
     goals: report.goals,
     assists: report.assists,
     missed: report.missed,
+    injured: report.injured,
     events: report.events,
     headline: report.headline,
   };
@@ -1020,12 +1071,17 @@ export function applyReport(career: Career, report: MatchReport, rng: () => numb
   next.season.fixturesPlayed.push(logFrom(report));
   next.season.cursor += 1;
   next.season.prep = "none";
-  if (report.missReason === "injury") next.season.outFor = Math.max(0, career.season.outFor - 1);
-  else if (!report.missed && report.injured) {
+  if (report.missReason === "injury") {
+    next.season.outFor = Math.max(0, career.season.outFor - 1);
+    if (career.season.outFor > 0 && next.season.outFor === 0) next.justRecovered = true;
+  } else if (!report.missed && report.injured) {
     const spell = career.player.age >= 33 ? (rng() < 0.4 ? 5 : 4) : rng() < 0.5 ? 2 : rng() < 0.85 ? 3 : 4;
     next.season.outFor = spell;
+    next.healEligible = false;
+    next.justRecovered = false;
     next.news = pushNews(next.news, `Injured. Out for the next ${spell} matches.`);
-  } else next.season.outFor = 0;
+  }
+  // Serving an injury never resets just because the player was benched or a key match was skipped.
   followUp(next, report, rng);
   const deltaText = ATTR_KEYS.filter((key) => report.deltas[key] > 0)
     .map((key) => `${ATTR_LABEL[key]} +${report.deltas[key]}`)
@@ -1077,6 +1133,7 @@ export function playNext(career: Career): Career {
 }
 
 export function playStep(career: Career): Career {
+  if (career.justRecovered) career = { ...career, justRecovered: false };
   if (career.retired || career.screen === "camp" || career.screen === "break" || career.screen === "season" || career.screen === "summer" || career.screen === "offers") return career;
   const fixture = nextFixture(career);
   if (!fixture) return openSeason(career);
@@ -1084,12 +1141,11 @@ export function playStep(career: Career): Career {
   const roll = () => rng.next();
   let playing = true;
   let missReason: MatchReport["missReason"];
-  // Key matches are always played: the manager starts you and you play through the knock.
-  if (isBigFixture(career, fixture)) return openBigMatch(career, fixture, roll, rng);
   if (career.season.outFor > 0) {
     playing = false;
     missReason = "injury";
-  } else if (shouldBench(career, roll)) {
+  } else if (isBigFixture(career, fixture)) return openBigMatch(career, fixture, roll, rng);
+  else if (shouldBench(career, roll)) {
     playing = false;
     missReason = "bench";
   }
@@ -1360,6 +1416,15 @@ function buildMoments(career: Career, fixture: Fixture, roll: () => number): Mom
 const KEY_BASE_SHIFT = -14;
 
 function openBigMatch(career: Career, fixture: Fixture, roll: () => number, rng: ReturnType<typeof makeRng>): Career {
+  if (career.season.outFor > 0) {
+    const report = simulateAgainst(career, fixture, false, roll);
+    report.missed = true;
+    report.missReason = "injury";
+    report.headline = headlineFor(report);
+    const applied = applyReport(career, report, roll, "run");
+    applied.rng = rng.state();
+    return applied;
+  }
   // The moments carry the player's own chances, so the rest of the match is played a little tighter.
   const base = simulateAgainst(career, fixture, true, roll, KEY_BASE_SHIFT);
   const moments = buildMoments(career, fixture, roll);
@@ -1553,6 +1618,17 @@ export function composeReport(pending: PendingMatch): MatchReport {
 export function skipBigMatch(career: Career): Career {
   const pending = career.pending;
   if (career.screen !== "bigmatch" || !pending) return career;
+  if (career.season.outFor > 0) {
+    const rng = makeRng(pending.rngState);
+    const roll = () => rng.next();
+    const report = simulateAgainst({ ...career, pending: null }, pending.base, false, roll);
+    report.missed = true;
+    report.missReason = "injury";
+    report.headline = headlineFor(report);
+    const applied = applyReport({ ...career, pending: null }, report, roll, "report");
+    applied.rng = rng.state();
+    return applied;
+  }
   const moments = pending.moments.map((moment, index) => {
     if (moment.picked) return moment;
     let option: MomentOption | undefined;
@@ -1571,6 +1647,7 @@ export function skipBigMatch(career: Career): Career {
 export function finishBigMatch(career: Career): Career {
   const pending = career.pending;
   if (!pending || pending.moments.some((moment) => !moment.picked)) return career;
+  if (career.season.outFor > 0) return skipBigMatch(career);
   const report = composeReport(pending);
   const rng = makeRng(pending.rngState);
   const roll = () => rng.next();
@@ -1587,10 +1664,8 @@ export function finishBigMatch(career: Career): Career {
   const log = applied.season.fixturesPlayed[applied.season.fixturesPlayed.length - 1];
   if (log && !debut) applied.season.fixturesPlayed[applied.season.fixturesPlayed.length - 1] = { ...log, key: true };
   if (!debut && report.competition === "league") {
-    const bonus = report.us > report.them ? 3 : report.us === report.them ? 1 : 0;
     applied.season = {
       ...applied.season,
-      table: applied.season.table.map((row) => (row.clubId === applied.clubId ? { ...row, pts: row.pts + bonus } : row)),
       keyWins: (applied.season.keyWins ?? 0) + (report.us > report.them ? 1 : 0),
     };
   }
@@ -1603,7 +1678,13 @@ export function finishBigMatch(career: Career): Career {
 
 /** Where the game goes after a match report: the winter break, the next match, or the season review. */
 export function afterReport(career: Career): Career {
-  const cleared: Career = { ...career, activeReport: null, campPending: false };
+  const injuredThis = Boolean(career.activeReport?.injured);
+  const cleared: Career = {
+    ...career,
+    activeReport: null,
+    campPending: false,
+    healEligible: career.season.outFor > 0 && !injuredThis,
+  };
   if (career.campPending) return { ...cleared, screen: "camp", story: null };
   if (!cleared.season.breakDone && cleared.season.cursor >= cleared.season.breakAt) {
     return { ...cleared, screen: "break", season: { ...cleared.season, phase: "first" } };
@@ -1880,7 +1961,10 @@ export function computeGrowth(career: Career): GrowthPreview {
     deltas.shooting -= 1;
   }
 
+  const start = career.season.startAttrs ?? before;
   const after = applyDeltas(before, deltas);
+  const display = emptyAttrs();
+  for (const key of ATTR_KEYS) display[key] = after[key] - start[key];
   const lines: string[] = [];
   if (career.difficulty === "easy") lines.push("@line.easy");
   else if (career.difficulty === "hard") lines.push("@line.hard");
@@ -1914,10 +1998,10 @@ export function computeGrowth(career: Career): GrowthPreview {
   }
   lines.push(ballon.yours ? "@ballon.you" : `@ballon.other|${ballon.name}`);
   return {
-    before,
-    deltas,
+    before: start,
+    deltas: display,
     after,
-    ovrBefore: overall(career.player.position, before),
+    ovrBefore: overall(career.player.position, start),
     ovrAfter: overall(career.player.position, after),
     avg: Math.round(avg * 10) / 10,
     lines,
@@ -2190,7 +2274,7 @@ export function buildOffers(career: Career, ovr: number, tablePos: number): Offe
 export function commitSeason(career: Career): Career {
   if (career.screen === "offers" || career.screen === "retired") return career;
   const preview = career.growthPreview ?? computeGrowth(career);
-  const attrs = applyDeltas(career.player.attrs, preview.deltas);
+  const attrs = { ...preview.after };
   const ovr = overall(career.player.position, attrs);
   const trophies = [
     ...career.trophies,
@@ -2304,6 +2388,7 @@ export function acceptOffer(career: Career, clubId: string): Career {
     wage: offer.wage,
     role: offer.role,
     contractLeft: offer.years,
+    contractYears: offer.years,
     year: career.year + 1,
     player: {
       ...career.player,
@@ -2476,7 +2561,8 @@ export function wrapNextSeason(career: Career, clubId: string): Career {
 }
 
 export function previewBoardTarget(career: Career, clubId: string, role?: Career["role"]) {
-  return boardTarget({ ...career, clubId, role: role ?? career.role });
+  const next = { ...career, clubId, role: role ?? career.role, season: { ...career.season, startRank: undefined } };
+  return boardTarget(next);
 }
 
 export function summerWrapInfo(career: Career): { tournamentKey: string; stageKey: string; goals: number } | null {
@@ -2566,6 +2652,7 @@ export function createDailyCareer(name: string, date = todayKey()): Career {
     wage: 5000,
     role: "Starter",
     contractLeft: 1,
+    contractYears: 1,
     lastFinish: place,
     europeComp: null,
     divisions: initialDivisions(),
