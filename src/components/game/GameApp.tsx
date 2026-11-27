@@ -2614,6 +2614,22 @@ function SeasonScreen({
   if (career.pendingOffers && !claimRace && onChange && onRetire) {
     return <SeasonWrap career={career} onStore={onStore} onAdvance={(clubId) => onSummer(clubId)} onRetire={onRetire} onMenu={onMenu} onChange={onChange} />;
   }
+  return <SeasonReview career={career} onStore={onStore} onSummer={onSummer} onMenu={onMenu} claimRace={claimRace} />;
+}
+
+function SeasonReview({
+  career,
+  onStore,
+  onSummer,
+  onMenu,
+  claimRace,
+}: {
+  career: Career;
+  onStore?: () => void;
+  onSummer: (clubId?: string) => void;
+  onMenu: () => void;
+  claimRace?: boolean;
+}) {
   const [summaryReady, setSummaryReady] = useState(false);
   useEffect(() => {
     setSummaryReady(true);

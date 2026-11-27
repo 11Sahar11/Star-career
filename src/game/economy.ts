@@ -198,7 +198,7 @@ export function earnForReport(report: MatchReport, isKey: boolean, moments: Mome
   if (report.rating >= 8) coins += EARN.highRating;
   // Every successful key-match moment pays, whatever it led to.
   coins += moments.filter((moment) => moment.success === true).length * EARN.keyMoment;
-  return coins;
+  return Math.round(coins);
 }
 
 export function itemPrice(career: Career, id: StoreItemId, today: string, admin = false) {

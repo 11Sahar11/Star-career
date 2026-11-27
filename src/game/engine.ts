@@ -740,30 +740,40 @@ function buildFixtures(career: Career, rng: () => number): { fixtures: Fixture[]
   return { fixtures, table: emptyTable(divisionClubs(career, league.id)), breakAt };
 }
 
-/** Primary season goal from the team's start ranking. Never "Win the league" outside 1st. */
-export function seasonGoalForRank(size: number, startRank: number): { label: string; line: number } {
-  const n = Math.max(1, size);
-  const rank = Math.max(1, Math.min(n, startRank));
-  if (rank === 1) return { label: "@target.win", line: 1 };
-  if (rank <= 4) return { label: "@target.four", line: 4 };
-  const half = Math.max(1, Math.ceil(n / 2));
-  if (rank <= half) return { label: "@target.half", line: half };
-  return { label: "@target.stay", line: Math.max(1, n - 2) };
-}
-
-function boardTarget(career: Career) {
+/** Opening-rank season goal, same rules as main: title for a strong start in higher tiers, stricter line for Star. Uses startRank when already fixed. */
+export function boardTarget(career: Career) {
   const league = getLeague(leagueOf(career, career.clubId));
   const list = divisionClubs(career, league.id);
   const size = Math.max(1, list.length);
-  const startRank = career.season.startRank ?? Math.max(1, list.findIndex((club) => club.id === career.clubId) + 1);
-  return seasonGoalForRank(size, startRank);
+  const idx =
+    career.season.startRank != null
+      ? Math.max(0, Math.min(size - 1, career.season.startRank - 1))
+      : Math.max(0, list.findIndex((club) => club.id === career.clubId));
+  const rank = idx / Math.max(1, size - 1);
+  let label = "target.half";
+  let line = Math.max(1, Math.ceil(size / 2));
+  if (rank <= 0.2 && league.tier >= 2) {
+    label = "target.title";
+    line = 1;
+  } else if (rank <= 0.35) {
+    label = "target.four";
+    line = Math.min(4, line);
+  } else if (rank >= 0.72) {
+    label = "target.stay";
+    line = Math.max(1, size - 2);
+  }
+  if (career.role === "Star" && line > 1) {
+    label = line <= 4 ? "target.win" : "target.four";
+    line = line <= 4 ? 1 : 4;
+  }
+  return { label: `@${label}`, line };
 }
 
 function freshSeason(career: Career, rng: () => number) {
   const built = buildFixtures(career, rng);
   const list = divisionClubs(career, leagueOf(career, career.clubId));
   const startRank = Math.max(1, list.findIndex((club) => club.id === career.clubId) + 1);
-  const target = seasonGoalForRank(list.length, startRank);
+  const target = boardTarget({ ...career, season: { ...career.season, startRank } });
   return {
     training: emptyAttrs(),
     startAttrs: { ...career.player.attrs },
@@ -886,7 +896,6 @@ export function leagueFixtureTotal(career: Career): number {
 }
 
 export function matchdayCount(career: Career): { played: number; total: number; cupPlayed: number; cupTotal: number } {
-  const league = career.season.fixtures.filter((item) => item.competition === "league");
   const cups = career.season.fixtures.filter((item) => item.competition !== "league");
   const playedLogs = career.season.fixturesPlayed;
   const total = leagueFixtureTotal(career);
@@ -1430,7 +1439,7 @@ function openBigMatch(career: Career, fixture: Fixture, roll: () => number, rng:
   const moments = buildMoments(career, fixture, roll);
   const seed = Math.floor(roll() * 2147483647) || 1;
   const pending: PendingMatch = { base, moments, seed, rngState: rng.state() };
-  const recentSituations = [...(career.recentSituations ?? []), ...moments.map((moment) => moment.situation)].slice(-16);
+  const recentSituations = [...(career.recentSituations ?? []), ...moments.map((moment) => moment.situation)].filter((id): id is string => Boolean(id)).slice(-16);
   return { ...career, pending, screen: "bigmatch", recentDeltas: null, lastTrain: null, keyGain: null, keyCampBonus: 0, gearTrial: null, recentSituations };
 }
 
@@ -1621,7 +1630,9 @@ export function skipBigMatch(career: Career): Career {
   if (career.season.outFor > 0) {
     const rng = makeRng(pending.rngState);
     const roll = () => rng.next();
-    const report = simulateAgainst({ ...career, pending: null }, pending.base, false, roll);
+    const fixture = nextFixture(career);
+    if (!fixture) return career;
+    const report = simulateAgainst({ ...career, pending: null }, fixture, false, roll);
     report.missed = true;
     report.missReason = "injury";
     report.headline = headlineFor(report);
@@ -2583,7 +2594,8 @@ export function summerWrapInfo(career: Career): { tournamentKey: string; stageKe
 
 export function retireCareer(career: Career): Career {
   const preview = career.growthPreview ?? (nextFixture(career) ? null : computeGrowth(career));
-  const attrs = preview ? applyDeltas(career.player.attrs, preview.deltas) : career.player.attrs;
+  const alreadyApplied = Boolean(preview && ATTR_KEYS.every((key) => career.player.attrs[key] === preview.after[key]));
+  const attrs = preview && !alreadyApplied ? applyDeltas(career.player.attrs, preview.deltas) : career.player.attrs;
   return {
     ...career,
     retired: true,

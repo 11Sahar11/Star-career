@@ -13,6 +13,7 @@ import {
   skipBigMatch,
   summerWrapInfo,
   wrapNextSeason,
+  retireCareer,
   playStep,
 } from "./engine";
 import { answerStory } from "./stories";
@@ -23,7 +24,7 @@ const i18n = readFileSync(new URL("./i18n.ts", import.meta.url), "utf8");
 
 test("three sessions fill the training bar and grant +1; injury keeps the bar", () => {
   assert.equal(TRAIN_BAR_SEGMENTS, 3);
-  let bars = {};
+  const bars = {};
   const first = progressTrainBar(bars, "shooting", false, 10);
   assert.equal(first.bar, 1);
   assert.equal(first.barFull, false);
@@ -115,4 +116,18 @@ test("a finished season opens one wrap screen with offers ready, and Next season
   assert.match(i18n, /wrapSign: "חותמים"/);
   assert.match(i18n, /nextSeason: "Next season"/);
   assert.match(i18n, /nextSeason: "לעונה הבאה"/);
+});
+
+test("retiring from the wrap does not apply growth twice", () => {
+  const started = createCareer("Retire wrap", "ST", "eng", 21);
+  const ended = drainToSeason(started);
+  const wrap = ended.pendingOffers ? ended : prepareSeasonWrap(ended);
+  assert.equal(wrap.screen, "season");
+  assert.ok(wrap.growthPreview);
+  const before = { ...wrap.player.attrs };
+  const retired = retireCareer(wrap);
+  assert.equal(retired.retired, true);
+  assert.equal(retired.screen, "retired");
+  assert.deepEqual(retired.player.attrs, before);
+  assert.deepEqual(retired.player.attrs, wrap.growthPreview!.after);
 });
