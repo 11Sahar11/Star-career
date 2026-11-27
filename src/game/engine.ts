@@ -1101,6 +1101,7 @@ export function playStep(career: Career): Career {
   }
   const applied = applyReport(career, report, roll, "run");
   applied.story = rollStory(applied, roll);
+  if (applied.story) applied.lastStoryPlayed = applied.season.fixturesPlayed.length;
   applied.rng = rng.state();
   applied.recentDeltas = null;
   applied.lastTrain = null;
@@ -1176,6 +1177,13 @@ export const MOMENT_QUALITY_PER_POINT = 0.045;
 export const FREE_KICK_PER_POINT = 0.051;
 export const FREE_KICK_BASE = 0.15;
 export const FREE_KICK_CEILING = 50;
+/** Key-match moments per match. Replaces the old 6–8 draw (average 7). */
+export const KEY_MOMENT_COUNT = 4;
+/** Previous average moments per key match (6, 7 or 8 equally). Used to keep coin totals stable. */
+export const PREVIOUS_KEY_MOMENT_AVG = 7;
+/** Minimum gap, in percentage points, between options in the same moment. */
+export const MIN_MOMENT_GAP = 5;
+
 
 /**
  * Football conversion rate at attribute 60 against an individual opponent rated 70.
@@ -1216,27 +1224,72 @@ const SITUATIONS: Record<string, { kind: MomentKind; options: OptionSpec[] }> = 
 const ATTACK_POOL = ["penalty", "freekick", "oneonone", "runbehind", "aerial", "keypass"];
 const KEEPER_POOL = ["gkdive", "gkstand", "gkcomeoff"];
 
+const REWARD_RANK: Record<string, number> = { goal: 2, assist: 1, stop: 0 };
+
+/**
+ * Safer must mean a smaller or equal reward, and every pair of options differs
+ * by at least {@link MIN_MOMENT_GAP} points. Adjustments stay inside each option's ceiling.
+ */
+export function enforceMomentGaps(options: MomentOption[], limits: number[]): MomentOption[] {
+  const items = options.map((option, index) => ({ ...option, limit: limits[index] ?? 92, index }));
+  items.sort((a, b) => (REWARD_RANK[a.reward] ?? 0) - (REWARD_RANK[b.reward] ?? 0) || b.odds - a.odds || a.index - b.index);
+  for (let i = 0; i < items.length - 1; i += 1) {
+    const need = items[i + 1].odds + MIN_MOMENT_GAP;
+    if (items[i].odds < need) items[i].odds = Math.min(items[i].limit, need);
+  }
+  for (let i = 0; i < items.length - 1; i += 1) {
+    if (items[i].odds - items[i + 1].odds < MIN_MOMENT_GAP) {
+      items[i + 1].odds = Math.max(5, items[i].odds - MIN_MOMENT_GAP);
+    }
+  }
+  items.sort((a, b) => a.index - b.index);
+  return items.map(({ limit: _limit, index: _index, ...option }) => option);
+}
+
+function rawMomentOptions(
+  career: Career,
+  situation: string,
+  opponent: number,
+  attrs: Career["player"]["attrs"],
+): { options: MomentOption[]; limits: number[] } {
+  const camp = career.keyCampBonus ?? 0;
+  const cap = ECONOMY.gear.oddsCap;
+  const options: MomentOption[] = [];
+  const limits: number[] = [];
+  for (const [id, attr, baseChance, reward, ceiling, qualityPerPoint] of SITUATIONS[situation].options) {
+    const limit = Math.min(cap, ceiling);
+    const odds = clamp(momentOdds(attrs[attr], opponent, baseChance, limit, qualityPerPoint) + camp, 5, limit);
+    options.push({ id, attr, odds, reward });
+    limits.push(limit);
+  }
+  return { options, limits };
+}
+
 /** Odds for each choice; `gain` is how much training since the last key match added. */
 export function momentOptions(career: Career, situation: string, opponent: number): MomentOption[] {
   const a = effectiveAttrs(career, true);
   const bare = career.player.attrs;
   const gains = career.keyGain ?? {};
-  const camp = career.keyCampBonus ?? 0;
-  const cap = ECONOMY.gear.oddsCap;
-  return SITUATIONS[situation].options.map(([id, attr, baseChance, reward, ceiling, qualityPerPoint]) => {
-    const limit = Math.min(cap, ceiling);
-    const oddsFor = (value: number) => clamp(momentOdds(value, opponent, baseChance, limit, qualityPerPoint) + camp, 5, limit);
-    const odds = oddsFor(a[attr]);
-    const option: MomentOption = { id, attr, odds, reward };
-    const gain = odds - oddsFor(a[attr] - (gains[attr] ?? 0));
-    if (gain > 0) option.gain = gain;
-    const gear = odds - oddsFor(bare[attr]);
-    const item = gearItemFor(career, attr, true);
+  const current = rawMomentOptions(career, situation, opponent, a);
+  const withoutGain = rawMomentOptions(
+    career,
+    situation,
+    opponent,
+    Object.fromEntries(ATTR_KEYS.map((key) => [key, a[key] - (gains[key] ?? 0)])) as Career["player"]["attrs"],
+  );
+  const withoutGear = rawMomentOptions(career, situation, opponent, bare);
+  const displayed = enforceMomentGaps(current.options, current.limits);
+  return displayed.map((option, index) => {
+    const next: MomentOption = { ...option };
+    const gain = current.options[index].odds - withoutGain.options[index].odds;
+    if (gain > 0) next.gain = gain;
+    const gear = current.options[index].odds - withoutGear.options[index].odds;
+    const item = gearItemFor(career, option.attr, true);
     if (gear > 0 && item) {
-      option.gear = gear;
-      option.gearItem = item;
+      next.gear = gear;
+      next.gearItem = item;
     }
-    return option;
+    return next;
   });
 }
 
@@ -1253,34 +1306,47 @@ function attrsCovered(situations: string[]) {
   return new Set(situations.flatMap((id) => SITUATIONS[id].options.map((option) => option[1]))).size;
 }
 
-/** 6-8 moments drawn from the pool, covering at least 4 different attributes. */
-export function drawSituations(position: PositionId, roll: () => number): string[] {
-  const count = 6 + Math.floor(roll() * 3);
-  if (position === "GK") {
-    const out = shuffled(KEEPER_POOL, roll);
-    while (out.length < count) out.push(KEEPER_POOL[Math.floor(roll() * KEEPER_POOL.length)]);
-    return shuffled(out, roll);
-  }
-  const defensive = position === "CB" || position === "FB" || position === "CDM";
-  const pool = defensive ? [...ATTACK_POOL, "defend", "defend"] : position === "CM" ? [...ATTACK_POOL, "defend"] : ATTACK_POOL;
-  // Start with four situations whose main attributes differ, then fill at random.
+/**
+ * Situations for one key match: {@link KEY_MOMENT_COUNT} unique types when the
+ * pool is large enough (draw without replacement). Fresh types (not in
+ * `recent`) are taken first. A smaller pool (goalkeepers) fills only after
+ * every type has been used once, so a match still has four moments.
+ */
+export function drawSituations(position: PositionId, roll: () => number, recent: string[] = []): string[] {
+  const count = KEY_MOMENT_COUNT;
+  const uniquePool =
+    position === "GK"
+      ? [...KEEPER_POOL]
+      : position === "CB" || position === "FB" || position === "CDM" || position === "CM"
+        ? [...ATTACK_POOL, "defend"]
+        : [...ATTACK_POOL];
+  const fresh = shuffled(uniquePool.filter((id) => !recent.includes(id)), roll);
+  const stale = shuffled(uniquePool.filter((id) => recent.includes(id)), roll).sort(
+    (a, b) => recent.lastIndexOf(a) - recent.lastIndexOf(b),
+  );
   const out: string[] = [];
-  const mains = new Set<AttrKey>();
-  for (const id of shuffled(ATTACK_POOL, roll)) {
-    const main = SITUATIONS[id].options[0][1];
-    if (mains.has(main)) continue;
-    mains.add(main);
-    out.push(id);
-    if (out.length === 4) break;
+  if ((position === "CB" || position === "FB" || position === "CDM") && uniquePool.includes("defend") && !out.includes("defend")) {
+    out.push("defend");
   }
-  if (defensive) out[0] = "defend";
-  while (out.length < count) out.push(pool[Math.floor(roll() * pool.length)]);
+  for (const id of [...fresh, ...stale]) {
+    if (out.includes(id)) continue;
+    out.push(id);
+    if (out.length === Math.min(count, uniquePool.length)) break;
+  }
+  // Only repeat once the unique pool is exhausted (keepers: 3 types, 4 moments).
+  const fill = [...fresh, ...stale, ...shuffled(uniquePool, roll)];
+  let i = 0;
+  while (out.length < count) {
+    out.push(fill[i % fill.length]);
+    i += 1;
+  }
   const final = shuffled(out, roll);
+  if (position === "GK") return final;
   return attrsCovered(final) >= 4 ? final : [...final.slice(0, -1), "keypass"];
 }
 
 function buildMoments(career: Career, fixture: Fixture, roll: () => number): Moment[] {
-  const situations = drawSituations(career.player.position, roll);
+  const situations = drawSituations(career.player.position, roll, career.recentSituations ?? []);
   const minutes = new Set<number>();
   while (minutes.size < situations.length) minutes.add(5 + Math.floor(roll() * 84));
   return [...minutes]
@@ -1299,7 +1365,8 @@ function openBigMatch(career: Career, fixture: Fixture, roll: () => number, rng:
   const moments = buildMoments(career, fixture, roll);
   const seed = Math.floor(roll() * 2147483647) || 1;
   const pending: PendingMatch = { base, moments, seed, rngState: rng.state() };
-  return { ...career, pending, screen: "bigmatch", recentDeltas: null, lastTrain: null, keyGain: null, keyCampBonus: 0, gearTrial: null };
+  const recentSituations = [...(career.recentSituations ?? []), ...moments.map((moment) => moment.situation)].slice(-16);
+  return { ...career, pending, screen: "bigmatch", recentDeltas: null, lastTrain: null, keyGain: null, keyCampBonus: 0, gearTrial: null, recentSituations };
 }
 
 /** Puts the earliest decision in minute 1 and keeps every other minute unique. */
@@ -1528,6 +1595,7 @@ export function finishBigMatch(career: Career): Career {
     };
   }
   applied.story = debut ? null : rollStory(applied, roll);
+  if (applied.story) applied.lastStoryPlayed = applied.season.fixturesPlayed.length;
   applied.rng = rng.state();
   applied.lastTrain = null;
   return applied;
@@ -1596,6 +1664,16 @@ export function trainOutcomes(odds: TrainOdds): { id: TrainPartId; n: number }[]
   ];
   const rank: Record<TrainPartId, number> = { up: 0, flat: 1, big: 2, down: 3 };
   return parts.filter((part) => part.n > 0).sort((a, b) => b.n - a.n || rank[a.id] - rank[b.id]);
+}
+
+/** Segments of the training odds bar, in roll order, totalling 100. Shown separately from the text line. */
+export function trainBarParts(odds: TrainOdds): { id: TrainPartId; n: number }[] {
+  return [
+    { id: "down" as const, n: odds.down },
+    { id: "big" as const, n: odds.big },
+    { id: "up" as const, n: odds.up },
+    { id: "flat" as const, n: 100 - odds.big - odds.up - odds.down },
+  ].filter((part) => part.n > 0);
 }
 
 /** The odds line, most likely outcome first, using the same percentages applyTrain rolls. */

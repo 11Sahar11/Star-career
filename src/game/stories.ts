@@ -44,11 +44,19 @@ export function storyById(id: string): Story | undefined {
   return STORIES.find((story) => story.id === id);
 }
 
-/** About three a season: every seventh match from the fourth, three times in five, a story not seen recently. */
+/** Minimum fixtures between story cards. Injury and return-from-injury are not stories and do not count. */
+export const STORY_MIN_GAP = 4;
+
+/**
+ * About three a season: every seventh match from the fourth, three times in five,
+ * a story not seen recently. Never more than one story per {@link STORY_MIN_GAP} rounds.
+ */
 export function rollStory(career: Career, roll: () => number): PendingStory | null {
   if (career.story || career.retired) return null;
   const played = career.season.fixturesPlayed.length;
   if (played < 4 || played % 7 !== 4) return null;
+  const last = career.lastStoryPlayed ?? 0;
+  if (career.lastStoryPlayed != null && played - last < STORY_MIN_GAP) return null;
   if (roll() > 0.6) return null;
   const seen = career.storiesSeen ?? [];
   let pool = STORIES.filter((story) => !seen.includes(story.id) && (!story.when || story.when(career)));

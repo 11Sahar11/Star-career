@@ -269,6 +269,10 @@ export type Career = {
   pending?: PendingMatch | null;
   story?: PendingStory | null;
   storiesSeen?: string[];
+  /** Situation ids from recent key matches, newest last. Used to vary scenes. */
+  recentSituations?: string[];
+  /** fixturesPlayed.length when the last between-match story was offered. */
+  lastStoryPlayed?: number;
   news: string[];
   /** Economy (save v9). Coins are per career; retirement resets them. */
   coins: number;
