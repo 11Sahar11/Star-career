@@ -1165,28 +1165,44 @@ export function momentOpponent(strength: number) {
   return strength + 10;
 }
 
+/** Default log-odds added per attribute point above 60 in {@link momentOdds}. */
+export const MOMENT_QUALITY_PER_POINT = 0.045;
+/**
+ * Log-odds per attribute point for the free-kick shot (`curl`) only.
+ * This is a log-odds coefficient, not linear percentage points: with base 15%
+ * at the usual reference (attribute 60 vs opponent 70), shooting 78 vs 70 is
+ * logit(0.15) + 18×0.051 ≈ -0.82 → 31%.
+ */
+export const FREE_KICK_PER_POINT = 0.051;
+export const FREE_KICK_BASE = 0.15;
+export const FREE_KICK_CEILING = 50;
+
 /**
  * Football conversion rate at attribute 60 against an individual opponent rated 70.
  * Training changes log-odds, not percentage points: +10 attribute multiplies the
- * odds ratio by exp(0.45). Opposition matters, but is bounded so an elite club
- * cannot erase an elite player's progression. All returned values are the exact
- * integer percentages stored on the option and used by resolveMoment/retryMoment.
+ * odds ratio by exp(10 * qualityPerPoint). Opposition matters, but is bounded so
+ * an elite club cannot erase an elite player's progression. All returned values
+ * are the exact integer percentages stored on the option and used by
+ * resolveMoment/retryMoment.
+ *
+ * `qualityPerPoint` defaults to {@link MOMENT_QUALITY_PER_POINT} (0.045). The
+ * free-kick shot (`curl`) is the only option that passes a different coefficient.
  */
-export function momentOdds(attr: number, opponent: number, baseChance: number, ceiling = 92) {
-  const quality = (clamp(attr, 1, 99) - 60) * 0.045;
+export function momentOdds(attr: number, opponent: number, baseChance: number, ceiling = 92, qualityPerPoint = MOMENT_QUALITY_PER_POINT) {
+  const quality = (clamp(attr, 1, 99) - 60) * qualityPerPoint;
   const opposition = clamp(opponent - 70, -20, 25) * 0.018;
   const logOdds = Math.log(baseChance / (1 - baseChance)) + quality - opposition;
   return clamp(Math.round(100 / (1 + Math.exp(-logOdds))), 5, ceiling);
 }
 
-type OptionSpec = [id: string, attr: AttrKey, baseChance: number, reward: MomentReward, ceiling: number];
+type OptionSpec = [id: string, attr: AttrKey, baseChance: number, reward: MomentReward, ceiling: number, qualityPerPoint?: number];
 
 // Rates are for the complete reward (including the finish), not just completing
 // a pass/dribble. No open-play long-shot situation exists; curl is the difficult
 // outside-box shot. Its lower ceiling preserves that difficulty even at 99.
 const SITUATIONS: Record<string, { kind: MomentKind; options: OptionSpec[] }> = {
   penalty: { kind: "chance", options: [["pen", "shooting", 0.78, "goal", 92], ["power", "physical", 0.74, "goal", 92]] },
-  freekick: { kind: "chance", options: [["curl", "shooting", 0.08, "goal", 35], ["layoff", "passing", 0.30, "assist", 80]] },
+  freekick: { kind: "chance", options: [["curl", "shooting", FREE_KICK_BASE, "goal", FREE_KICK_CEILING, FREE_KICK_PER_POINT], ["layoff", "passing", 0.30, "assist", 80]] },
   oneonone: { kind: "chance", options: [["dribble", "dribbling", 0.35, "goal", 82], ["shoot", "shooting", 0.40, "goal", 85]] },
   runbehind: { kind: "chance", options: [["sprint", "pace", 0.32, "goal", 80], ["pass", "passing", 0.55, "assist", 90]] },
   aerial: { kind: "chance", options: [["header", "physical", 0.22, "goal", 72], ["knock", "passing", 0.35, "assist", 82]] },
@@ -1207,9 +1223,9 @@ export function momentOptions(career: Career, situation: string, opponent: numbe
   const gains = career.keyGain ?? {};
   const camp = career.keyCampBonus ?? 0;
   const cap = ECONOMY.gear.oddsCap;
-  return SITUATIONS[situation].options.map(([id, attr, baseChance, reward, ceiling]) => {
+  return SITUATIONS[situation].options.map(([id, attr, baseChance, reward, ceiling, qualityPerPoint]) => {
     const limit = Math.min(cap, ceiling);
-    const oddsFor = (value: number) => clamp(momentOdds(value, opponent, baseChance, limit) + camp, 5, limit);
+    const oddsFor = (value: number) => clamp(momentOdds(value, opponent, baseChance, limit, qualityPerPoint) + camp, 5, limit);
     const odds = oddsFor(a[attr]);
     const option: MomentOption = { id, attr, odds, reward };
     const gain = odds - oddsFor(a[attr] - (gains[attr] ?? 0));
